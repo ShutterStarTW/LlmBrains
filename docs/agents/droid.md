@@ -4,7 +4,13 @@
 
 ```shell
 # Install with npm
-curl -fsSL https://app.factory.ai/cli | sh
+npm install -g droid
+
+# Update to latest version
+npm update --quiet --no-fund -g droid
+
+# Uninstall
+npm uninstall -g droid
 ```
 
 > via [factory.ai/product/ide](https://factory.ai/product/ide)

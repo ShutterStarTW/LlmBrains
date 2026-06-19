@@ -1,11 +1,14 @@
-.DS_Store
-.env
-/.cache/
-/.claude/
-/.gradle/
-/.grok/
-/.idea/
-/.intellijPlatform/
-/.kotlin/
-/.temp/
+# Build outputs
 /build/
+/site/
+/.gradle/
+/.kotlin/
+/.cache/
+
+# Scratch / temp dirs
+/tmp/
+/temp/
+/.temp/
+
+# Gradle local config
+local.properties

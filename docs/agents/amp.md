@@ -1,4 +1,4 @@
-# Amp CLI - by SourceGraph
+# Amp CLI - by Sourcegraph
 
 ## Installation
 
@@ -6,8 +6,11 @@
 # Install with npm
 npm install -g @sourcegraph/amp
 
-# update to latest version with npm
-npm update -g @sourcegraph/amp
+# Update to latest version
+npm update --quiet --no-fund -g @sourcegraph/amp
+
+# Uninstall
+npm uninstall -g @sourcegraph/amp
 ```
 
 > via [ampcode.com/manual](https://ampcode.com/manual#getting-started-command-line-interface)

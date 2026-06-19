@@ -1,11 +1,20 @@
-# Qodo CLI
+# Qodo - by Qodo
 
 ## Installation
 
 ```shell
-# install with npm
+# Install with npm
 npm install -g @qodo/command
+
+# Update to latest version
+npm update --quiet --no-fund -g @qodo/command
+
+# Uninstall
+npm uninstall -g @qodo/command
 ```
+
+> via [qodo.ai](https://qodo.ai)
+
 
 ## Usage
 

@@ -1,53 +1,75 @@
-![GitHub Tag](https://img.shields.io/github/v/tag/toolstud-io/LlmBrains)
-![GitHub Release](https://img.shields.io/github/v/release/toolstud-io/LlmBrains)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/y/toolstud-io/LlmBrains)
-![JetBrains Plugin Version](https://img.shields.io/jetbrains/plugin/v/28522)
-![JetBrains Plugin Downloads](https://img.shields.io/jetbrains/plugin/d/28522?logo=jetbrains)
+![GitHub Tag](https://img.shields.io/github/v/tag/ShutterStarTW/LlmBrains)
+![GitHub Release](https://img.shields.io/github/v/release/ShutterStarTW/LlmBrains)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/ShutterStarTW/LlmBrains)
+![JetBrains Plugin Version](https://img.shields.io/jetbrains/plugin/v/32310)
+![JetBrains Plugin Downloads](https://img.shields.io/jetbrains/plugin/d/32310?logo=jetbrains)
 
 
-# LLM Brains
+<img src="icon/agenthub.svg" alt="AgentHub" width="96" align="right" />
 
-[![JetBrains Plugin Downloads](https://img.shields.io/jetbrains/plugin/d/28522?style=for-the-badge&logo=jetbrains)](https://plugins.jetbrains.com/plugin/28522-llm-brains)
+# AgentHub
 
-[plugins.jetbrains.com/plugin/28522-llm-brains](https://plugins.jetbrains.com/plugin/28522-llm-brains)
+[![JetBrains Plugin Downloads](https://img.shields.io/jetbrains/plugin/d/32310?style=for-the-badge&logo=jetbrains)](https://plugins.jetbrains.com/plugin/32310-agenthub)
 
-**LLM Brains** is a JetBrains IDE plugin that adds a toolbar button to launch popular **CLI coding agents** directly in their own IDE terminal window. Works with all JetBrains IDEs (IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, etc.).
+[plugins.jetbrains.com/plugin/32310-agenthub](https://plugins.jetbrains.com/plugin/32310-agenthub)
 
-![img.png](dropdown.png)
+**AgentHub** is a JetBrains IDE plugin that adds a toolbar button to launch popular **CLI coding agents** directly in their own IDE terminal window. Works with all JetBrains IDEs (IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, etc.).
 
 ## Features
 
-- **One-click access** to CLI coding agents from the IDE toolbar (🫴 icon)
-- **14 built-in agents** with auto-detection of installed tools
-- **Custom agent support** - add your own CLI tool with configurable name, command, and URL
-- **Check & Update utilities** to manage all agents at once
-- **Configurable** - enable/disable agents via Settings > Tools > LLM Brains
-- **Cross-platform** - works on macOS, Linux, and Windows
+- **One-click launch** of any CLI coding agent directly from the IDE toolbar
+- **30 built-in agents** with auto-detection of installed tools
+- **Auto-detect on install** — runs automatically on first install and after each plugin update
+- **Update notifications** — background check on IDE startup; notifies when npm/pip agents have newer versions available
+- **Install flow** — not-installed agents are labeled "(not installed)" and prompt to install with a confirmation dialog; success confirmed automatically in background
+- **Detection results persisted** across IDE restarts — no need to re-detect every session; last run timestamp displayed in Settings
+- **Custom agent support** — add your own CLI tool with configurable name, command, and URL
+- **Check & Update utilities** — operate on all installed agents, not just enabled ones
+- **Configurable** — enable/disable agents via Settings > Tools > AgentHub
+- **Cross-platform** — works on macOS, Linux, and Windows
 
 ## Supported CLI Agents
 
-| Agent                                                                         | Command    | Provider    | Installation                                              |
-|-------------------------------------------------------------------------------|------------|-------------|-----------------------------------------------------------|
-| [Amp CLI](https://ampcode.com/manual#getting-started-command-line-interface)  | `amp`      | Sourcegraph | `npm install -g @sourcegraph/amp`                         |
-| [Claude Code](https://docs.claude.com/en/docs/claude-code/setup)              | `claude`   | Anthropic   | `npm install -g @anthropic-ai/claude-code`                |
-| [Codex CLI](https://developers.openai.com/codex/cli/)                         | `codex`    | OpenAI      | `npm install -g @openai/codex`                            |
-| [Copilot CLI](https://github.com/features/copilot/cli)                        | `copilot`  | GitHub      | `npm install -g @github/copilot`                          |
-| [Crush CLI](https://github.com/charmbracelet/crush/)                          | `crush`    | Charm       | `npm install -g @charmland/crush`                         |
-| [Droid CLI](https://factory.ai/product/ide)                                   | `droid`    | Factory AI  | `curl -fsSL https://app.factory.ai/cli \| sh`             |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli)                     | `gemini`   | Google      | `npm install -g @google/gemini-cli`                       |
-| [Goose CLI](https://github.com/block/goose)                                   | `goose`    | Block       | `curl -fsSL https://.../download_cli.sh \| bash`          |
-| [Grok CLI](https://github.com/superagent-ai/grok-cli)                         | `grok`     | xAI         | `npm install -g @vibe-kit/grok-cli`                       |
-| [OpenCode](https://opencode.ai/docs)                                          | `opencode` | OpenCode AI | `npm install -g opencode-ai`                              |
-| [Qodo](https://qodo.ai/)                                                      | `qodo`     | Qodo        | `npm install -g @qodo/command`                            |
-| [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/)                      | `qwen`     | Alibaba     | `npm install -g @qwen-code/qwen-code@latest`              |
-| [VT Code](https://github.com/vinhnx/vtcode)                                   | `vtcode`   | vinhnx      | `npm install -g @vinhnx/vtcode`                           |
-| [Warp CLI](https://docs.warp.dev/developers/cli)                              | `warp`     | Warp        | `brew install --cask warp-cli`                            |
+| Agent                                                                          | Command      | Provider    | Installation                                                                    |
+|--------------------------------------------------------------------------------|--------------|-------------|---------------------------------------------------------------------------------|
+| [Aider](https://aider.chat)                                                    | `aider`      | Aider AI    | `pip install aider-install && aider-install`                                    |
+| [Amp](https://ampcode.com)                                                     | `amp`        | Sourcegraph | `npm install -g @sourcegraph/amp`                                               |
+| [Antigravity CLI](https://antigravity.google/product/antigravity-cli)         | `agy`        | Google      | `curl -fsSL https://antigravity.google/cli/install.sh \| bash`                  |
+| [Auggie](https://www.augmentcode.com/product/CLI)                              | `auggie`     | Augment     | `npm install -g @augmentcode/auggie`                                            |
+| [Claude Code](https://claude.com/product/claude-code)                          | `claude`     | Anthropic   | `npm install -g @anthropic-ai/claude-code`                                      |
+| [Cline](https://cline.bot/cli)                                                 | `cline`      | Cline       | `npm install -g cline`                                                          |
+| [Codex CLI](https://openai.com/codex)                                          | `codex`      | OpenAI      | `npm install -g @openai/codex`                                                  |
+| [Cody CLI](https://sourcegraph.com/cody)                                       | `cody`       | Sourcegraph | `npm install -g @sourcegraph/cody`                                              |
+| [Continue CLI](https://continue.dev)                                           | `cn`         | Continue    | `npm install -g @continuedev/cli`                                               |
+| [Copilot CLI](https://github.com/features/copilot/cli)                         | `copilot`    | GitHub      | `npm install -g @github/copilot`                                                |
+| [Crush](https://charm.land/)                                                   | `crush`      | Charm       | `npm install -g @charmland/crush`                                               |
+| [Cursor CLI](https://cursor.com/cli)                                           | `cursor-agent` | Cursor    | `curl https://cursor.com/install -fsS \| bash`                                  |
+| [Droid](https://factory.ai/product/ide)                                        | `droid`      | Factory AI  | `npm install -g droid`                                                          |
+| [ForgeCode](https://forgecode.dev)                                             | `forge`      | Antinomy    | `curl -fsSL https://forgecode.dev/cli \| sh`                                    |
+| [Goose CLI](https://block.github.io/goose)                                     | `goose`      | Block       | `curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh \| bash` |
+| [Grok Build](https://x.ai/cli)                                                 | `grok`       | xAI         | `curl -fsSL https://x.ai/cli/install.sh \| bash`                                |
+| [Kilo Code](https://kilo.ai)                                                   | `kilo`       | Kilo        | `npm install -g @kilocode/cli`                                                  |
+| [Kimi Code](https://www.kimi.com/code)                                         | `kimi`       | Moonshot AI | `pip install kimi-cli`                                                          |
+| [Kiro CLI](https://kiro.dev/cli/)                                              | `kiro-cli`   | Kiro        | `curl -fsSL https://cli.kiro.dev/install \| bash`                               |
+| [LeanCTL](https://leanctl.com)                                                 | `leanctl`    | LeanCTL     | `npm install -g leanctl-bin`                                                    |
+| [MiMo Code](https://mimo.xiaomi.com/mimocode)                                  | `mimo`       | Xiaomi      | `npm install -g @mimo-ai/cli`                                                   |
+| [Mistral Vibe](https://mistral.ai/products/vibe)                               | `vibe`       | Mistral AI  | `pip install mistral-vibe`                                                      |
+| [OpenCode](https://opencode.ai)                                                | `opencode`   | SST         | `npm install -g opencode-ai`                                                    |
+| [OpenHands](https://openhands.dev/)                                            | `openhands`  | All Hands   | `pip install openhands-ai`                                                      |
+| [Plandex](https://plandex.ai)                                                  | `plandex`    | Plandex     | `curl -sL https://plandex.ai/install.sh \| bash`                                |
+| [Qodo](https://qodo.ai/)                                                       | `qodo`       | Qodo        | `npm install -g @qodo/command`                                                  |
+| [Qoder CLI](https://qoder.com)                                                 | `qodercli`   | Qoder AI    | `npm install -g @qoder-ai/qodercli`                                             |
+| [Qwen Code](https://qwen.ai/qwencode)                                          | `qwen`       | Alibaba     | `npm install -g @qwen-code/qwen-code@latest`                                    |
+| [SWE-agent](https://swe-agent.com)                                             | `sweagent`   | SWE-agent   | `pip install sweagent`                                                          |
+| [VT Code](https://vinhnx.github.io/)                                           | `vtcode`     | vinhnx      | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com`           |
+
+> **Note:** ForgeCode, LeanCTL, and Plandex have no native Windows build and are hidden on Windows.
 
 ## Custom Agent
 
 In addition to the built-in agents, you can configure your own custom CLI agent:
 
-1. Go to **Settings/Preferences > Tools > LLM Brains**
+1. Go to **Settings/Preferences > Tools > AgentHub**
 2. Enable the **Custom Agent** checkbox
 3. Configure:
    - **Name**: Display name shown in the dropdown (e.g., "My Agent")
@@ -58,30 +80,31 @@ Your custom agent will appear in the dropdown menu alongside the built-in agents
 
 ## Usage
 
-Click the 🫴 icon in the top right corner of the IDE to access:
+Click the toolbar icon in the top right corner of the IDE to access:
 
-- **Agent actions** - Launch any enabled agent in a new terminal tab
-- **Check what's installed** - Shows version info for all agents (or install hints for missing ones)
-- **Update all agents** - Updates all enabled agents to their latest versions
+- **Agent actions** — Click any enabled agent to launch it in a new terminal tab. If not installed, a confirmation dialog offers to install it; success is confirmed automatically in background.
+- **Auto-detect installed agents** — Scans your PATH, saves results with timestamp; also runs automatically on first install and after plugin updates
+- **Check all CLI versions** — Shows version info for all installed agents; summary: `✓ N OK` or `✓ N OK   ⚠ M issues`
+- **Update all agents** — Updates all installed agents to their latest versions
 
 ## Installation
 
 1. Open your JetBrains IDE
 2. Go to **Settings/Preferences > Plugins > Marketplace**
-3. Search for "LLM Brains"
+3. Search for "AgentHub"
 4. Click **Install** and restart the IDE
 
-Or install from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/28522-llm-brains).
+Or install from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32310-agenthub).
 
 ## Configuration
 
-Go to **Settings/Preferences > Tools > LLM Brains** to:
+Go to **Settings/Preferences > Tools > AgentHub** to:
 
 - Enable or disable specific built-in agents in the dropdown menu
 - Configure a custom agent with your own CLI tool
 
 ## Requirements
 
-- JetBrains IDE 2024.1+ (platform version 251, 252, 253)
+- JetBrains IDE 2025.1+ (platform version 251+)
 - Terminal plugin (bundled with all JetBrains IDEs)
 

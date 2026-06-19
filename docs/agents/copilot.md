@@ -6,8 +6,11 @@
 # Install with npm
 npm install -g @github/copilot
 
-# update to latest version with npm
-npm update -g @github/copilot
+# Update to latest version
+npm update --quiet --no-fund -g @github/copilot
+
+# Uninstall
+npm uninstall -g @github/copilot
 ```
 
 > via [github.com/features/copilot/cli](https://github.com/features/copilot/cli)

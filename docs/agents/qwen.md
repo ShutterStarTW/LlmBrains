@@ -6,8 +6,11 @@
 # Install with npm
 npm install -g @qwen-code/qwen-code@latest
 
-# update to latest version with npm
-npm update -g @qwen-code/qwen-code
+# Update to latest version
+npm update --quiet --no-fund -g @qwen-code/qwen-code
+
+# Uninstall
+npm uninstall -g @qwen-code/qwen-code
 ```
 
 > via [qwenlm.github.io/qwen-code-docs/en](https://qwenlm.github.io/qwen-code-docs/en/)

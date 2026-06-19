@@ -6,8 +6,11 @@
 # Install with npm (requires GitHub npm registry)
 npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 
-# update to latest version with npm
-npm update -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
+# Update to latest version
+npm update --quiet --no-fund -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
+
+# Uninstall
+npm uninstall -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 ```
 
 > via [github.com/vinhnx/vtcode](https://github.com/vinhnx/vtcode)

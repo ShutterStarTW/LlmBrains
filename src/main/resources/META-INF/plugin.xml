@@ -1,27 +1,96 @@
 <idea-plugin>
-    <id>com.forret.llmbrains</id>
-    <name>LLM Brains</name>
-    <vendor email="peter@forret.com">Peter Forret</vendor>
-    <version>0.3.7</version>
-    <description>
-        Open popular CLI coding agents (Claude, Codex, Gemini) in an IDE terminal.
-    </description>
-    <change-notes>
-        <p>0.4.8 — 2025-12-10</p>
+    <id>com.shutterstar.agenthub</id>
+    <name>AgentHub</name>
+    <vendor email="pbazsi@gmail.com">ShutterStar</vendor>
+    <version><!-- set by patchPluginXml --></version>
+    <description><![CDATA[
+        <p>
+            <b>AgentHub</b> adds a toolbar button to every JetBrains IDE that launches any popular
+            <b>CLI coding agent</b> in its own terminal window &mdash; one click, no setup.
+            Works with IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, GoLand, Rider and the rest.
+        </p>
+
+        <p><b>Highlights</b></p>
         <ul>
-            <li>Added Copilot/Charm/... as coding agent - fixed problem with Classic UI</li>
+            <li><b>30 built-in agents</b> &mdash; Claude Code (Anthropic), Codex CLI (OpenAI),
+                Grok Build (xAI), Antigravity CLI (Google), Copilot CLI (GitHub), Cursor, Aider,
+                Qodo, Qwen Code, Goose, OpenCode and many more.</li>
+            <li><b>One-click launch</b> from the toolbar &mdash; or install a missing agent
+                through a confirmation dialog.</li>
+            <li><b>Auto-detection</b> of installed agents on startup.</li>
+            <li><b>Update notifications</b> &mdash; a background check flags agents that
+                have a newer version.</li>
+            <li><b>Manage from Settings</b> &mdash; install, update or remove any agent.</li>
+            <li><b>Custom agent</b> &mdash; add your own CLI tool with a name, command and URL.</li>
+            <li><b>Cross-platform</b> &mdash; macOS, Linux and Windows (PowerShell helper script).</li>
         </ul>
-    </change-notes>
-    <depends>com.intellij.modules.platform</depends>
-    <depends>org.jetbrains.plugins.terminal</depends>
+
+        <p>
+            Open <b>Settings/Preferences &rarr; Tools &rarr; AgentHub</b> to choose which agents
+            appear in the toolbar dropdown and to configure your custom agent.
+        </p>
+
+        <p><b>Supported agents</b></p>
+        <ul>
+            <li><a href="https://aider.chat">Aider</a> &mdash; Aider AI</li>
+            <li><a href="https://ampcode.com">Amp</a> &mdash; Sourcegraph</li>
+            <li><a href="https://antigravity.google/product/antigravity-cli">Antigravity CLI</a> &mdash; Google</li>
+            <li><a href="https://www.augmentcode.com/product/CLI">Auggie</a> &mdash; Augment</li>
+            <li><a href="https://claude.com/product/claude-code">Claude Code</a> &mdash; Anthropic</li>
+            <li><a href="https://cline.bot/cli">Cline</a> &mdash; Cline</li>
+            <li><a href="https://openai.com/codex">Codex CLI</a> &mdash; OpenAI</li>
+            <li><a href="https://sourcegraph.com/cody">Cody CLI</a> &mdash; Sourcegraph</li>
+            <li><a href="https://continue.dev">Continue CLI</a> &mdash; Continue</li>
+            <li><a href="https://github.com/features/copilot/cli">Copilot CLI</a> &mdash; GitHub</li>
+            <li><a href="https://charm.land/">Crush</a> &mdash; Charm</li>
+            <li><a href="https://cursor.com/cli">Cursor CLI</a> &mdash; Cursor</li>
+            <li><a href="https://factory.ai/product/ide">Droid</a> &mdash; Factory AI</li>
+            <li><a href="https://forgecode.dev">ForgeCode</a> &mdash; Antinomy</li>
+            <li><a href="https://block.github.io/goose">Goose CLI</a> &mdash; Block</li>
+            <li><a href="https://x.ai/cli">Grok Build</a> &mdash; xAI</li>
+            <li><a href="https://kilo.ai">Kilo Code</a> &mdash; Kilo</li>
+            <li><a href="https://www.kimi.com/code">Kimi Code</a> &mdash; Moonshot AI</li>
+            <li><a href="https://kiro.dev/cli/">Kiro CLI</a> &mdash; Kiro</li>
+            <li><a href="https://leanctl.com">LeanCTL</a> &mdash; LeanCTL</li>
+            <li><a href="https://mimo.xiaomi.com/mimocode">MiMo Code</a> &mdash; Xiaomi</li>
+            <li><a href="https://mistral.ai/products/vibe">Mistral Vibe</a> &mdash; Mistral AI</li>
+            <li><a href="https://opencode.ai">OpenCode</a> &mdash; SST</li>
+            <li><a href="https://openhands.dev/">OpenHands</a> &mdash; All Hands</li>
+            <li><a href="https://plandex.ai">Plandex</a> &mdash; Plandex</li>
+            <li><a href="https://qodo.ai">Qodo</a> &mdash; Qodo</li>
+            <li><a href="https://qoder.com">Qoder CLI</a> &mdash; Qoder AI</li>
+            <li><a href="https://qwen.ai/qwencode">Qwen Code</a> &mdash; Alibaba</li>
+            <li><a href="https://swe-agent.com">SWE-agent</a> &mdash; SWE-agent</li>
+            <li><a href="https://vinhnx.github.io/">VT Code</a> &mdash; vinhnx</li>
+        </ul>
+
+        <p><i>ForgeCode, LeanCTL and Plandex have no native Windows build and are hidden on Windows.</i></p>
+    ]]></description>
+    <change-notes><![CDATA[
+        <p><b>0.9.0</b> &mdash; Initial release</p>
+        <ul>
+            <li>30 built-in CLI coding agents</li>
+            <li>One-click launch from toolbar; not-installed agents prompt to install with confirmation</li>
+            <li>Auto-detect on first install and after each plugin update</li>
+            <li>Background update availability check on IDE startup</li>
+            <li>Install / Update / Remove directly from Settings panel</li>
+            <li>Custom agent support: configure your own CLI tool with name, command and URL</li>
+            <li>Cross-platform: macOS, Linux, Windows (PowerShell helper script)</li>
+        </ul>
+    ]]></change-notes>
+    <dependencies>
+        <plugin id="com.intellij.modules.platform"/>
+        <plugin id="org.jetbrains.plugins.terminal"/>
+    </dependencies>
     <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="LLM Brains" displayType="BALLOON"/>
-        <applicationConfigurable instance="com.forret.llmbrains.AgentSettingsConfigurable" displayName="LLM Brains"/>
+        <notificationGroup id="AgentHub" displayType="BALLOON"/>
+        <applicationConfigurable instance="com.shutterstar.agenthub.AgentSettingsConfigurable" displayName="AgentHub"/>
+        <backgroundPostStartupActivity implementation="com.shutterstar.agenthub.LlmBrainsStartupActivity"/>
     </extensions>
     <actions>
-        <group id="com.forret.llmbrains.Dropdown" class="com.forret.llmbrains.LlmBrainsActionGroup"
-               text="LLM Brains" description="Open popular CLI coding agents (Claude, Codex, Gemini) in an IDE terminal." popup="true"
-               icon="/icons/palm-up-hand-noto.svg">
+        <group id="com.shutterstar.agenthub.Dropdown" class="com.shutterstar.agenthub.LlmBrainsActionGroup"
+               text="AgentHub" description="Launch CLI coding agents in an IDE terminal. Auto-detects installed agents." popup="true"
+               icon="/icons/terminal-prompt.svg">
             <!-- New UI toolbar (2022.3+) -->
             <add-to-group group-id="MainToolbarRight" anchor="last"/>
             <!-- Classic UI: Navigation bar toolbar -->

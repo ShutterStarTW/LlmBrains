@@ -13,6 +13,7 @@ buildscript {
 plugins {
     kotlin("jvm") version "2.1.0"
     id("org.jetbrains.intellij") version "1.17.3"
+    jacoco
 }
 
 fun markdownToHtml(markdown: String): String {
@@ -26,40 +27,49 @@ version = file("VERSION.md").readText().trim()
 
 defaultTasks("build")
 
+jacoco {
+    toolVersion = "0.8.12"
+}
+
 repositories {
     mavenCentral()
 }
 
 intellij {
-    // Build against IntelliJ IDEA 2025.1 (251.*) to match our sinceBuild and use the new Terminal services API.
-    version.set("2025.1")
-    type.set("IC")
+    // Use locally installed IDEA if available (no network download needed).
+    // Falls back to downloading IC 2025.1 when building in CI or Docker.
+    val localIdea = file("${System.getProperty("user.home")}/AppData/Local/Programs/IntelliJ IDEA Ultimate")
+    if (localIdea.exists()) {
+        localPath.set(localIdea.absolutePath)
+    } else {
+        version.set("2025.1")
+        type.set("IC")
+    }
     // Only require the built-in Terminal plugin so every JetBrains IDE with a terminal can load us.
     plugins.set(listOf("org.jetbrains.plugins.terminal"))
 }
 
 kotlin {
     jvmToolchain(17)
+    compilerOptions {
+        // Allow Kotlin 2.1.x compiler to read newer platform metadata (e.g. IDEA compiled with Kotlin 2.3+)
+        freeCompilerArgs.add("-Xskip-metadata-version-check")
+    }
 }
 
 dependencies {
     // Use IntelliJ Platform's Kotlin stdlib; don't bundle our own
     compileOnly(kotlin("stdlib"))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks {
     patchPluginXml {
-        // 251 corresponds to the 2025.1 release family; newer IDEs remain compatible without an explicit upper bound.
+        // 251 = 2025.1; the plugin uses only stable APIs available since 2025.1+.
         sinceBuild.set("251")
-        // Support up to 2026.1 release family (261.*) for PhpStorm 2026.1 and other recent IDEs.
-        untilBuild.set("261.*")
-        pluginDescription.set(
-            """
-            LLM Brains: open popular CLI coding agents (Claude, Codex, Gemini ...) in an IDE terminal.
-            Adds a toolbar button (🫴) with options and a check to see what is installed.
-            """.trimIndent()
-        )
-        changeNotes.set(markdownToHtml(file("CHANGES.md").readText()))
+        untilBuild.set("")
+        // description and change-notes are maintained in plugin.xml
     }
 
     // Ensure `./gradlew build` also produces the plugin ZIP
@@ -67,12 +77,30 @@ tasks {
         dependsOn("buildPlugin")
     }
 
+    test {
+        useJUnitPlatform()
+        finalizedBy(jacocoTestReport)
+    }
+
+    jacocoTestReport {
+        dependsOn(test)
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
+    }
+
+    named("instrumentCode") {
+        enabled = false
+    }
+
     named("buildSearchableOptions") {
         enabled = false
     }
 
-    runIde {
-        // Optionally point to a specific IDE install
-        // ideDir.set(file("/Applications/PhpStorm.app/Contents"))
+    processResources {
+        filesMatching("agenthub-version.properties") {
+            expand("version" to project.version)
+        }
     }
 }

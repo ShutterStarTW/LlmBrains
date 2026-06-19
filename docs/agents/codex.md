@@ -5,11 +5,15 @@
 ```shell
 # Install with npm
 npm install -g @openai/codex
-# update to latest version with npm
-npm update -g @openai/codex
 
-# Install with Homebrew
+# Install with Homebrew (alternative)
 brew install codex
+
+# Update to latest version
+npm update --quiet --no-fund -g @openai/codex
+
+# Uninstall
+npm uninstall -g @openai/codex
 ```
 
 > via [developers.openai.com/codex/cli/](https://developers.openai.com/codex/cli/)

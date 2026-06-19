@@ -6,8 +6,11 @@
 # Install with npm
 npm install -g @charmland/crush
 
-# update to latest version with npm
-npm update -g @charmland/crush
+# Update to latest version
+npm update --quiet --no-fund -g @charmland/crush
+
+# Uninstall
+npm uninstall -g @charmland/crush
 ```
 
 > via [github.com/charmbracelet/crush](https://github.com/charmbracelet/crush/)

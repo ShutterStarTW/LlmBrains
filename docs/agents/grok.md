@@ -1,44 +1,41 @@
-# Grok CLI - by xAI
+# Grok Build - by xAI
 
 ## Installation
 
 ```shell
-# Install with npm
-npm install -g @vibe-kit/grok-cli
-# update to latest version with npm
-npm update -g @vibe-kit/grok-cli
+# Install on macOS/Linux
+curl -fsSL https://x.ai/cli/install.sh | bash
+
+# Install on Windows (PowerShell)
+irm https://x.ai/cli/install.ps1 | iex
 ```
 
-> via [github.com/superagent-ai/grok-cli](https://github.com/superagent-ai/grok-cli)
-
+> via [x.ai/cli](https://x.ai/cli)
 
 ## Get Version
 
 ```
-% grok -V
-1.0.1
+% grok --version
+```
+
+## Update
+
+```shell
+grok update
 ```
 
 ## Usage
+
 ```
-Usage: grok [options] [command] [message...]
+Usage: grok [options] [command]
 
-A conversational AI CLI tool powered by Grok with text editor capabilities
-
-Arguments:
-  message                     Initial message to send to Grok
+Grok Build — agentic coding CLI by xAI
 
 Options:
-  -V, --version               output the version number
-  -d, --directory <dir>       set working directory (default: "/Users/pforret/Code/pforret/LlmBrains")
-  -k, --api-key <key>         Grok API key (or set GROK_API_KEY env var)
-  -u, --base-url <url>        Grok API base URL (or set GROK_BASE_URL env var)
-  -m, --model <model>         AI model to use (e.g., grok-code-fast-1, grok-4-latest) (or set GROK_MODEL env var)
-  -p, --prompt <prompt>       process a single prompt and exit (headless mode)
-  --max-tool-rounds <rounds>  maximum number of tool execution rounds (default: 400) (default: "400")
-  -h, --help                  display help for command
+  --version   Show version number
+  --help      Show help
 
 Commands:
-  git                         Git operations with AI assistance
-  mcp                         Manage MCP (Model Context Protocol) servers
+  git         Git operations with AI assistance
+  mcp         Manage MCP servers
 ```

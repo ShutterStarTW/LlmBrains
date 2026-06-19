@@ -1,12 +1,16 @@
-# OpenCode CLI
+# OpenCode - by SST
 
 ## Installation
 
 ```shell
 # Install with npm
-npm i -g opencode-ai
-# update to latest version with npm
-npm update -g opencode-ai
+npm install -g opencode-ai
+
+# Update to latest version
+npm update --quiet --no-fund -g opencode-ai
+
+# Uninstall
+npm uninstall -g opencode-ai
 ```
 
 > via [opencode.ai/docs](https://opencode.ai/docs)

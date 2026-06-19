@@ -1,5 +1,1 @@
-- `0.5.2`: support for 2026.1 versions of IDE
-- `0.5.1`: auto-detect installed CLI coding agents
-- `0.5.0`: Added custom agent support: configure your own CLI tool with Name, Command, and URL
-- `0.4.8`: Added Crush, VT Code agents
-- `0.4.6`: Added Grok, Droid, Warp CLI agents
+- `0.9.0`: Initial release as **AgentHub**. 30 built-in CLI coding agents with auto-detection and per-agent favicon icons; one-click launch from the toolbar (not-installed agents prompt to install with confirmation); auto-detect on first install and after each plugin update, with results persisted across IDE restarts; background update-availability check on IDE startup; install/update/remove directly from the Settings panel with background result polling; custom agent support (name, command, URL); cross-platform (macOS, Linux, Windows PowerShell helper script). Requires JetBrains IDE 2025.1+ (build 251+).

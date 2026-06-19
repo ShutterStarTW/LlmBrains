@@ -5,9 +5,12 @@
 ```shell
 # Install with npm
 npm install -g @anthropic-ai/claude-code
-# update to latest version with npm
-npm update -g @anthropic-ai/claude-code
 
+# Update to latest version
+npm update --quiet --no-fund -g @anthropic-ai/claude-code
+
+# Uninstall
+npm uninstall -g @anthropic-ai/claude-code
 ```
 
 > via [docs.claude.com/en/docs/claude-code/setup](https://docs.claude.com/en/docs/claude-code/setup)
