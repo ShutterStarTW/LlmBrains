@@ -172,22 +172,27 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         }
 
         override fun actionPerformed(e: AnActionEvent) {
+            val proj = project ?: return
             val installed = AgentSettingsState.getInstance().getDetectionResults()?.get(agent.id)
             if (installed == false && agent.platformInstallHint.isNotBlank()) {
+                val background = AgentSettingsState.getInstance().getState().runInBackground
                 val confirmed = TerminalCommandRunner.confirmRun(
-                    project,
+                    proj,
                     "Install ${agent.name}",
                     agent.platformInstallHint,
                     context = "${agent.name} is not installed yet.",
+                    background = background,
                 )
-                if (confirmed) {
-                    project?.let {
-                        TerminalCommandRunner.run(it, "📦 Install ${agent.name}", agent.platformInstallHint)
-                        DetectionResultsWatcher.watchCommandAvailability(it, agent, expectInstalled = true)
+                if (!confirmed) return
+                val label = "📦 Install ${agent.name}"
+                TerminalCommandRunner.runRespectingSettings(proj, label, label, agent.platformInstallHint)
+                DetectionResultsWatcher.watchCommandAvailability(proj, agent, expectInstalled = true) {
+                    if (background && AgentSettingsState.getInstance().getDetectionResults()?.get(agent.id) == true) {
+                        TerminalCommandRunner.run(proj, "🤖 ${agent.name}", agent.command)
                     }
                 }
             } else {
-                project?.let { TerminalCommandRunner.run(it, "🤖 ${agent.name}", agent.command) }
+                TerminalCommandRunner.run(proj, "🤖 ${agent.name}", agent.command)
             }
         }
     }

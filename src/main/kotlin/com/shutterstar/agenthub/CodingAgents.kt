@@ -203,6 +203,16 @@ object CodingAgents {
             unsupportedOnWindows = true, // WSL-only install; binary not visible to Windows-native detection
         ),
         CodingAgent(
+            id = "freebuff",
+            name = "Freebuff",
+            command = "freebuff",
+            installHint = "npm install -g freebuff",
+            updateHint = "npm update --quiet --no-fund -g freebuff",
+            uninstallHint = "npm uninstall -g freebuff",
+            provider = "Codebuff",
+            url = "https://freebuff.com/cli",
+        ),
+        CodingAgent(
             id = "goose",
             name = "Goose CLI",
             command = "goose",

@@ -12,7 +12,7 @@
 
         <p><b>Highlights</b></p>
         <ul>
-            <li><b>30 built-in agents</b> &mdash; Claude Code (Anthropic), Codex CLI (OpenAI),
+            <li><b>30+ built-in agents</b> &mdash; Claude Code (Anthropic), Codex CLI (OpenAI),
                 Grok Build (xAI), Antigravity CLI (Google), Copilot CLI (GitHub), Cursor, Aider,
                 Qodo, Qwen Code, Goose, OpenCode and many more.</li>
             <li><b>One-click launch</b> from the toolbar &mdash; or install a missing agent
@@ -46,6 +46,7 @@
             <li><a href="https://cursor.com/cli">Cursor CLI</a> &mdash; Cursor</li>
             <li><a href="https://factory.ai/product/ide">Droid</a> &mdash; Factory AI</li>
             <li><a href="https://forgecode.dev">ForgeCode</a> &mdash; Antinomy</li>
+            <li><a href="https://freebuff.com/cli">Freebuff</a> &mdash; Codebuff</li>
             <li><a href="https://block.github.io/goose">Goose CLI</a> &mdash; Block</li>
             <li><a href="https://x.ai/cli">Grok Build</a> &mdash; xAI</li>
             <li><a href="https://kilo.ai">Kilo Code</a> &mdash; Kilo</li>
@@ -67,6 +68,12 @@
         <p><i>ForgeCode, LeanCTL and Plandex have no native Windows build and are hidden on Windows.</i></p>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>0.9.1</b></p>
+        <ul>
+            <li>New agent: <b>Freebuff</b> (Codebuff) &mdash; the free, ad-supported terminal coding agent</li>
+            <li>Fixes: Toolbar install of a not-installed agent now honors the "Run operations in background" setting; a background-installed agent launches automatically once ready</li>
+            <li>Lowered minimum platform to JetBrains IDE 2024.1+ (build 241+)</li>
+        </ul>
         <p><b>0.9.0</b> &mdash; Initial release</p>
         <ul>
             <li>30 built-in CLI coding agents</li>

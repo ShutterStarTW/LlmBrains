@@ -17,7 +17,7 @@ Works with all JetBrains IDEs (IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, etc.)
 ## Development
 
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF?logo=kotlin&logoColor=white)
-![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2025.1%2B%20(251)-000000?logo=intellijidea&logoColor=white)
+![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2024.1%2B%20(241)-000000?logo=intellijidea&logoColor=white)
 ![JDK](https://img.shields.io/badge/JDK-17-ED8B00?logo=openjdk&logoColor=white)
 ![Gradle IntelliJ Plugin](https://img.shields.io/badge/Gradle%20IntelliJ%20Plugin-1.17.3-02303A?logo=gradle&logoColor=white)
 
@@ -107,7 +107,7 @@ See also: [`CHANGES.md`](CHANGES.md)
 ## Features
 
 - **One-click launch** of any CLI coding agent directly from the IDE toolbar
-- **30 built-in agents** with auto-detection of installed tools
+- **30+ built-in agents** with auto-detection of installed tools
 - **Auto-detect on install** — runs automatically on first install and after each plugin update
 - **Update notifications** — background check on IDE startup; notifies when npm/pip agents have newer versions available
 - **Install flow** — not-installed agents are labeled "(not installed)" and prompt to install with a confirmation dialog; success confirmed automatically in background
@@ -135,6 +135,7 @@ See also: [`CHANGES.md`](CHANGES.md)
 | [Cursor CLI](https://cursor.com/cli)                                           | `cursor-agent` | Cursor    | `curl https://cursor.com/install -fsS \| bash`                                  |
 | [Droid](https://factory.ai/product/ide)                                        | `droid`      | Factory AI  | `npm install -g droid`                                                          |
 | [ForgeCode](https://forgecode.dev)                                             | `forge`      | Antinomy    | `curl -fsSL https://forgecode.dev/cli \| sh`                                    |
+| [Freebuff](https://freebuff.com/cli)                                           | `freebuff`   | Codebuff    | `npm install -g freebuff`                                                       |
 | [Goose CLI](https://block.github.io/goose)                                     | `goose`      | Block       | `curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh \| bash` |
 | [Grok Build](https://x.ai/cli)                                                 | `grok`       | xAI         | `curl -fsSL https://x.ai/cli/install.sh \| bash`                                |
 | [Kilo Code](https://kilo.ai)                                                   | `kilo`       | Kilo        | `npm install -g @kilocode/cli`                                                  |
@@ -194,7 +195,7 @@ Go to **Settings/Preferences > Tools > AgentHub** to:
 
 ## Requirements
 
-- JetBrains IDE 2025.1+ (platform version 251+)
+- JetBrains IDE 2024.1+ (platform version 241+)
 - Terminal plugin (bundled with all JetBrains IDEs)
 
 ## License

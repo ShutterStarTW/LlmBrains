@@ -66,8 +66,8 @@ dependencies {
 
 tasks {
     patchPluginXml {
-        // 251 = 2025.1; the plugin uses only stable APIs available since 2025.1+.
-        sinceBuild.set("251")
+        // 241 = 2024.1; the plugin uses only stable APIs available since 2024.1+.
+        sinceBuild.set("241")
         untilBuild.set("")
         // description and change-notes are maintained in plugin.xml
     }
