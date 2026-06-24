@@ -6,7 +6,7 @@ AgentHub is a JetBrains IDE plugin built with Gradle and the IntelliJ Platform G
 
 - **JDK 17+** (a recent GraalVM or Temurin build works)
 - **Gradle** — use the bundled wrapper (`gradlew` / `gradlew.bat`); no separate install needed
-- A JetBrains IDE **2025.1+** (platform build `251+`) to run/test the plugin
+- A JetBrains IDE **2024.1+** (platform build `241+`) to run/test the plugin
 
 ## Build the plugin
 

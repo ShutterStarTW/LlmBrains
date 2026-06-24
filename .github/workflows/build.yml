@@ -1,0 +1,60 @@
+# Build the plugin ZIP and run the test suite on every push/PR.
+name: Build & Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # gradlew may lose its exec bit when committed from Windows.
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # No localPath IDEA on the runner, so build.gradle.kts falls back to
+      # downloading IC 2024.1. `build` dependsOn buildPlugin AND runs the tests.
+      - name: Build plugin & run tests
+        run: ./gradlew build --stacktrace
+
+      - name: Upload plugin ZIP
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agenthub-plugin
+          path: build/distributions/*.zip
+          if-no-files-found: error
+
+      - name: Upload test & coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+            build/reports/jacoco/test
+          if-no-files-found: ignore

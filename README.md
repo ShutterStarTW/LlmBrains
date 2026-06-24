@@ -25,7 +25,7 @@ Works with all JetBrains IDEs (IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, etc.)
 
 - JDK 17+ (build toolchain targets 17+; a GraalVM JDK 24 is used locally)
 - A locally installed **IntelliJ IDEA Ultimate** is used as the plugin SDK when present;
-  otherwise the build falls back to downloading IntelliJ IDEA Community `2025.1`
+  otherwise the build falls back to downloading IntelliJ IDEA Community `2024.1`
 - The built-in **Terminal** plugin (bundled with every JetBrains IDE)
 
 ### Common commands

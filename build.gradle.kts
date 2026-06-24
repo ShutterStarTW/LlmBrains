@@ -37,12 +37,12 @@ repositories {
 
 intellij {
     // Use locally installed IDEA if available (no network download needed).
-    // Falls back to downloading IC 2025.1 when building in CI or Docker.
+    // Falls back to downloading IC 2024.1 when building in CI or Docker
     val localIdea = file("${System.getProperty("user.home")}/AppData/Local/Programs/IntelliJ IDEA Ultimate")
     if (localIdea.exists()) {
         localPath.set(localIdea.absolutePath)
     } else {
-        version.set("2025.1")
+        version.set("2024.1")
         type.set("IC")
     }
     // Only require the built-in Terminal plugin so every JetBrains IDE with a terminal can load us.
