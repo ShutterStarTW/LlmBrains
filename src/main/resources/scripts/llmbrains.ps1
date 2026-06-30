@@ -140,7 +140,7 @@ switch ($Subcommand) {
         $agentsData = $Arguments[0]
 
         Clear-Host
-        Write-Host "[?] Checking CLI coding agents" -ForegroundColor White
+        Write-Host "[?] Checking agents & companion tools" -ForegroundColor White
         Write-Host ("-" * 50) -ForegroundColor DarkGray
 
         $okCount = 0
@@ -179,7 +179,7 @@ switch ($Subcommand) {
         $outputFile = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
 
         Clear-Host
-        Write-Host "[?] CLI coding agents - versions & updates" -ForegroundColor White
+        Write-Host "[?] Agents & companion tools - versions & updates" -ForegroundColor White
         Write-Host ("-" * 50) -ForegroundColor DarkGray
 
         # Fetch npm outdated once
@@ -277,12 +277,12 @@ switch ($Subcommand) {
         $outputFile = if ($Arguments.Count -gt 2) { $Arguments[2] } else { "" }
 
         if ([string]::IsNullOrEmpty($activeIds)) {
-            Write-Host "No coding agents are enabled. Enable them via Preferences > Tools > AgentHub."
+            Write-Host "No agents or companion tools are enabled. Enable them via Preferences > Tools > AgentHub."
             exit 0
         }
 
         Clear-Host
-        Write-Host "[~] Updating enabled CLI coding agents" -ForegroundColor White
+        Write-Host "[~] Updating enabled agents & companion tools" -ForegroundColor White
         Write-Host ("-" * 50) -ForegroundColor DarkGray
 
         $okCount = 0
@@ -332,7 +332,7 @@ switch ($Subcommand) {
         $outputFile = $Arguments[1]
 
         Clear-Host
-        Write-Host "[?] Detecting installed CLI coding agents" -ForegroundColor White
+        Write-Host "[?] Detecting installed agents & companion tools" -ForegroundColor White
         Write-Host ("-" * 50) -ForegroundColor DarkGray
 
         "" | Out-File -FilePath $outputFile -Encoding ascii

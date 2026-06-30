@@ -22,6 +22,8 @@
                 have a newer version.</li>
             <li><b>Manage from Settings</b> &mdash; install, update or remove any agent.</li>
             <li><b>Custom agent</b> &mdash; add your own CLI tool with a name, command and URL.</li>
+            <li><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents
+                (usage tracking, context packing, skills); off by default.</li>
             <li><b>Cross-platform</b> &mdash; macOS, Linux and Windows (PowerShell helper script).</li>
         </ul>
 
@@ -38,23 +40,30 @@
             <li><a href="https://www.augmentcode.com/product/CLI">Auggie</a> &mdash; Augment</li>
             <li><a href="https://claude.com/product/claude-code">Claude Code</a> &mdash; Anthropic</li>
             <li><a href="https://cline.bot/cli">Cline</a> &mdash; Cline</li>
+            <li><a href="https://www.codebuddy.ai">CodeBuddy</a> &mdash; Tencent</li>
             <li><a href="https://openai.com/codex">Codex CLI</a> &mdash; OpenAI</li>
             <li><a href="https://sourcegraph.com/cody">Cody CLI</a> &mdash; Sourcegraph</li>
+            <li><a href="https://commandcode.ai">Command Code</a> &mdash; Command Code</li>
             <li><a href="https://continue.dev">Continue CLI</a> &mdash; Continue</li>
             <li><a href="https://github.com/features/copilot/cli">Copilot CLI</a> &mdash; GitHub</li>
             <li><a href="https://charm.land/">Crush</a> &mdash; Charm</li>
             <li><a href="https://cursor.com/cli">Cursor CLI</a> &mdash; Cursor</li>
+            <li><a href="https://devin.ai/cli">Devin</a> &mdash; Cognition</li>
             <li><a href="https://factory.ai/product/ide">Droid</a> &mdash; Factory AI</li>
             <li><a href="https://forgecode.dev">ForgeCode</a> &mdash; Antinomy</li>
             <li><a href="https://freebuff.com/cli">Freebuff</a> &mdash; Codebuff</li>
             <li><a href="https://block.github.io/goose">Goose CLI</a> &mdash; Block</li>
             <li><a href="https://x.ai/cli">Grok Build</a> &mdash; xAI</li>
+            <li><a href="https://iflow.cn">iFlow CLI</a> &mdash; iFlow</li>
+            <li><a href="https://junie.jetbrains.com">Junie CLI</a> &mdash; JetBrains</li>
             <li><a href="https://kilo.ai">Kilo Code</a> &mdash; Kilo</li>
             <li><a href="https://www.kimi.com/code">Kimi Code</a> &mdash; Moonshot AI</li>
             <li><a href="https://kiro.dev/cli/">Kiro CLI</a> &mdash; Kiro</li>
+            <li><a href="https://github.com/shareAI-lab/Kode-cli">Kode</a> &mdash; shareAI-lab</li>
             <li><a href="https://leanctl.com">LeanCTL</a> &mdash; LeanCTL</li>
             <li><a href="https://mimo.xiaomi.com/mimocode">MiMo Code</a> &mdash; Xiaomi</li>
             <li><a href="https://mistral.ai/products/vibe">Mistral Vibe</a> &mdash; Mistral AI</li>
+            <li><a href="https://openclaw.ai">OpenClaw</a> &mdash; OpenClaw</li>
             <li><a href="https://opencode.ai">OpenCode</a> &mdash; SST</li>
             <li><a href="https://openhands.dev/">OpenHands</a> &mdash; All Hands</li>
             <li><a href="https://plandex.ai">Plandex</a> &mdash; Plandex</li>
@@ -65,9 +74,24 @@
             <li><a href="https://vinhnx.github.io/">VT Code</a> &mdash; vinhnx</li>
         </ul>
 
-        <p><i>ForgeCode, LeanCTL and Plandex have no native Windows build and are hidden on Windows.</i></p>
+        <p><i>Command Code, ForgeCode, LeanCTL and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command).</i></p>
+
+        <p><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents (off by default):</p>
+        <ul>
+            <li><a href="https://ccusage.com">ccusage</a> &mdash; token &amp; cost usage reports from local agent logs</li>
+            <li><a href="https://repomix.com">Repomix</a> &mdash; pack your repository into an AI-friendly file</li>
+            <li><a href="https://www.skills.sh">Skills</a> &mdash; install reusable agent skills</li>
+            <li><a href="https://www.tokentracker.cc">TokenTracker</a> &mdash; local token &amp; cost dashboard</li>
+        </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.0.0</b> &mdash; first stable release</p>
+        <ul>
+            <li>New <b>Companion Tools</b> section &mdash; optional CLI utilities that work alongside the agents:
+                <b>ccusage</b>, <b>Repomix</b>, <b>Skills</b> and <b>TokenTracker</b> (off by default; enable in Settings)</li>
+            <li>New agents: <b>CodeBuddy</b> (Tencent), <b>Command Code</b>, <b>Devin</b> (Cognition),
+                <b>iFlow CLI</b>, <b>Junie CLI</b> (JetBrains), <b>Kode</b> and <b>OpenClaw</b></li>
+        </ul>
         <p><b>0.9.1</b></p>
         <ul>
             <li>New agent: <b>Freebuff</b> (Codebuff) &mdash; the free, ad-supported terminal coding agent</li>

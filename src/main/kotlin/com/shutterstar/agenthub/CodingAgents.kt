@@ -15,6 +15,13 @@ data class CodingAgent(
     val provider: String = "",
     val url: String,
     val devUrl: String = "",
+    /**
+     * Overrides the favicon resource lookup key (file name without extension under
+     * `/favicons/`). Use when the [url] host shares a root domain with another agent
+     * (e.g. several GitHub-hosted agents collapse to `github.com`) and a distinct
+     * brand icon is needed. Falls back to the URL root domain when blank.
+     */
+    val faviconKey: String = "",
     /** No native Windows install path (WSL-only or unsupported) → hidden from the UI on Windows. */
     val unsupportedOnWindows: Boolean = false,
 ) {
@@ -39,6 +46,9 @@ object CodingAgents {
     // installed inside WSL is invisible to the Windows-native detection (`where`) and launch.
     fun available(): List<CodingAgent> =
         if (OsDetector.isWindows()) all.filterNot { it.unsupportedOnWindows } else all
+
+    /** Agents + companion tools — the full set covered by detection / check / update-all. */
+    fun detectable(): List<CodingAgent> = available() + CompanionTools.available()
 
     val all: List<CodingAgent> = listOf(
         CodingAgent(
@@ -110,6 +120,16 @@ object CodingAgents {
             devUrl = "https://github.com/cline/cline",
         ),
         CodingAgent(
+            id = "codebuddy",
+            name = "CodeBuddy",
+            command = "codebuddy",
+            installHint = "npm install -g @tencent-ai/codebuddy-code",
+            updateHint = "npm update --quiet --no-fund -g @tencent-ai/codebuddy-code",
+            uninstallHint = "npm uninstall -g @tencent-ai/codebuddy-code",
+            provider = "Tencent",
+            url = "https://www.codebuddy.ai",
+        ),
+        CodingAgent(
             id = "codex",
             name = "Codex CLI",
             command = "codex",
@@ -130,6 +150,18 @@ object CodingAgents {
             provider = "Sourcegraph",
             url = "https://sourcegraph.com/cody",
             devUrl = "https://github.com/sourcegraph/cody",
+        ),
+        CodingAgent(
+            id = "commandcode",
+            name = "Command Code",
+            command = "cmd",
+            installHint = "npm install -g command-code",
+            updateHint = "npm update --quiet --no-fund -g command-code",
+            uninstallHint = "npm uninstall -g command-code",
+            provider = "Command Code",
+            url = "https://commandcode.ai",
+            devUrl = "https://github.com/CommandCodeAI/command-code",
+            unsupportedOnWindows = true, // launch command is `cmd`, which collides with Windows cmd.exe
         ),
         CodingAgent(
             id = "continue",
@@ -176,6 +208,17 @@ object CodingAgents {
             uninstallHintWindows = "Remove-Item -Recurse -Force \"\$env:LOCALAPPDATA\\cursor-agent\" -ErrorAction SilentlyContinue",
             provider = "Cursor",
             url = "https://cursor.com/cli",
+        ),
+        CodingAgent(
+            id = "devin",
+            name = "Devin",
+            command = "devin",
+            installHint = "curl -fsSL https://cli.devin.ai/install.sh | bash",
+            updateHint = "devin update",
+            uninstallHint = "devin uninstall --force",
+            installHintWindows = "irm https://static.devin.ai/cli/setup.ps1 | iex",
+            provider = "Cognition",
+            url = "https://devin.ai/cli",
         ),
         CodingAgent(
             id = "droid",
@@ -239,6 +282,30 @@ object CodingAgents {
             url = "https://x.ai/cli",
         ),
         CodingAgent(
+            id = "iflow",
+            name = "iFlow CLI",
+            command = "iflow",
+            installHint = "npm install -g @iflow-ai/iflow-cli",
+            updateHint = "npm update --quiet --no-fund -g @iflow-ai/iflow-cli",
+            uninstallHint = "npm uninstall -g @iflow-ai/iflow-cli",
+            provider = "iFlow",
+            url = "https://iflow.cn",
+            devUrl = "https://github.com/iflow-ai/iflow-cli",
+        ),
+        CodingAgent(
+            id = "junie",
+            name = "Junie CLI",
+            command = "junie",
+            installHint = "npm install -g @jetbrains/junie-cli",
+            updateHint = "npm update --quiet --no-fund -g @jetbrains/junie-cli",
+            uninstallHint = "npm uninstall -g @jetbrains/junie-cli",
+            installHintWindows = "irm https://junie.jetbrains.com/install.ps1 | iex",
+            uninstallHintWindows = "Remove-Item -Force \"\$env:USERPROFILE\\.local\\bin\\junie.bat\" -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force \"\$env:USERPROFILE\\.local\\share\\junie\" -ErrorAction SilentlyContinue",
+            provider = "JetBrains",
+            url = "https://junie.jetbrains.com",
+            devUrl = "https://github.com/JetBrains/junie",
+        ),
+        CodingAgent(
             id = "kilo",
             name = "Kilo Code",
             command = "kilo",
@@ -274,6 +341,18 @@ object CodingAgents {
             devUrl = "https://github.com/kirodotdev/Kiro",
         ),
         CodingAgent(
+            id = "kode",
+            name = "Kode",
+            command = "kode",
+            installHint = "npm install -g @shareai-lab/kode",
+            updateHint = "npm update --quiet --no-fund -g @shareai-lab/kode",
+            uninstallHint = "npm uninstall -g @shareai-lab/kode",
+            provider = "shareAI-lab",
+            url = "https://github.com/shareAI-lab/Kode-cli",
+            devUrl = "https://github.com/shareAI-lab/Kode-cli",
+            faviconKey = "kode",
+        ),
+        CodingAgent(
             id = "leanctl",
             name = "LeanCTL",
             command = "leanctl",
@@ -306,6 +385,17 @@ object CodingAgents {
             provider = "Mistral AI",
             url = "https://mistral.ai/products/vibe",
             devUrl = "https://github.com/mistralai/mistral-vibe",
+        ),
+        CodingAgent(
+            id = "openclaw",
+            name = "OpenClaw",
+            command = "openclaw",
+            installHint = "npm install -g openclaw",
+            updateHint = "npm update --quiet --no-fund -g openclaw",
+            uninstallHint = "npm uninstall -g openclaw",
+            provider = "OpenClaw",
+            url = "https://openclaw.ai",
+            devUrl = "https://github.com/openclaw/openclaw",
         ),
         CodingAgent(
             id = "opencode",

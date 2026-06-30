@@ -123,7 +123,7 @@ case "$subcommand" in
     agents_json="$1"
 
     clear
-    printf "${COL_BRIGHT_WHITE}📋 Checking CLI coding agents${COL_RESET}\n"
+    printf "${COL_BRIGHT_WHITE}📋 Checking agents & companion tools${COL_RESET}\n"
     printf "${COL_DIM}%s${COL_RESET}\n" "──────────────────────────────────────────────────"
 
     ok_count=0
@@ -154,7 +154,7 @@ case "$subcommand" in
     output_file="${2:-}"
 
     clear
-    printf "${COL_BRIGHT_WHITE}📋 CLI coding agents — versions & updates${COL_RESET}\n"
+    printf "${COL_BRIGHT_WHITE}📋 Agents & companion tools — versions & updates${COL_RESET}\n"
     printf "${COL_DIM}%s${COL_RESET}\n" "──────────────────────────────────────────────────"
 
     # Fetch npm outdated once (columns: Package Current Wanted Latest ...)
@@ -237,12 +237,12 @@ case "$subcommand" in
     output_file="${3:-}"
 
     if [[ -z "$active_ids" ]]; then
-      echo "No coding agents are enabled. Enable them via Preferences > Tools > AgentHub."
+      echo "No agents or companion tools are enabled. Enable them via Preferences > Tools > AgentHub."
       exit 0
     fi
 
     clear
-    printf "${COL_BRIGHT_WHITE}🔄 Updating enabled CLI coding agents${COL_RESET}\n"
+    printf "${COL_BRIGHT_WHITE}🔄 Updating enabled agents & companion tools${COL_RESET}\n"
     printf "${COL_DIM}%s${COL_RESET}\n" "──────────────────────────────────────────────────"
 
     ok_count=0
@@ -282,7 +282,7 @@ case "$subcommand" in
     output_file="$2"
 
     clear
-    printf "${COL_BRIGHT_WHITE}🔍 Detecting installed CLI coding agents${COL_RESET}\n"
+    printf "${COL_BRIGHT_WHITE}🔍 Detecting installed agents & companion tools${COL_RESET}\n"
     printf "${COL_DIM}%s${COL_RESET}\n" "──────────────────────────────────────────────────"
 
     : > "$output_file"  # clear output file

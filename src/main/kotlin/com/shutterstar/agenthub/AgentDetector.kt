@@ -52,16 +52,16 @@ object AgentDetector {
             }
 
             process.exitValue() == 0
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             false
-        } catch (e: InterruptedException) {
+        } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false
         }
     }
 
     fun detectAllAgents(): Map<String, Boolean> {
-        val agents = CodingAgents.available()
+        val agents = CodingAgents.detectable()
         val pool = Executors.newFixedThreadPool(minOf(agents.size, 16))
         return try {
             agents
@@ -69,10 +69,10 @@ object AgentDetector {
                 .associate { (id, future) ->
                     id to try {
                         future.get()
-                    } catch (e: InterruptedException) {
+                    } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
                         false
-                    } catch (e: ExecutionException) {
+                    } catch (_: ExecutionException) {
                         false
                     }
                 }
@@ -105,7 +105,7 @@ object AgentDetector {
     fun checkForUpdates(project: Project, notifyIfUpToDate: Boolean = false) {
         val settings = AgentSettingsState.getInstance()
         val detectionResults = settings.getDetectionResults() ?: return
-        val installedAgents = CodingAgents.available().filter { detectionResults[it.id] == true }
+        val installedAgents = CodingAgents.detectable().filter { detectionResults[it.id] == true }
         if (installedAgents.isEmpty()) return
 
         val outdatedIds = mutableListOf<String>()

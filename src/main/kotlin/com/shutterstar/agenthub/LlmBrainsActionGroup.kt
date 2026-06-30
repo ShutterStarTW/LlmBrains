@@ -3,6 +3,7 @@
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Separator
@@ -21,7 +22,7 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         val activeAgents = settings.activeAgents()
         val detectionResults = settings.getDetectionResults()
         val installedAgents = if (detectionResults != null)
-            CodingAgents.available().filter { detectionResults[it.id] == true }
+            CodingAgents.detectable().filter { detectionResults[it.id] == true }
         else
             activeAgents
         activeAgents.forEach { agent ->
@@ -36,7 +37,28 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
             actions += AgentDirectAction(customAgent, project)
         }
 
-        if (activeAgents.isNotEmpty() || customAgent != null) {
+        val activeCompanions = settings.activeCompanions()
+        val companionSectionShown: Boolean
+        if (activeCompanions.isEmpty()) {
+            // Placeholder: when no companion tool is enabled (companions are opt-in, so after a fresh
+            // install / plugin update they all start off), show a disabled "Companion Tools" marker so
+            // the category stays discoverable.
+            companionSectionShown = CompanionTools.available().isNotEmpty()
+            if (companionSectionShown) {
+                actions += Separator.getInstance()
+                actions += SimpleLabelAction("Companion Tools")
+            }
+        } else {
+            // Once a companion is enabled the header is redundant — whoever enabled it already knows
+            // it is a companion tool — so list the active tools directly under a separator.
+            companionSectionShown = true
+            actions += Separator.getInstance()
+            activeCompanions.forEach { tool ->
+                actions += AgentDirectAction(tool, project)
+            }
+        }
+
+        if (activeAgents.isNotEmpty() || customAgent != null || companionSectionShown) {
             actions += Separator.getInstance()
         }
         actions += SimpleRunAction("Agent settings…", AllIcons.General.Settings) {
@@ -49,7 +71,7 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
             } else {
                 project?.let { proj ->
                     val tempFile = Files.createTempFile("llmbrains-detect-", ".txt")
-                    val command = buildDetectScript(CodingAgents.available(), tempFile)
+                    val command = buildDetectScript(CodingAgents.detectable(), tempFile)
                     TerminalCommandRunner.run(proj, "🔍 Detect Agents", command)
                     DetectionResultsWatcher.watchForDetectResults(proj, tempFile)
                 }
@@ -159,6 +181,12 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         private val project: Project?,
     ) : AnAction(agent.name), DumbAware {
 
+        // Companion tools get a distinct terminal-tab marker (🧩) to set them apart from agents (🤖).
+        private val launchTitle: String =
+            (if (CompanionTools.isCompanion(agent.id)) "🧩" else "🤖") + " " + agent.name
+
+        override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
         override fun update(e: AnActionEvent) {
             val icon = FaviconLoader.get(agent)
             if (icon != null) e.presentation.icon = icon
@@ -188,11 +216,11 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
                 TerminalCommandRunner.runRespectingSettings(proj, label, label, agent.platformInstallHint)
                 DetectionResultsWatcher.watchCommandAvailability(proj, agent, expectInstalled = true) {
                     if (background && AgentSettingsState.getInstance().getDetectionResults()?.get(agent.id) == true) {
-                        TerminalCommandRunner.run(proj, "🤖 ${agent.name}", agent.command)
+                        TerminalCommandRunner.run(proj, launchTitle, agent.command)
                     }
                 }
             } else {
-                TerminalCommandRunner.run(proj, "🤖 ${agent.name}", agent.command)
+                TerminalCommandRunner.run(proj, launchTitle, agent.command)
             }
         }
     }
@@ -202,6 +230,7 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         private val icon: Icon? = null,
         val runner: () -> Unit,
     ) : AnAction(text), DumbAware {
+        override fun getActionUpdateThread() = ActionUpdateThread.BGT
         override fun update(e: AnActionEvent) {
             if (icon != null) e.presentation.icon = icon
         }
@@ -209,6 +238,7 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
     }
 
     private class SimpleLabelAction(text: String) : AnAction(text), DumbAware {
+        override fun getActionUpdateThread() = ActionUpdateThread.BGT
         override fun actionPerformed(e: AnActionEvent) {}
         override fun update(e: AnActionEvent) {
             e.presentation.isEnabled = false

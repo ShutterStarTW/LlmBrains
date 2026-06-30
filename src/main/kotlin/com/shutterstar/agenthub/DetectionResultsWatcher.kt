@@ -45,7 +45,14 @@ object DetectionResultsWatcher {
                     // ModalityState.any() so the notification/refresh fires while the modal Settings dialog is open.
                     ApplicationManager.getApplication().invokeLater({
                         AgentSettingsState.getInstance().updateDetectionResult(agent.id, isInstalled)
-                        if (!isUpdate) AgentSettingsState.getInstance().setAgentActive(agent.id, isInstalled)
+                        if (!isUpdate) {
+                            // Activate in the matching set: companions are opt-in, agents opt-out.
+                            if (CompanionTools.isCompanion(agent.id)) {
+                                AgentSettingsState.getInstance().setCompanionActive(agent.id, isInstalled)
+                            } else {
+                                AgentSettingsState.getInstance().setAgentActive(agent.id, isInstalled)
+                            }
+                        }
                         AgentSettingsConfigurable.scheduleRefresh()
                         val succeeded = isInstalled == expectInstalled
                         val type = if (succeeded) NotificationType.INFORMATION else NotificationType.WARNING
@@ -157,7 +164,7 @@ object DetectionResultsWatcher {
             AgentSettingsState.getInstance().saveOutdatedAgents(outdatedIds)
             AgentSettingsConfigurable.scheduleRefresh()
             val msg = if (updates > 0) {
-                val names = CodingAgents.all.filter { it.id in outdatedIds }.map { it.name }
+                val names = (CodingAgents.all + CompanionTools.all).filter { it.id in outdatedIds }.map { it.name }
                 val nameList = if (names.isNotEmpty()) ": ${names.joinToString(", ")}" else ""
                 "$uptodate up to date · $updates ${if (updates == 1) "update" else "updates"} available$nameList"
             } else {

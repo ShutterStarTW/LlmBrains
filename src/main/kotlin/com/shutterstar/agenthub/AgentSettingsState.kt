@@ -22,6 +22,7 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         var outdatedAgentIds: MutableList<String> = mutableListOf(),
         var runInBackground: Boolean = true,
         var defaultsApplied: Boolean = false,
+        var activeCompanionIds: MutableList<String> = mutableListOf(),
     )
 
     private var state: State = State()
@@ -44,6 +45,19 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
     fun activeAgents(): List<CodingAgent> = CodingAgents.available().filter { isAgentActive(it.id) }
 
+    fun isCompanionActive(id: String): Boolean = id in state.activeCompanionIds
+
+    fun setCompanionActive(id: String, active: Boolean) {
+        if (active) {
+            if (id !in state.activeCompanionIds) state.activeCompanionIds.add(id)
+        } else {
+            state.activeCompanionIds.remove(id)
+        }
+    }
+
+    fun activeCompanions(): List<CodingAgent> =
+        CompanionTools.available().filter { isCompanionActive(it.id) }
+
     /**
      * On a fresh install, enable only a sensible default set — the top 10 agents plus any
      * detected-installed agents — instead of all 30. Runs once (guarded by [State.defaultsApplied]);
@@ -56,6 +70,21 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
             .filter { it !in activeIds }
             .toMutableList()
         state.defaultsApplied = true
+    }
+
+    /**
+     * After a plugin update introduces new agents, keep the opt-out model from silently enabling
+     * them: any agent absent from [previouslyKnownIds] (the agent ids seen at the previous detection)
+     * that is NOT currently detected-installed is added to [State.inactiveAgentIds]. Newly-introduced
+     * agents that *are* installed stay active. No-op when there is no prior baseline to compare against,
+     * so an existing user's explicit selection is never overwritten.
+     */
+    fun deactivateNewUninstalledAgents(previouslyKnownIds: Set<String>) {
+        if (previouslyKnownIds.isEmpty()) return
+        val installed = state.detectedInstalledIds.toSet()
+        CodingAgents.all.map { it.id }
+            .filter { it !in previouslyKnownIds && it !in installed && it !in state.inactiveAgentIds }
+            .forEach { state.inactiveAgentIds.add(it) }
     }
 
     fun getDetectionResults(): Map<String, Boolean>? {

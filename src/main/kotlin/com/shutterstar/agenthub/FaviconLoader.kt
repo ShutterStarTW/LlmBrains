@@ -11,8 +11,10 @@ object FaviconLoader {
     private val notFound = ConcurrentHashMap.newKeySet<String>()
 
     fun get(agent: CodingAgent): Icon? {
-        val host = runCatching { URI(agent.url).host }.getOrNull() ?: return null
-        val domain = rootDomain(host)
+        val domain = agent.faviconKey.ifBlank {
+            val host = runCatching { URI(agent.url).host }.getOrNull() ?: return null
+            rootDomain(host)
+        }
         if (domain in notFound) return null
         return cache.getOrPut(domain) {
             loadResource(domain) ?: run { notFound.add(domain); return null }
