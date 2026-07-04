@@ -117,6 +117,7 @@ See also: [`CHANGES.md`](CHANGES.md)
 - **Check & Update utilities** — operate on all installed agents, not just enabled ones
 - **Configurable** — enable/disable agents via Settings > Tools > AgentHub
 - **Cross-platform** — works on macOS, Linux, and Windows
+- **WSL mode** (Windows) — optionally run every agent inside a WSL distribution instead of natively
 
 ## Supported CLI Agents
 
@@ -154,6 +155,7 @@ See also: [`CHANGES.md`](CHANGES.md)
 | [OpenClaw](https://openclaw.ai)                                                | `openclaw`   | OpenClaw    | `npm install -g openclaw`                                                       |
 | [OpenCode](https://opencode.ai)                                                | `opencode`   | SST         | `npm install -g opencode-ai`                                                    |
 | [OpenHands](https://openhands.dev/)                                            | `openhands`  | All Hands   | `pip install openhands-ai`                                                      |
+| [Pi](https://pi.dev)                                                           | `pi`         | Mario Zechner | `npm install -g @mariozechner/pi-coding-agent`                                |
 | [Plandex](https://plandex.ai)                                                  | `plandex`    | Plandex     | `curl -sL https://plandex.ai/install.sh \| bash`                                |
 | [Qodo](https://qodo.ai/)                                                       | `qodo`       | Qodo        | `npm install -g @qodo/command`                                                  |
 | [Qoder CLI](https://qoder.com)                                                 | `qodercli`   | Qoder AI    | `npm install -g @qoder-ai/qodercli`                                             |
@@ -170,12 +172,21 @@ tracking, context packing, skill management. They share the same install / detec
 flow, appear in their own **Companion Tools** section in the toolbar dropdown and Settings, and are
 **off by default** (opt-in).
 
-| Tool                                       | Command        | Provider     | Installation                     | What it does                                                        |
-|--------------------------------------------|----------------|--------------|----------------------------------|---------------------------------------------------------------------|
-| [ccusage](https://ccusage.com)             | `ccusage`      | ryoppippi    | `npm install -g ccusage`         | Token & cost usage reports from local agent logs                    |
-| [Repomix](https://repomix.com)             | `repomix`      | yamadashy    | `npm install -g repomix`         | Packs your repository into a single AI-friendly file                |
-| [Skills](https://www.skills.sh)            | `skills`       | Vercel       | `npm install -g skills`          | Installs reusable agent skills across many CLI agents               |
-| [TokenTracker](https://www.tokentracker.cc)| `tokentracker` | TokenTracker | `npm install -g tokentracker-cli`| Local-first token & cost dashboard across 25 AI coding tools        |
+| Tool                                                                          | Command        | Provider        | Installation                                          | What it does                                                        |
+|--------------------------------------------------------------------------------|----------------|-----------------|--------------------------------------------------------|---------------------------------------------------------------------|
+| [ccusage](https://ccusage.com)                                                 | `ccusage`      | ryoppippi       | `npm install -g ccusage`                               | Token & cost usage reports from local agent logs                    |
+| [Claude Code Router](https://ccrdesk.top)                                     | `ccr`          | musistudio      | `npm install -g @musistudio/claude-code-router`        | Routes Claude Code requests to other providers/models                |
+| [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | `claude-monitor` | Maciek-roboblog | `pip install claude-monitor`                     | Live, predictive token & cost dashboard                              |
+| [code2prompt](https://code2prompt.dev)                                        | `code2prompt`  | mufeedvh        | `cargo install code2prompt`                            | Codebase to LLM prompt with Handlebars templating and token counting |
+| [CodeGrab](https://github.com/epilande/codegrab)                              | `grab`         | epilande        | `brew install epilande/tap/codegrab`                   | Interactive TUI repo-context packer with secret redaction            |
+| [CodeRabbit CLI](https://www.coderabbit.ai/cli)                               | `coderabbit`   | CodeRabbit      | `curl -fsSL https://cli.coderabbit.ai/install.sh \| sh` | AI code reviews directly in the terminal                            |
+| [LiteLLM](https://www.litellm.ai)                                             | `litellm`      | BerriAI         | `pip install 'litellm[proxy]'`                         | Self-hosted multi-provider LLM gateway with cost tracking            |
+| [Repomix](https://repomix.com)                                                | `repomix`      | yamadashy       | `npm install -g repomix`                               | Packs your repository into a single AI-friendly file                |
+| [Skills](https://www.skills.sh)                                              | `skills`       | Vercel          | `npm install -g skills`                                | Installs reusable agent skills across many CLI agents                |
+| [TokenTracker](https://www.tokentracker.cc)                                   | `tokentracker` | TokenTracker    | `npm install -g tokentracker-cli`                      | Local-first token & cost dashboard across 25 AI coding tools         |
+| [Tokscale](https://tokscale.ai)                                               | `tokscale`     | junhoyeo        | `npm install -g tokscale`                              | TUI token & cost dashboard with a contribution graph                 |
+
+> **Note:** CodeRabbit CLI is hidden on Windows (Windows support not released yet).
 
 ## Custom Agent
 
@@ -189,6 +200,28 @@ In addition to the built-in agents, you can configure your own custom CLI agent:
    - **URL**: Documentation URL for reference
 
 Your custom agent will appear in the dropdown menu alongside the built-in agents.
+
+## WSL Mode (Windows)
+
+On Windows, AgentHub can run agents either **natively** or inside a **WSL distribution**.
+Enable it in **Settings/Preferences > Tools > AgentHub > Behavior**, under *"Run agents in:"* —
+choose `WSL` and pick a distribution (or leave it on the default one).
+
+In WSL mode:
+
+- Every command — agent launch, detection, install/update/remove — runs inside the distro.
+- Detection uses the distro's own `command -v` and ignores Windows-side binaries exposed through
+  WSL interop, so an agent that's only installed on the Windows side is correctly reported as
+  not installed in the distro.
+- A few agents that are hidden on native Windows because they have no native Windows build
+  (ForgeCode, LeanCTL, Plandex, Command Code) become available, since they run as Linux binaries
+  inside the distro.
+- If `pip`/`npm` is missing in the distro, install/update commands show a friendly hint
+  (e.g. `sudo apt install python3-pip`) instead of failing silently.
+
+Switching between native and WSL mode (or changing the distro) re-runs detection automatically,
+since the two environments have a different set of "installed" agents. See
+[WSL Mode](https://ShutterStarTW.github.io/LlmBrains/wsl-mode/) in the docs for details.
 
 ## Usage
 

@@ -2,7 +2,9 @@ package com.shutterstar.agenthub
 
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
@@ -39,8 +41,11 @@ class AgentSettingsConfigurable : Configurable {
 
     private data class AgentRow(val agent: CodingAgent, var enabled: Boolean)
 
-    private val agentRows: List<AgentRow> = CodingAgents.available().map { AgentRow(it, false) }
-    private val companionRows: List<AgentRow> = CompanionTools.available().map { AgentRow(it, false) }
+    // Mutable: `available()` depends on the WSL mode, so switching Windows ↔ WSL in this very
+    // panel must rebuild the row lists (see rebuildRows) — the tables keep referencing these
+    // same list instances.
+    private val agentRows: MutableList<AgentRow> = CodingAgents.available().map { AgentRow(it, false) }.toMutableList()
+    private val companionRows: MutableList<AgentRow> = CompanionTools.available().map { AgentRow(it, false) }.toMutableList()
 
     // Detection results: null = not yet checked, true/false = result
     private var detectedInstalled: Map<String, Boolean> = AgentSettingsState.getInstance().getDetectionResults() ?: emptyMap()
@@ -322,6 +327,12 @@ class AgentSettingsConfigurable : Configurable {
 
     private val runInBackgroundCheckbox = JBCheckBox("Run operations in background (no terminal window)")
 
+    // Execution environment (Windows only): native shell vs. a WSL distribution.
+    private val execEnvCombo = ComboBox(arrayOf("Windows (native)", "WSL"))
+    private val wslDistroCombo = ComboBox<String>().apply { prototypeDisplayValue = "Ubuntu-24.04-LTS-xxxx" }
+    private val wslStatusLabel = JBLabel("")
+    private var wslDistrosLoaded = false
+
     private val customEnabledCheckbox = JBCheckBox("Enable custom agent")
     private val customNameField = JBTextField().apply { emptyText.text = "e.g. My Agent" }
     private val customCommandField = JBTextField().apply { emptyText.text = "e.g. myagent" }
@@ -420,6 +431,29 @@ class AgentSettingsConfigurable : Configurable {
             runInBackgroundCheckbox.alignmentX = Component.LEFT_ALIGNMENT
             content.add(runInBackgroundCheckbox)
 
+            if (OsDetector.isWindows()) {
+                content.add(Box.createVerticalStrut(6))
+                execEnvCombo.maximumSize = execEnvCombo.preferredSize
+                wslDistroCombo.maximumSize = wslDistroCombo.preferredSize
+                execEnvCombo.addActionListener {
+                    val wsl = execEnvCombo.selectedIndex == 1
+                    wslDistroCombo.isEnabled = wsl
+                    if (wsl) loadWslDistrosAsync() else wslStatusLabel.text = ""
+                }
+                val wslRow = JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.X_AXIS)
+                    add(JBLabel("Run agents in:"))
+                    add(Box.createHorizontalStrut(6))
+                    add(execEnvCombo)
+                    add(Box.createHorizontalStrut(8))
+                    add(wslDistroCombo)
+                    add(Box.createHorizontalStrut(8))
+                    add(wslStatusLabel)
+                    alignmentX = Component.LEFT_ALIGNMENT
+                }
+                content.add(wslRow)
+            }
+
             add(content, BorderLayout.NORTH)
         }
     }
@@ -487,6 +521,17 @@ class AgentSettingsConfigurable : Configurable {
         ShowSettingsUtil.getInstance().showSettingsDialog(project, "AgentHub")
     }
 
+    // Recomputes the visible agent/companion rows for the current execution environment
+    // (the WSL setting was just applied, so available() already reflects the new mode).
+    private fun rebuildRows() {
+        val settings = AgentSettingsState.getInstance()
+        agentRows.clear()
+        agentRows.addAll(CodingAgents.available().map { AgentRow(it, settings.isAgentActive(it.id)) })
+        companionRows.clear()
+        companionRows.addAll(CompanionTools.available().map { AgentRow(it, settings.isCompanionActive(it.id)) })
+        tables.forEach { it.tableModel.fireTableDataChanged() }
+    }
+
     private fun runAgentCommand(
         project: Project,
         label: String,
@@ -519,6 +564,51 @@ class AgentSettingsConfigurable : Configurable {
             spinnerTimer.start()
         }
         tables.forEach { it.table.repaint() }
+    }
+
+    private fun uiUseWsl(): Boolean = OsDetector.isWindows() && execEnvCombo.selectedIndex == 1
+
+    private fun uiWslDistro(): String =
+        (wslDistroCombo.selectedItem as? String)?.takeIf { it != DEFAULT_DISTRO_ITEM } ?: ""
+
+    // Before the real distro list arrives, show just the default entry plus the saved distro so
+    // an early Apply cannot lose the persisted selection.
+    private fun seedDistroCombo(saved: String) {
+        wslDistroCombo.removeAllItems()
+        wslDistroCombo.addItem(DEFAULT_DISTRO_ITEM)
+        if (saved.isNotEmpty()) wslDistroCombo.addItem(saved)
+        wslDistroCombo.selectedItem = if (saved.isEmpty()) DEFAULT_DISTRO_ITEM else saved
+    }
+
+    private fun selectDistro(saved: String) {
+        if (!wslDistrosLoaded) {
+            seedDistroCombo(saved)
+            return
+        }
+        if (saved.isNotEmpty() && (0 until wslDistroCombo.itemCount).none { wslDistroCombo.getItemAt(it) == saved }) {
+            wslDistroCombo.addItem(saved)
+        }
+        wslDistroCombo.selectedItem = if (saved.isEmpty()) DEFAULT_DISTRO_ITEM else saved
+    }
+
+    // `wsl.exe --list` runs off the EDT; ModalityState.any() so the result lands while the modal
+    // Settings dialog is open (same pattern as AgentDetector.detectAndNotify).
+    private fun loadWslDistrosAsync() {
+        if (wslDistrosLoaded) return
+        val selected = uiWslDistro()
+        wslStatusLabel.text = "Loading distributions…"
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val distros = WslSupport.listDistros()
+            ApplicationManager.getApplication().invokeLater({
+                wslDistrosLoaded = true
+                wslDistroCombo.removeAllItems()
+                wslDistroCombo.addItem(DEFAULT_DISTRO_ITEM)
+                distros.forEach { wslDistroCombo.addItem(it) }
+                if (selected.isNotEmpty() && selected !in distros) wslDistroCombo.addItem(selected)
+                wslDistroCombo.selectedItem = if (selected.isEmpty()) DEFAULT_DISTRO_ITEM else selected
+                wslStatusLabel.text = if (distros.isEmpty()) "WSL not detected on this system" else ""
+            }, ModalityState.any())
+        }
     }
 
     private fun runAutoDetect() {
@@ -579,7 +669,9 @@ class AgentSettingsConfigurable : Configurable {
             customCommandField.text != state.customAgentCommand ||
             customUrlField.text != state.customAgentUrl
         val behaviorModified = runInBackgroundCheckbox.isSelected != state.runInBackground
-        return builtInModified || companionModified || customModified || behaviorModified
+        val wslModified = OsDetector.isWindows() &&
+            (uiUseWsl() != state.useWsl || uiWslDistro() != state.wslDistro)
+        return builtInModified || companionModified || customModified || behaviorModified || wslModified
     }
 
     override fun apply() {
@@ -592,6 +684,24 @@ class AgentSettingsConfigurable : Configurable {
         state.customAgentCommand = customCommandField.text
         state.customAgentUrl = customUrlField.text
         state.runInBackground = runInBackgroundCheckbox.isSelected
+
+        if (OsDetector.isWindows()) {
+            val newUseWsl = uiUseWsl()
+            val newDistro = uiWslDistro()
+            val envChanged = newUseWsl != state.useWsl || (newUseWsl && newDistro != state.wslDistro)
+            settings.setWslMode(newUseWsl, newDistro)
+            if (envChanged) {
+                // The installed-set differs per environment — drop stale results and re-detect.
+                settings.clearDetectionResults()
+                detectedInstalled = emptyMap()
+                outdatedAgents = emptySet()
+                // The agent list itself also differs: WSL mode surfaces the unsupportedOnWindows
+                // agents (forge, plandex, …), native mode hides them.
+                rebuildRows()
+                refreshDetectStatusLabel()
+                AgentDetector.detectAndNotify(ProjectManager.getInstance().openProjects.lastOrNull())
+            }
+        }
     }
 
     override fun reset() {
@@ -607,11 +717,19 @@ class AgentSettingsConfigurable : Configurable {
         customCommandField.text = state.customAgentCommand
         customUrlField.text = state.customAgentUrl
         runInBackgroundCheckbox.isSelected = state.runInBackground
+        if (OsDetector.isWindows()) {
+            execEnvCombo.selectedIndex = if (state.useWsl) 1 else 0
+            selectDistro(state.wslDistro)
+            wslDistroCombo.isEnabled = state.useWsl
+            if (state.useWsl) loadWslDistrosAsync()
+        }
     }
 
     override fun getDisplayName(): String = "AgentHub"
 
     companion object {
+        private const val DEFAULT_DISTRO_ITEM = "Default distribution"
+
         // EDT-only: set when panel is open, cleared when disposed
         private var refreshCallback: (() -> Unit)? = null
 

@@ -30,7 +30,13 @@ object AgentDetector {
 
     fun isCommandAvailable(command: String): Boolean {
         return try {
-            val process = if (OsDetector.isWindows()) {
+            val process = if (WslSupport.isActive()) {
+                // nativeCheck, not plain `command -v`: WSL's interop PATH would report every
+                // Windows-side binary (/mnt/*) as installed in the distro.
+                ProcessBuilder(WslSupport.wrapArgv(WslSupport.nativeCheck(command)))
+                    .redirectErrorStream(true)
+                    .start()
+            } else if (OsDetector.isWindows()) {
                 ProcessBuilder("where", command)
                     .redirectErrorStream(true)
                     .start()
@@ -115,8 +121,11 @@ object AgentDetector {
         if (npmAgents.isNotEmpty()) {
             // --json exits with code 1 when packages are outdated; runSilent captures stdout regardless
             val output = runSilent(
-                if (OsDetector.isWindows()) arrayOf("cmd", "/c", "npm outdated -g --json")
-                else arrayOf("bash", "-lc", "npm outdated -g --json 2>/dev/null")
+                when {
+                    WslSupport.isActive() -> WslSupport.wrapArgv("npm outdated -g --json 2>/dev/null").toTypedArray()
+                    OsDetector.isWindows() -> arrayOf("cmd", "/c", "npm outdated -g --json")
+                    else -> arrayOf("bash", "-lc", "npm outdated -g --json 2>/dev/null")
+                }
             )
             npmAgents.forEach { agent ->
                 val pkg = packageNameFrom(agent.updateHint)
@@ -129,8 +138,11 @@ object AgentDetector {
         val pipAgents = installedAgents.filter { "pip" in it.updateHint }
         if (pipAgents.isNotEmpty()) {
             val output = runSilent(
-                if (OsDetector.isWindows()) arrayOf("cmd", "/c", "pip list --outdated --format=json")
-                else arrayOf("bash", "-lc", "pip list --outdated --format=json 2>/dev/null")
+                when {
+                    WslSupport.isActive() -> WslSupport.wrapArgv("pip list --outdated --format=json 2>/dev/null").toTypedArray()
+                    OsDetector.isWindows() -> arrayOf("cmd", "/c", "pip list --outdated --format=json")
+                    else -> arrayOf("bash", "-lc", "pip list --outdated --format=json 2>/dev/null")
+                }
             ).lowercase()
             pipAgents.forEach { agent ->
                 val pkg = packageNameFrom(agent.updateHint).lowercase()

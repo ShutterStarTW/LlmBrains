@@ -110,6 +110,17 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
 
     // Each element of [args] is passed as a separate quoted argument; escaping is handled here.
     private fun buildScript(subcommand: String, args: List<String>): String {
+        if (WslSupport.isActive()) {
+            // WSL mode: run the bundled bash helper (installed on Windows too) through its
+            // /mnt/<drive> path. Temp data/result file arguments are translated the same way —
+            // the bash side reads/writes the very files DetectionResultsWatcher polls on the
+            // Windows side. TerminalCommandRunner adds the `wsl.exe --exec bash -lic` envelope.
+            val scriptPath = LlmBrainsScriptInstaller.bashScriptPath()
+                ?: return """echo 'AgentHub: script installation failed — check IDE logs'"""
+            val wslScript = escapeForDoubleQuotes(WslSupport.toWslPath(scriptPath.toString()))
+            val quotedArgs = args.joinToString(" ") { "\"${escapeForDoubleQuotes(WslSupport.toWslPath(it))}\"" }
+            return """bash "$wslScript" $subcommand $quotedArgs"""
+        }
         return if (OsDetector.isWindows()) {
             val scriptPath = LlmBrainsScriptInstaller.powershellScriptPath()
                 ?: return """powershell -Command "Write-Host 'AgentHub: script installation failed — check IDE logs'""""

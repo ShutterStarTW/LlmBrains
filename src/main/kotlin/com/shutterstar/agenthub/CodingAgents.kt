@@ -25,11 +25,13 @@ data class CodingAgent(
     /** No native Windows install path (WSL-only or unsupported) → hidden from the UI on Windows. */
     val unsupportedOnWindows: Boolean = false,
 ) {
+    // In WSL mode the effective platform is Linux: the plain (Unix) hints apply, which also
+    // avoids double-wrapping the `wsl bash -c ...` style installHintWindows entries.
     val platformInstallHint: String get() =
-        if (OsDetector.isWindows() && installHintWindows.isNotBlank()) installHintWindows else installHint
+        if (OsDetector.isWindows() && !WslSupport.isActive() && installHintWindows.isNotBlank()) installHintWindows else installHint
 
     val platformUninstallHint: String get() =
-        if (OsDetector.isWindows() && uninstallHintWindows.isNotBlank()) uninstallHintWindows else uninstallHint
+        if (OsDetector.isWindows() && !WslSupport.isActive() && uninstallHintWindows.isNotBlank()) uninstallHintWindows else uninstallHint
 }
 
 object CodingAgents {
@@ -42,10 +44,11 @@ object CodingAgents {
         "grok", "qwen", "goose", "opencode", "cline",
     )
 
-    // On Windows, hide agents with no native Windows install (WSL-only / unsupported): a binary
-    // installed inside WSL is invisible to the Windows-native detection (`where`) and launch.
+    // On Windows (native mode), hide agents with no native Windows install (WSL-only /
+    // unsupported): a binary installed inside WSL is invisible to the Windows-native detection
+    // (`where`) and launch. In WSL mode everything runs inside the distro, so the full list applies.
     fun available(): List<CodingAgent> =
-        if (OsDetector.isWindows()) all.filterNot { it.unsupportedOnWindows } else all
+        if (OsDetector.isWindows() && !WslSupport.isActive()) all.filterNot { it.unsupportedOnWindows } else all
 
     /** Agents + companion tools — the full set covered by detection / check / update-all. */
     fun detectable(): List<CodingAgent> = available() + CompanionTools.available()
@@ -184,6 +187,7 @@ object CodingAgents {
             provider = "GitHub",
             url = "https://github.com/features/copilot/cli",
             devUrl = "https://github.com/github/copilot-cli",
+            faviconKey = "copilot",
         ),
         CodingAgent(
             id = "crush",
@@ -348,7 +352,7 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g @shareai-lab/kode",
             uninstallHint = "npm uninstall -g @shareai-lab/kode",
             provider = "shareAI-lab",
-            url = "https://github.com/shareAI-lab/Kode-cli",
+            url = "",
             devUrl = "https://github.com/shareAI-lab/Kode-cli",
             faviconKey = "kode",
         ),
@@ -418,6 +422,17 @@ object CodingAgents {
             provider = "All Hands",
             url = "https://openhands.dev/",
             devUrl = "https://github.com/OpenHands/OpenHands",
+        ),
+        CodingAgent(
+            id = "pi",
+            name = "Pi",
+            command = "pi",
+            installHint = "npm install -g @mariozechner/pi-coding-agent",
+            updateHint = "npm update --quiet --no-fund -g @mariozechner/pi-coding-agent",
+            uninstallHint = "npm uninstall -g @mariozechner/pi-coding-agent",
+            provider = "Mario Zechner",
+            url = "https://pi.dev",
+            devUrl = "https://github.com/badlogic/pi-mono",
         ),
         CodingAgent(
             id = "plandex",

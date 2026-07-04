@@ -7,7 +7,11 @@ import com.intellij.openapi.ui.Messages
 object TerminalCommandRunner {
     fun confirmRun(project: Project?, title: String, command: String, context: String? = null, background: Boolean = false): Boolean {
         val intro = context?.let { "$it\n\n" } ?: ""
-        val where = if (background) "in the background" else "in a terminal"
+        val wslSuffix = if (WslSupport.isActive()) {
+            val distro = WslSupport.settings.distro.trim()
+            if (distro.isEmpty()) " in WSL" else " in WSL ($distro)"
+        } else ""
+        val where = (if (background) "in the background" else "in a terminal") + wslSuffix
         val message = "${intro}Run this command $where?\n\n$command"
         return Messages.showYesNoDialog(project, message, title, Messages.getQuestionIcon()) == Messages.YES
     }
@@ -37,10 +41,11 @@ object TerminalCommandRunner {
 
     fun runInBackground(project: Project?, title: String, command: String) {
         try {
-            val shell = if (OsDetector.isWindows())
-                listOf("powershell", "-NoProfile", "-NonInteractive", "-Command", command)
-            else
-                listOf("bash", "-lc", command)
+            val shell = when {
+                WslSupport.isActive() -> WslSupport.wrapArgv(command)
+                OsDetector.isWindows() -> listOf("powershell", "-NoProfile", "-NonInteractive", "-Command", command)
+                else -> listOf("bash", "-lc", command)
+            }
             ProcessBuilder(shell).redirectErrorStream(true).start()
         } catch (_: Exception) {
             DetectionResultsWatcher.showNotification(
@@ -54,6 +59,9 @@ object TerminalCommandRunner {
 
     fun run(project: Project, title: String, command: String) {
         val workingDir = project.basePath ?: ""
+        // WSL mode: wrap for the (PowerShell) terminal line. wsl.exe maps the terminal's working
+        // directory to the matching /mnt/<drive> path, so the command starts in the project dir.
+        val effectiveCommand = if (WslSupport.isActive()) WslSupport.wrapForTerminal(command) else command
 
         // Candidates ordered newest → oldest API; TerminalView is deprecated but present in 2023.x/2024.x,
         // TerminalToolWindowManager is the oldest fallback.
@@ -62,12 +70,12 @@ object TerminalCommandRunner {
             "org.jetbrains.plugins.terminal.TerminalView",
             "org.jetbrains.plugins.terminal.TerminalToolWindowManager",
         )
-        if (terminalApiClasses.any { tryRunViaReflection(it, project, workingDir, title, command) }) return
+        if (terminalApiClasses.any { tryRunViaReflection(it, project, workingDir, title, effectiveCommand) }) return
 
         DetectionResultsWatcher.showNotification(
             project,
             "Error",
-            "Could not open a terminal window. Please run manually: $command",
+            "Could not open a terminal window. Please run manually: $effectiveCommand",
             NotificationType.ERROR,
         )
     }

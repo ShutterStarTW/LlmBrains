@@ -46,7 +46,7 @@ class CodingAgentsTest {
     }
 
     @Test
-    fun `agent count is 38`() {
-        assertEquals(38, CodingAgents.all.size)
+    fun `agent count is 39`() {
+        assertEquals(39, CodingAgents.all.size)
     }
 }

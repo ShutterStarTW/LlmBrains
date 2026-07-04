@@ -30,6 +30,29 @@ read_agent_definitions() {
   rm -f "$path"
 }
 
+# WSL appends the Windows PATH (/mnt/c/...) by default, so `command -v` also finds Windows-side
+# shims (e.g. every Windows-npm global package). Those must not count as installed in the distro,
+# so under WSL resolutions below /mnt are rejected. No PS1 mirror: this branch only runs in WSL.
+case "${WSL_DISTRO_NAME:-}${WSL_INTEROP:-}" in
+  "") IS_WSL=0 ;;
+  *)  IS_WSL=1 ;;
+esac
+
+has_cmd() {
+  local p
+  p=$(command -v "$1" 2>/dev/null) || return 1
+  if [[ $IS_WSL -eq 1 && "$p" == /mnt/* ]]; then return 1; fi
+  return 0
+}
+
+# " (Windows-only …)" when the binary exists but only via the interop PATH — telling the user
+# "not found" alone reads as a lie when they can type the command right there.
+windows_only_note() {
+  if [[ $IS_WSL -eq 1 ]] && command -v "$1" >/dev/null 2>&1; then
+    echo " (Windows-only, not in this distro)"
+  fi
+}
+
 if [[ $# -lt 1 ]]; then
   usage
   exit 1
@@ -55,7 +78,7 @@ case "$subcommand" in
       exit 1
     fi
 
-    if command -v "$binary" >/dev/null 2>&1; then
+    if has_cmd "$binary"; then
       read -ra _cmd <<< "$version_command"
       version_output=$("${_cmd[@]}" 2>&1)
       status=$?
@@ -68,10 +91,11 @@ case "$subcommand" in
         exit 1
       fi
     else
+      win_note=$(windows_only_note "$binary")
       if [[ -n "$install_hint" ]]; then
-        printf "  ${COL_YELLOW}✗${COL_RESET}  %-20s ${COL_YELLOW}not installed${COL_RESET}  →  %s\n" "$name" "$install_hint"
+        printf "  ${COL_YELLOW}✗${COL_RESET}  %-20s ${COL_YELLOW}not installed%s${COL_RESET}  →  %s\n" "$name" "$win_note" "$install_hint"
       else
-        printf "  ${COL_YELLOW}✗${COL_RESET}  %-20s ${COL_YELLOW}not installed${COL_RESET}\n" "$name"
+        printf "  ${COL_YELLOW}✗${COL_RESET}  %-20s ${COL_YELLOW}not installed%s${COL_RESET}\n" "$name" "$win_note"
       fi
       exit 1
     fi
@@ -87,7 +111,7 @@ case "$subcommand" in
     update_command="$3"
     install_hint="${4:-}"
 
-    if command -v "$binary" >/dev/null 2>&1; then
+    if has_cmd "$binary"; then
       printf "  ${COL_BRIGHT_WHITE}↻${COL_RESET}  ${COL_BRIGHT_WHITE}%s${COL_RESET}\n" "$name"
       read -ra _cmd <<< "$update_command"
       update_output=$("${_cmd[@]}" 2>&1)
@@ -159,14 +183,17 @@ case "$subcommand" in
 
     # Fetch npm outdated once (columns: Package Current Wanted Latest ...)
     npm_outdated=""
-    if command -v npm >/dev/null 2>&1; then
+    if has_cmd npm; then
       npm_outdated=$(npm outdated -g 2>/dev/null || true)
     fi
 
-    # Fetch pip outdated once (columns: Package Version Latest Type)
+    # Fetch pip outdated once (columns: Package Version Latest Type); Debian/Ubuntu may only
+    # ship the pip3 name (python3-pip), so fall back to that
     pip_outdated=""
-    if command -v pip >/dev/null 2>&1; then
+    if has_cmd pip; then
       pip_outdated=$(pip list --outdated 2>/dev/null || true)
+    elif has_cmd pip3; then
+      pip_outdated=$(pip3 list --outdated 2>/dev/null || true)
     fi
 
     ok_count=0
@@ -179,7 +206,7 @@ case "$subcommand" in
         version_command="$command $version_args"
         binary="${version_command%% *}"
 
-        if command -v "$binary" >/dev/null 2>&1; then
+        if has_cmd "$binary"; then
           read -ra _cmd <<< "$version_command"
           version_output=$("${_cmd[@]}" 2>&1)
           status=$?
@@ -295,12 +322,12 @@ case "$subcommand" in
         version_command="$command $version_args"
         binary="${version_command%% *}"
 
-        if command -v "$binary" >/dev/null 2>&1; then
+        if has_cmd "$binary"; then
           printf "  ${COL_BRIGHT_GREEN}✓${COL_RESET}  %-20s ${COL_BRIGHT_GREEN}installed${COL_RESET}\n" "$name"
           echo "$id=1" >> "$output_file"
           ((found_count++))
         else
-          printf "  ${COL_YELLOW}✗${COL_RESET}  %-20s ${COL_DIM}not found${COL_RESET}\n" "$name"
+          printf "  ${COL_YELLOW}✗${COL_RESET}  %-20s ${COL_DIM}not found%s${COL_RESET}\n" "$name" "$(windows_only_note "$binary")"
           echo "$id=0" >> "$output_file"
           ((missing_count++))
         fi

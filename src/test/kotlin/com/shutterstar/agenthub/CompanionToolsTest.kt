@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test
 class CompanionToolsTest {
 
     @Test
-    fun `companion tool count is 4`() {
-        assertEquals(4, CompanionTools.all.size)
+    fun `companion tool count is 11`() {
+        assertEquals(11, CompanionTools.all.size)
     }
 
     @Test

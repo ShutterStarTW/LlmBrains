@@ -25,6 +25,8 @@
             <li><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents
                 (usage tracking, context packing, skills); off by default.</li>
             <li><b>Cross-platform</b> &mdash; macOS, Linux and Windows (PowerShell helper script).</li>
+            <li><b>WSL mode</b> (Windows) &mdash; optionally run every agent inside a WSL
+                distribution instead of natively.</li>
         </ul>
 
         <p>
@@ -66,6 +68,7 @@
             <li><a href="https://openclaw.ai">OpenClaw</a> &mdash; OpenClaw</li>
             <li><a href="https://opencode.ai">OpenCode</a> &mdash; SST</li>
             <li><a href="https://openhands.dev/">OpenHands</a> &mdash; All Hands</li>
+            <li><a href="https://pi.dev">Pi</a> &mdash; Mario Zechner</li>
             <li><a href="https://plandex.ai">Plandex</a> &mdash; Plandex</li>
             <li><a href="https://qodo.ai">Qodo</a> &mdash; Qodo</li>
             <li><a href="https://qoder.com">Qoder CLI</a> &mdash; Qoder AI</li>
@@ -74,17 +77,36 @@
             <li><a href="https://vinhnx.github.io/">VT Code</a> &mdash; vinhnx</li>
         </ul>
 
-        <p><i>Command Code, ForgeCode, LeanCTL and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command).</i></p>
+        <p><i>Command Code, ForgeCode, LeanCTL and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
 
         <p><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents (off by default):</p>
         <ul>
             <li><a href="https://ccusage.com">ccusage</a> &mdash; token &amp; cost usage reports from local agent logs</li>
+            <li><a href="https://ccrdesk.top">Claude Code Router</a> &mdash; route Claude Code requests to other providers/models</li>
+            <li><a href="https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor">Claude-Code-Usage-Monitor</a> &mdash; live, predictive token &amp; cost dashboard</li>
+            <li><a href="https://code2prompt.dev">code2prompt</a> &mdash; codebase to LLM prompt, with Handlebars templating</li>
+            <li><a href="https://github.com/epilande/codegrab">CodeGrab</a> &mdash; interactive TUI repo-context packer with secret redaction</li>
+            <li><a href="https://www.coderabbit.ai/cli">CodeRabbit CLI</a> &mdash; AI code reviews in the terminal</li>
+            <li><a href="https://www.litellm.ai">LiteLLM</a> &mdash; self-hosted multi-provider LLM gateway with cost tracking</li>
             <li><a href="https://repomix.com">Repomix</a> &mdash; pack your repository into an AI-friendly file</li>
             <li><a href="https://www.skills.sh">Skills</a> &mdash; install reusable agent skills</li>
             <li><a href="https://www.tokentracker.cc">TokenTracker</a> &mdash; local token &amp; cost dashboard</li>
+            <li><a href="https://tokscale.ai">Tokscale</a> &mdash; TUI token &amp; cost dashboard with contribution graph</li>
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.1.0</b></p>
+        <ul>
+            <li><b>New: WSL mode</b> (Windows) &mdash; Settings &rarr; Behavior &rarr; "Run agents in:"
+                lets you run every agent/companion tool inside a WSL distribution instead of natively.
+                Detection is distro-native (ignores Windows binaries exposed through WSL interop),
+                Linux/WSL-only agents (ForgeCode, LeanCTL, Plandex, Command Code) become available,
+                and missing pip/npm in the distro gets a friendly install hint instead of failing silently</li>
+            <li>New agent: <b>Pi</b> (Mario Zechner) &mdash; minimalist terminal coding agent harness</li>
+            <li>New companion tools: <b>Claude Code Router</b>, <b>Claude-Code-Usage-Monitor</b>,
+                <b>code2prompt</b>, <b>CodeGrab</b>, <b>CodeRabbit CLI</b>, <b>LiteLLM</b> and
+                <b>Tokscale</b></li>
+        </ul>
         <p><b>1.0.0</b> &mdash; first stable release</p>
         <ul>
             <li>New <b>Companion Tools</b> section &mdash; optional CLI utilities that work alongside the agents:

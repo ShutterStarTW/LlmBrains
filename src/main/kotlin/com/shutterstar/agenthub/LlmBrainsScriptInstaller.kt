@@ -26,9 +26,13 @@ object LlmBrainsScriptInstaller {
         val bashTarget = configDir.resolve(BASH_SCRIPT_NAME)
         val bashResource = LlmBrainsScriptInstaller::class.java.getResourceAsStream("/scripts/$BASH_SCRIPT_NAME")
             ?: throw IOException("Missing resource /scripts/$BASH_SCRIPT_NAME")
-        bashResource.use { input ->
-            Files.copy(input, bashTarget, StandardCopyOption.REPLACE_EXISTING)
-        }
+        // CRLF → LF: a plugin ZIP built from a CRLF checkout (Windows, core.autocrlf) would
+        // otherwise ship a bash script that dies with `$'\r': command not found` — bash never
+        // tolerates CRLF, whether on macOS/Linux or in WSL mode.
+        val bashContent = bashResource.use { it.readBytes() }
+            .toString(Charsets.UTF_8)
+            .replace("\r\n", "\n")
+        Files.writeString(bashTarget, bashContent)
         bashTarget.toFile().setExecutable(true, false)
 
         val ps1Target = configDir.resolve(POWERSHELL_SCRIPT_NAME)

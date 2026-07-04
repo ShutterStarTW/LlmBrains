@@ -23,14 +23,32 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         var runInBackground: Boolean = true,
         var defaultsApplied: Boolean = false,
         var activeCompanionIds: MutableList<String> = mutableListOf(),
+        var useWsl: Boolean = false,
+        var wslDistro: String = "",
     )
 
     private var state: State = State()
+
+    init {
+        syncWslSettings()
+    }
 
     override fun getState(): State = state
 
     override fun loadState(state: State) {
         this.state = state
+        syncWslSettings()
+    }
+
+    /** Persist WSL mode and mirror it into [WslSupport] (the SDK-free layer cannot read this service). */
+    fun setWslMode(useWsl: Boolean, distro: String) {
+        state.useWsl = useWsl
+        state.wslDistro = distro
+        syncWslSettings()
+    }
+
+    private fun syncWslSettings() {
+        WslSupport.settings = WslSupport.Settings(state.useWsl, state.wslDistro)
     }
 
     fun isAgentActive(id: String): Boolean = id !in state.inactiveAgentIds
@@ -100,6 +118,18 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         state.detectedInstalledIds = installed.map { it.key }.toMutableList()
         state.detectedNotInstalledIds = notInstalled.map { it.key }.toMutableList()
         state.detectionTimestamp = System.currentTimeMillis()
+    }
+
+    /**
+     * Drops all detection state. Used when the execution environment changes (native ↔ WSL or
+     * another distro): the installed-set differs per environment, so stale results would show
+     * false "(not installed)" labels until the next detection.
+     */
+    fun clearDetectionResults() {
+        state.detectedInstalledIds = mutableListOf()
+        state.detectedNotInstalledIds = mutableListOf()
+        state.outdatedAgentIds = mutableListOf()
+        state.detectionTimestamp = 0L
     }
 
     fun getDetectionTimestamp(): Long = state.detectionTimestamp

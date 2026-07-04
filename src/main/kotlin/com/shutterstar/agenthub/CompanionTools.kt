@@ -8,13 +8,25 @@ package com.shutterstar.agenthub
  * size, [CodingAgents.defaultActiveIds], and the agent-count test) and are opt-in in the UI.
  */
 object CompanionTools {
-    // On Windows, hide tools with no native Windows install (mirrors CodingAgents.available()).
+    // On Windows (native mode), hide tools with no native Windows install (mirrors
+    // CodingAgents.available()); in WSL mode the full list applies.
     fun available(): List<CodingAgent> =
-        if (OsDetector.isWindows()) all.filterNot { it.unsupportedOnWindows } else all
+        if (OsDetector.isWindows() && !WslSupport.isActive()) all.filterNot { it.unsupportedOnWindows } else all
 
     fun isCompanion(id: String): Boolean = all.any { it.id == id }
 
     val all: List<CodingAgent> = listOf(
+        CodingAgent(
+            id = "ccr",
+            name = "Claude Code Router",
+            command = "ccr",
+            installHint = "npm install -g @musistudio/claude-code-router",
+            updateHint = "npm update --quiet --no-fund -g @musistudio/claude-code-router",
+            uninstallHint = "npm uninstall -g @musistudio/claude-code-router",
+            provider = "musistudio",
+            url = "https://ccrdesk.top",
+            devUrl = "https://github.com/musistudio/claude-code-router",
+        ),
         CodingAgent(
             id = "ccusage",
             name = "ccusage",
@@ -25,6 +37,65 @@ object CompanionTools {
             provider = "ryoppippi",
             url = "https://ccusage.com",
             devUrl = "https://github.com/ryoppippi/ccusage",
+        ),
+        CodingAgent(
+            id = "claudemonitor",
+            name = "Claude-Code-Usage-Monitor",
+            command = "claude-monitor",
+            installHint = "pip install claude-monitor",
+            updateHint = "pip install --upgrade --upgrade-strategy eager claude-monitor",
+            uninstallHint = "pip uninstall -y claude-monitor",
+            provider = "Maciek-roboblog",
+            url = "",
+            devUrl = "https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor",
+            faviconKey = "github.com",
+        ),
+        CodingAgent(
+            id = "code2prompt",
+            name = "code2prompt",
+            command = "code2prompt",
+            installHint = "cargo install code2prompt",
+            updateHint = "cargo install code2prompt --force",
+            uninstallHint = "cargo uninstall code2prompt",
+            provider = "mufeedvh",
+            url = "https://code2prompt.dev",
+            devUrl = "https://github.com/mufeedvh/code2prompt",
+        ),
+        CodingAgent(
+            id = "codegrab",
+            name = "CodeGrab",
+            command = "grab",
+            installHint = "brew install epilande/tap/codegrab",
+            updateHint = "brew upgrade codegrab",
+            uninstallHint = "brew uninstall codegrab",
+            installHintWindows = "go install github.com/epilande/codegrab/cmd/grab@latest",
+            uninstallHintWindows = "Remove-Item -Force \"\$env:USERPROFILE\\go\\bin\\grab.exe\" -ErrorAction SilentlyContinue",
+            provider = "epilande",
+            url = "",
+            devUrl = "https://github.com/epilande/codegrab",
+            faviconKey = "github.com",
+        ),
+        CodingAgent(
+            id = "coderabbit",
+            name = "CodeRabbit CLI",
+            command = "coderabbit",
+            installHint = "curl -fsSL https://cli.coderabbit.ai/install.sh | sh",
+            updateHint = "curl -fsSL https://cli.coderabbit.ai/install.sh | sh",
+            uninstallHint = "rm -f \$(which coderabbit) \$(which cr)",
+            provider = "CodeRabbit",
+            url = "https://www.coderabbit.ai/cli",
+            unsupportedOnWindows = true, // Windows support not released yet (macOS + Linux only)
+        ),
+        CodingAgent(
+            id = "litellm",
+            name = "LiteLLM",
+            command = "litellm",
+            installHint = "pip install 'litellm[proxy]'",
+            updateHint = "pip install --upgrade --upgrade-strategy eager 'litellm[proxy]'",
+            uninstallHint = "pip uninstall -y litellm",
+            provider = "BerriAI",
+            url = "https://www.litellm.ai",
+            devUrl = "https://github.com/BerriAI/litellm",
         ),
         CodingAgent(
             id = "repomix",
@@ -58,6 +129,17 @@ object CompanionTools {
             provider = "TokenTracker",
             url = "https://www.tokentracker.cc",
             devUrl = "https://github.com/mm7894215/TokenTracker",
+        ),
+        CodingAgent(
+            id = "tokscale",
+            name = "Tokscale",
+            command = "tokscale",
+            installHint = "npm install -g tokscale",
+            updateHint = "npm update --quiet --no-fund -g tokscale",
+            uninstallHint = "npm uninstall -g tokscale",
+            provider = "junhoyeo",
+            url = "https://tokscale.ai/",
+            devUrl = "https://github.com/junhoyeo/tokscale",
         ),
     )
 }
