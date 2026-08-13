@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @shareai-lab/kode
 npm uninstall -g @shareai-lab/kode
 ```
 
-> via [github.com/shareAI-lab/Kode-cli](https://github.com/shareAI-lab/Kode-cli)
+> via [npmjs.com/package/@shareai-lab/kode](https://www.npmjs.com/package/@shareai-lab/kode) &middot; [github.com/shareAI-lab/Kode-CLI](https://github.com/shareAI-lab/Kode-CLI)
 
 > **Note:** Kode runs in YOLO mode by default (equivalent to `--dangerously-skip-permissions`).
 > Use `kode --safe` to enable permission checks on important projects.

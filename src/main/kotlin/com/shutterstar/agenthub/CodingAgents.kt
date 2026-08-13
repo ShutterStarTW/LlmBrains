@@ -74,7 +74,6 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g @sourcegraph/amp",
             provider = "Sourcegraph",
             url = "https://ampcode.com",
-            devUrl = "https://github.com/sourcegraph/amp",
         ),
         CodingAgent(
             id = "antigravity",
@@ -84,7 +83,7 @@ object CodingAgents {
             updateHint = "agy update",
             uninstallHint = "rm -f ~/.local/bin/agy",
             installHintWindows = "irm https://antigravity.google/cli/install.ps1 | iex",
-            uninstallHintWindows = "Remove-Item -Recurse -Force \"\$env:LOCALAPPDATA\\Antigravity\" -ErrorAction SilentlyContinue",
+            uninstallHintWindows = "Remove-Item -Recurse -Force \"\$env:LOCALAPPDATA\\agy\" -ErrorAction SilentlyContinue",
             provider = "Google",
             url = "https://antigravity.google/product/antigravity-cli",
             devUrl = "https://github.com/google-antigravity/antigravity-cli",
@@ -131,6 +130,7 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g @tencent-ai/codebuddy-code",
             provider = "Tencent",
             url = "https://www.codebuddy.ai",
+            devUrl = "https://cnb.cool/codebuddy/codebuddy-code",
         ),
         CodingAgent(
             id = "codex",
@@ -152,7 +152,6 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g @sourcegraph/cody",
             provider = "Sourcegraph",
             url = "https://sourcegraph.com/cody",
-            devUrl = "https://github.com/sourcegraph/cody",
         ),
         CodingAgent(
             id = "commandcode",
@@ -246,7 +245,7 @@ object CodingAgents {
             uninstallHintWindows = "wsl bash -c \"rm -f `\$(which forge) && rm -rf ~/.forge\"",
             provider = "Antinomy",
             url = "https://forgecode.dev",
-            devUrl = "https://github.com/antinomyhq/forge",
+            devUrl = "https://github.com/tailcallhq/forgecode",
             unsupportedOnWindows = true, // WSL-only install; binary not visible to Windows-native detection
         ),
         CodingAgent(
@@ -258,32 +257,32 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g freebuff",
             provider = "Codebuff",
             url = "https://freebuff.com/cli",
+            devUrl = "https://github.com/CodebuffAI/codebuff",
         ),
         CodingAgent(
             id = "goose",
             name = "Goose CLI",
             command = "goose",
-            installHint = "curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | bash",
+            installHint = "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
             updateHint = "goose update",
             uninstallHint = "brew uninstall block-goose-cli 2>/dev/null || rm -f ~/.local/bin/goose",
             // No download_cli.ps1 exists (404); fetch the native Windows CLI zip, extract, and add it to PATH.
-            installHintWindows = "Invoke-WebRequest 'https://github.com/block/goose/releases/download/stable/goose-x86_64-pc-windows-msvc.zip' -OutFile \"\$env:TEMP\\goose.zip\"; Expand-Archive -Force \"\$env:TEMP\\goose.zip\" \"\$env:LOCALAPPDATA\\goose\"; \$p=[Environment]::GetEnvironmentVariable('Path','User'); if(\$p -notlike '*goose\\goose-package*'){[Environment]::SetEnvironmentVariable('Path',\"\$env:LOCALAPPDATA\\goose\\goose-package;\$p\",'User')}",
+            installHintWindows = "Invoke-WebRequest 'https://github.com/aaif-goose/goose/releases/download/stable/goose-x86_64-pc-windows-msvc.zip' -OutFile \"\$env:TEMP\\goose.zip\"; Expand-Archive -Force \"\$env:TEMP\\goose.zip\" \"\$env:LOCALAPPDATA\\goose\"; \$p=[Environment]::GetEnvironmentVariable('Path','User'); if(\$p -notlike '*goose\\goose-package*'){[Environment]::SetEnvironmentVariable('Path',\"\$env:LOCALAPPDATA\\goose\\goose-package;\$p\",'User')}",
             uninstallHintWindows = "Remove-Item -Recurse -Force \"\$env:LOCALAPPDATA\\goose\" -ErrorAction SilentlyContinue",
             provider = "Block",
-            url = "https://block.github.io/goose",
-            devUrl = "https://github.com/block/goose",
+            url = "https://goose-docs.ai",
+            devUrl = "https://github.com/aaif-goose/goose",
         ),
         CodingAgent(
             id = "grok",
             name = "Grok Build",
             command = "grok",
-            installHint = "curl -fsSL https://x.ai/cli/install.sh | bash",
-            updateHint = "grok update",
-            uninstallHint = "rm -rf ~/.grok && rm -f $(which grok)",
-            installHintWindows = "irm https://x.ai/cli/install.ps1 | iex",
-            uninstallHintWindows = "Remove-Item -Recurse -Force \"\$env:USERPROFILE\\.grok\" -ErrorAction SilentlyContinue",
+            installHint = "npm install -g @xai-official/grok",
+            updateHint = "npm update --quiet --no-fund -g @xai-official/grok",
+            uninstallHint = "npm uninstall -g @xai-official/grok",
             provider = "xAI",
             url = "https://x.ai/cli",
+            devUrl = "https://github.com/xai-org/grok-build",
         ),
         CodingAgent(
             id = "iflow",
@@ -352,8 +351,8 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g @shareai-lab/kode",
             uninstallHint = "npm uninstall -g @shareai-lab/kode",
             provider = "shareAI-lab",
-            url = "",
-            devUrl = "https://github.com/shareAI-lab/Kode-cli",
+            url = "https://www.npmjs.com/package/@shareai-lab/kode",
+            devUrl = "https://github.com/shareAI-lab/Kode-CLI",
             faviconKey = "kode",
         ),
         CodingAgent(
@@ -378,6 +377,19 @@ object CodingAgents {
             provider = "Xiaomi",
             url = "https://mimo.xiaomi.com/mimocode",
             devUrl = "https://github.com/XiaomiMiMo/MiMo-Code",
+        ),
+        CodingAgent(
+            id = "muse",
+            name = "Muse Code",
+            command = "muse",
+            installHint = "curl -fsSL https://dev.meta.ai/install.sh | bash",
+            updateHint = "curl -fsSL https://dev.meta.ai/install.sh | bash",
+            uninstallHint = "rm -f ~/.local/bin/muse ~/.local/bin/muse-bin-*",
+            installHintWindows = "wsl bash -c \"curl -fsSL https://dev.meta.ai/install.sh | bash\"",
+            uninstallHintWindows = "wsl bash -c \"rm -f ~/.local/bin/muse ~/.local/bin/muse-bin-*\"",
+            provider = "Meta",
+            url = "https://developer.meta.com/ai/products/muse-code/",
+            unsupportedOnWindows = true, // installer hard-fails on native Windows; WSL2-only
         ),
         CodingAgent(
             id = "vibe",
@@ -410,7 +422,7 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g opencode-ai",
             provider = "SST",
             url = "https://opencode.ai",
-            devUrl = "https://github.com/sst/opencode",
+            devUrl = "https://github.com/anomalyco/opencode",
         ),
         CodingAgent(
             id = "openhands",
@@ -432,7 +444,7 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g @mariozechner/pi-coding-agent",
             provider = "Mario Zechner",
             url = "https://pi.dev",
-            devUrl = "https://github.com/badlogic/pi-mono",
+            devUrl = "https://github.com/earendil-works/pi",
         ),
         CodingAgent(
             id = "plandex",
@@ -501,7 +513,7 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g @vinhnx/vtcode --registry=https://npm.pkg.github.com",
             provider = "vinhnx",
             url = "https://vinhnx.github.io/",
-            devUrl = "https://github.com/vinhnx/vtcode",
+            devUrl = "https://github.com/vinhnx/VTCode",
         ),
     )
 

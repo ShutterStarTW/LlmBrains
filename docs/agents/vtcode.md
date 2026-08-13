@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @vinhnx/vtcode --registry=https://npm.pkg.github
 npm uninstall -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 ```
 
-> via [github.com/vinhnx/vtcode](https://github.com/vinhnx/vtcode)
+> via [github.com/vinhnx/VTCode](https://github.com/vinhnx/VTCode)
 
 
 ## Get Version

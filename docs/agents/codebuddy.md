@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @tencent-ai/codebuddy-code
 npm uninstall -g @tencent-ai/codebuddy-code
 ```
 
-> via [codebuddy.ai/docs/cli/installation](https://www.codebuddy.ai/docs/cli/installation)
+> via [codebuddy.ai/docs/cli/installation](https://www.codebuddy.ai/docs/cli/installation) &middot; [cnb.cool/codebuddy/codebuddy-code](https://cnb.cool/codebuddy/codebuddy-code)
 
 ## Get Version
 

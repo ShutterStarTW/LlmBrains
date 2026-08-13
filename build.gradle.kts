@@ -12,7 +12,7 @@ buildscript {
 
 plugins {
     kotlin("jvm") version "2.1.0"
-    id("org.jetbrains.intellij") version "1.17.3"
+    id("org.jetbrains.intellij.platform") version "2.18.1"
     jacoco
 }
 
@@ -33,20 +33,9 @@ jacoco {
 
 repositories {
     mavenCentral()
-}
-
-intellij {
-    // Use locally installed IDEA if available (no network download needed).
-    // Falls back to downloading IC 2024.1 when building in CI or Docker
-    val localIdea = file("${System.getProperty("user.home")}/AppData/Local/Programs/IntelliJ IDEA Ultimate")
-    if (localIdea.exists()) {
-        localPath.set(localIdea.absolutePath)
-    } else {
-        version.set("2024.1")
-        type.set("IC")
+    intellijPlatform {
+        defaultRepositories()
     }
-    // Only require the built-in Terminal plugin so every JetBrains IDE with a terminal can load us.
-    plugins.set(listOf("org.jetbrains.plugins.terminal"))
 }
 
 kotlin {
@@ -58,20 +47,39 @@ kotlin {
 }
 
 dependencies {
+    // Use locally installed IDEA if available (no network download needed).
+    // Falls back to downloading IC 2024.1 when building in CI or Docker
+    intellijPlatform {
+        val localIdea = file("${System.getProperty("user.home")}/AppData/Local/Programs/IntelliJ IDEA Ultimate")
+        if (localIdea.exists()) {
+            local(localIdea.absolutePath)
+        } else {
+            intellijIdeaCommunity("2024.1")
+        }
+        // Only require the built-in Terminal plugin so every JetBrains IDE with a terminal can load us.
+        bundledPlugin("org.jetbrains.plugins.terminal")
+    }
+
     // Use IntelliJ Platform's Kotlin stdlib; don't bundle our own
     compileOnly(kotlin("stdlib"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-tasks {
-    patchPluginXml {
-        // 241 = 2024.1; the plugin uses only stable APIs available since 2024.1+.
-        sinceBuild.set("241")
-        untilBuild.set("")
+intellijPlatform {
+    pluginConfiguration {
+        ideaVersion {
+            // 241 = 2024.1; the plugin uses only stable APIs available since 2024.1+.
+            sinceBuild = "241"
+            untilBuild = provider { null }
+        }
         // description and change-notes are maintained in plugin.xml
     }
+    buildSearchableOptions = false
+    instrumentCode = false
+}
 
+tasks {
     // Ensure `./gradlew build` also produces the plugin ZIP
     named("build") {
         dependsOn("buildPlugin")
@@ -88,14 +96,6 @@ tasks {
             xml.required.set(true)
             html.required.set(true)
         }
-    }
-
-    named("instrumentCode") {
-        enabled = false
-    }
-
-    named("buildSearchableOptions") {
-        enabled = false
     }
 
     processResources {

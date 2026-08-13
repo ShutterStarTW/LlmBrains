@@ -4,13 +4,13 @@
 
 ```shell
 # Install with curl
-curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | bash
+curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash
 
 # update to latest version
 goose update
 ```
 
-> via [github.com/block/goose](https://github.com/block/goose)
+> via [goose-docs.ai](https://goose-docs.ai) &middot; [github.com/aaif-goose/goose](https://github.com/aaif-goose/goose)
 
 
 ## Get Version

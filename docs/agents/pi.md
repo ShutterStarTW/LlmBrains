@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @mariozechner/pi-coding-agent
 npm uninstall -g @mariozechner/pi-coding-agent
 ```
 
-> via [pi.dev](https://pi.dev) &middot; [github.com/badlogic/pi-mono](https://github.com/badlogic/pi-mono)
+> via [pi.dev](https://pi.dev) &middot; [github.com/earendil-works/pi](https://github.com/earendil-works/pi)
 
 ## Get Version
 

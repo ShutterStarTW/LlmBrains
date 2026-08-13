@@ -26,7 +26,7 @@ npm update --quiet --no-fund -g ccusage
 npm uninstall -g ccusage
 ```
 
-> via [ccusage.com](https://ccusage.com) · [github.com/ryoppippi/ccusage](https://github.com/ryoppippi/ccusage)
+> via [ccusage.com](https://ccusage.com) · [github.com/ccusage/ccusage](https://github.com/ccusage/ccusage)
 
 ```
 % ccusage --version
@@ -208,6 +208,31 @@ npm uninstall -g repomix
 % repomix --version
 % cd your-project
 % repomix          # writes repomix-output.xml in the current directory
+```
+
+---
+
+## Semgrep CLI — by Semgrep
+
+Static analysis security scanner that finds bugs, vulnerabilities and anti-patterns using
+lightweight, language-aware rules — runs in seconds and works with pre-commit hooks and CI.
+
+```shell
+# Install
+pip install semgrep
+
+# Update
+pip install --upgrade --upgrade-strategy eager semgrep
+
+# Uninstall
+pip uninstall -y semgrep
+```
+
+> via [semgrep.dev](https://semgrep.dev) · [github.com/semgrep/semgrep](https://github.com/semgrep/semgrep)
+
+```
+% semgrep --version
+% semgrep --config auto .   # scan the current directory with the default rule set
 ```
 
 ---

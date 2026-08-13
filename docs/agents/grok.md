@@ -3,14 +3,20 @@
 ## Installation
 
 ```shell
-# Install on macOS/Linux
-curl -fsSL https://x.ai/cli/install.sh | bash
+# Install with npm (macOS, Linux, and Windows)
+npm install -g @xai-official/grok
 
-# Install on Windows (PowerShell)
-irm https://x.ai/cli/install.ps1 | iex
+# Update to the latest version
+npm update --quiet --no-fund -g @xai-official/grok
+
+# Uninstall
+npm uninstall -g @xai-official/grok
 ```
 
-> via [x.ai/cli](https://x.ai/cli)
+> The official shell installer remains available as an alternative:
+> `curl -fsSL https://x.ai/cli/install.sh | bash`
+>
+> via [x.ai/cli](https://x.ai/cli) &middot; [github.com/xai-org/grok-build](https://github.com/xai-org/grok-build)
 
 ## Get Version
 

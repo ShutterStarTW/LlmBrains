@@ -27,6 +27,11 @@ class CodingAgentsTest {
     }
 
     @Test
+    fun `all agents have non-blank website urls`() {
+        CodingAgents.all.forEach { assertTrue(it.url.isNotBlank(), "blank URL for: ${it.id}") }
+    }
+
+    @Test
     fun `all agent ids are lowercase with no whitespace`() {
         CodingAgents.all.forEach {
             assertEquals(it.id, it.id.lowercase().trim(), "id not lowercase/trimmed: ${it.id}")
@@ -46,7 +51,7 @@ class CodingAgentsTest {
     }
 
     @Test
-    fun `agent count is 39`() {
-        assertEquals(39, CodingAgents.all.size)
+    fun `agent count is 40`() {
+        assertEquals(40, CodingAgents.all.size)
     }
 }

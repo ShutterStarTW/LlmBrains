@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g freebuff
 npm uninstall -g freebuff
 ```
 
-> via [freebuff.com/cli](https://freebuff.com/cli)
+> via [freebuff.com/cli](https://freebuff.com/cli) &middot; [github.com/CodebuffAI/codebuff](https://github.com/CodebuffAI/codebuff)
 
 
 ## Get Version

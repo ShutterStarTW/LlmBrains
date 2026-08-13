@@ -54,17 +54,18 @@
             <li><a href="https://factory.ai/product/ide">Droid</a> &mdash; Factory AI</li>
             <li><a href="https://forgecode.dev">ForgeCode</a> &mdash; Antinomy</li>
             <li><a href="https://freebuff.com/cli">Freebuff</a> &mdash; Codebuff</li>
-            <li><a href="https://block.github.io/goose">Goose CLI</a> &mdash; Block</li>
+            <li><a href="https://goose-docs.ai">Goose CLI</a> &mdash; Block</li>
             <li><a href="https://x.ai/cli">Grok Build</a> &mdash; xAI</li>
             <li><a href="https://iflow.cn">iFlow CLI</a> &mdash; iFlow</li>
             <li><a href="https://junie.jetbrains.com">Junie CLI</a> &mdash; JetBrains</li>
             <li><a href="https://kilo.ai">Kilo Code</a> &mdash; Kilo</li>
             <li><a href="https://www.kimi.com/code">Kimi Code</a> &mdash; Moonshot AI</li>
             <li><a href="https://kiro.dev/cli/">Kiro CLI</a> &mdash; Kiro</li>
-            <li><a href="https://github.com/shareAI-lab/Kode-cli">Kode</a> &mdash; shareAI-lab</li>
+            <li><a href="https://www.npmjs.com/package/@shareai-lab/kode">Kode</a> &mdash; shareAI-lab</li>
             <li><a href="https://leanctl.com">LeanCTL</a> &mdash; LeanCTL</li>
             <li><a href="https://mimo.xiaomi.com/mimocode">MiMo Code</a> &mdash; Xiaomi</li>
             <li><a href="https://mistral.ai/products/vibe">Mistral Vibe</a> &mdash; Mistral AI</li>
+            <li><a href="https://developer.meta.com/ai/products/muse-code/">Muse Code</a> &mdash; Meta</li>
             <li><a href="https://openclaw.ai">OpenClaw</a> &mdash; OpenClaw</li>
             <li><a href="https://opencode.ai">OpenCode</a> &mdash; SST</li>
             <li><a href="https://openhands.dev/">OpenHands</a> &mdash; All Hands</li>
@@ -83,18 +84,25 @@
         <ul>
             <li><a href="https://ccusage.com">ccusage</a> &mdash; token &amp; cost usage reports from local agent logs</li>
             <li><a href="https://ccrdesk.top">Claude Code Router</a> &mdash; route Claude Code requests to other providers/models</li>
-            <li><a href="https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor">Claude-Code-Usage-Monitor</a> &mdash; live, predictive token &amp; cost dashboard</li>
+            <li><a href="https://pypi.org/project/claude-monitor/">Claude-Code-Usage-Monitor</a> &mdash; live, predictive token &amp; cost dashboard</li>
             <li><a href="https://code2prompt.dev">code2prompt</a> &mdash; codebase to LLM prompt, with Handlebars templating</li>
-            <li><a href="https://github.com/epilande/codegrab">CodeGrab</a> &mdash; interactive TUI repo-context packer with secret redaction</li>
+            <li><a href="https://pkg.go.dev/github.com/epilande/codegrab">CodeGrab</a> &mdash; interactive TUI repo-context packer with secret redaction</li>
             <li><a href="https://www.coderabbit.ai/cli">CodeRabbit CLI</a> &mdash; AI code reviews in the terminal</li>
             <li><a href="https://www.litellm.ai">LiteLLM</a> &mdash; self-hosted multi-provider LLM gateway with cost tracking</li>
             <li><a href="https://repomix.com">Repomix</a> &mdash; pack your repository into an AI-friendly file</li>
+            <li><a href="https://semgrep.dev">Semgrep CLI</a> &mdash; static analysis security scanner</li>
             <li><a href="https://www.skills.sh">Skills</a> &mdash; install reusable agent skills</li>
             <li><a href="https://www.tokentracker.cc">TokenTracker</a> &mdash; local token &amp; cost dashboard</li>
             <li><a href="https://tokscale.ai">Tokscale</a> &mdash; TUI token &amp; cost dashboard with contribution graph</li>
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.1.1</b></p>
+        <ul>
+            <li>New agent: <b>Muse Code</b> (Meta) &mdash; terminal coding agent for
+                multi-agent, repo-scale software engineering tasks (WSL-only on Windows)</li>
+            <li>New companion tool: <b>Semgrep CLI</b> &mdash; static analysis security scanner</li>
+        </ul>
         <p><b>1.1.0</b></p>
         <ul>
             <li><b>New: WSL mode</b> (Windows) &mdash; Settings &rarr; Behavior &rarr; "Run agents in:"

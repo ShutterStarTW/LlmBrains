@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test
 class CompanionToolsTest {
 
     @Test
-    fun `companion tool count is 11`() {
-        assertEquals(11, CompanionTools.all.size)
+    fun `companion tool count is 12`() {
+        assertEquals(12, CompanionTools.all.size)
     }
 
     @Test
@@ -35,6 +35,11 @@ class CompanionToolsTest {
             assertTrue(it.command.isNotBlank(), "blank command for: ${it.id}")
             assertTrue(it.installHint.isNotBlank(), "blank installHint for: ${it.id}")
         }
+    }
+
+    @Test
+    fun `all companions have non-blank website urls`() {
+        CompanionTools.all.forEach { assertTrue(it.url.isNotBlank(), "blank URL for: ${it.id}") }
     }
 
     @Test
