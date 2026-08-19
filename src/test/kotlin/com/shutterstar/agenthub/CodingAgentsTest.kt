@@ -1,4 +1,4 @@
-﻿package com.shutterstar.agenthub
+package com.shutterstar.agenthub
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -51,7 +51,7 @@ class CodingAgentsTest {
     }
 
     @Test
-    fun `agent count is 40`() {
-        assertEquals(40, CodingAgents.all.size)
+    fun `agent count is 41`() {
+        assertEquals(41, CodingAgents.all.size)
     }
 }
