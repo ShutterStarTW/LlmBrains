@@ -392,6 +392,17 @@ object CodingAgents {
             unsupportedOnWindows = true, // installer hard-fails on native Windows; WSL2-only
         ),
         CodingAgent(
+            id = "omp",
+            name = "Oh My Pi",
+            command = "omp",
+            installHint = "npm install -g @oh-my-pi/pi-coding-agent",
+            updateHint = "npm update --quiet --no-fund -g @oh-my-pi/pi-coding-agent",
+            uninstallHint = "npm uninstall -g @oh-my-pi/pi-coding-agent",
+            provider = "can1357",
+            url = "https://omp.sh",
+            devUrl = "https://github.com/can1357/oh-my-pi",
+        ),
+        CodingAgent(
             id = "vibe",
             name = "Mistral Vibe",
             command = "vibe",
@@ -401,17 +412,6 @@ object CodingAgents {
             provider = "Mistral AI",
             url = "https://mistral.ai/products/vibe",
             devUrl = "https://github.com/mistralai/mistral-vibe",
-        ),
-        CodingAgent(
-            id = "omp",
-            name = "Oh My Pi",
-            command = "omp",
-            installHint = "npm install -g @oh-my-pi/pi-coding-agent",
-            updateHint = "npm update --quiet --no-fund -g @oh-my-pi/pi-coding-agent",
-            uninstallHint = "npm uninstall -g @oh-my-pi/pi-coding-agent",
-            provider = "oh-my-pi",
-            url = "https://omp.sh",
-            devUrl = "https://github.com/can1357/oh-my-pi",
         ),
         CodingAgent(
             id = "openclaw",

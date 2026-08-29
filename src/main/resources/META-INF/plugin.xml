@@ -66,6 +66,7 @@
             <li><a href="https://mimo.xiaomi.com/mimocode">MiMo Code</a> &mdash; Xiaomi</li>
             <li><a href="https://mistral.ai/products/vibe">Mistral Vibe</a> &mdash; Mistral AI</li>
             <li><a href="https://developer.meta.com/ai/products/muse-code/">Muse Code</a> &mdash; Meta</li>
+            <li><a href="https://omp.sh">Oh My Pi</a> &mdash; can1357</li>
             <li><a href="https://openclaw.ai">OpenClaw</a> &mdash; OpenClaw</li>
             <li><a href="https://opencode.ai">OpenCode</a> &mdash; SST</li>
             <li><a href="https://openhands.dev/">OpenHands</a> &mdash; All Hands</li>
@@ -99,10 +100,15 @@
     <change-notes><![CDATA[
         <p><b>1.1.2</b></p>
         <ul>
+            <li>New agent: <b>Oh My Pi</b> (can1357) &mdash; coding-first fork of Pi with
+                LSP/DAP integration, browser &amp; desktop tools, subagents and 60+ providers</li>
             <li>Fix: <b>"Update all agents"</b> ran every installed agent's update command
                 regardless of whether a newer version was actually available &mdash; it now only
                 updates agents flagged outdated by the last "Check for updates" run, matching the
                 per-agent Update button in Settings</li>
+            <li>Fix (Windows): a failing version-check command (e.g. a missing runtime
+                dependency) was silently reported as "up to date" instead of a warning, since the
+                error text was mistaken for the version string</li>
         </ul>
         <p><b>1.1.1</b></p>
         <ul>

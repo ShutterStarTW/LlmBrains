@@ -48,6 +48,14 @@ function Invoke-Check {
     if (Get-Command $binary -ErrorAction SilentlyContinue) {
         try {
             $versionOutput = (cmd /c "$VersionCommand 2>&1") | Select-Object -First 1 | Out-String
+            # cmd /c does not throw on a non-zero exit code, so a failing version command
+            # (e.g. a missing runtime dependency) would otherwise print its error text as
+            # if it were a legitimate version string with a green checkmark.
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host ("  [!] {0,-20} " -f $Name) -NoNewline
+                Write-Host ("installed, version check failed (exit {0})" -f $LASTEXITCODE) -ForegroundColor Yellow
+                return $false
+            }
             Write-Host ("  [+] {0,-20} " -f $Name) -NoNewline
             Write-Host $versionOutput.Trim() -ForegroundColor Green
             return $true
@@ -212,6 +220,15 @@ switch ($Subcommand) {
                 if (Get-Command $command -ErrorAction SilentlyContinue) {
                     try {
                         $versionFirst = ((cmd /c "$versionCommand 2>&1") | Select-Object -First 1 | Out-String).Trim()
+                        # cmd /c does not throw on a non-zero exit code, so a failing version
+                        # command must be caught here explicitly, or its error text gets reported
+                        # as a legitimate "up to date" version string.
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Host ("  [!] {0,-20} " -f $name) -NoNewline
+                            Write-Host "installed, version check failed" -ForegroundColor Yellow
+                            $warnCount++
+                            return
+                        }
 
                         # Package name is the last non-flag token, e.g. "npm update ... -g @vinhnx/vtcode --registry=..." -> "@vinhnx/vtcode"
                         $latest = ""
