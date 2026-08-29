@@ -28,9 +28,9 @@ of "installed" tools.
   npm look "installed" from inside WSL too. AgentHub filters out anything that only resolves to
   a `/mnt/c/...` Windows path, so detection reflects what is actually installed *in the distro* —
   not what's reachable through interop.
-- **Linux/WSL-only agents become available.** ForgeCode, LeanCTL, Plandex and Command Code have
-  no native Windows build and are normally hidden on Windows; in WSL mode they run as regular
-  Linux binaries inside the distro and show up like any other agent.
+- **Linux/WSL-only agents become available.** ForgeCode, LeanCTL, Muse Code, Plandex and Command
+  Code have no native Windows build and are normally hidden on Windows; in WSL mode they run as
+  regular Linux binaries inside the distro and show up like any other agent.
 - **Missing toolchain gets a friendly hint, not a silent failure.** A fresh distro often lacks
   `pip` or `npm`. Install/update commands first check for the tool: if only `pip3` is available,
   they use that instead of `pip`; if neither exists, you get a one-line hint

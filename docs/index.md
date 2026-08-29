@@ -75,7 +75,7 @@
 | [SWE-agent](https://swe-agent.com)                                             | `sweagent`   | SWE-agent   | `pip install sweagent`                                                          |
 | [VT Code](https://vinhnx.github.io/)                                           | `vtcode`     | vinhnx      | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com`           |
 
-> **Note:** Command Code, ForgeCode, LeanCTL, and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command).
+> **Note:** Command Code, ForgeCode, LeanCTL, Muse Code, and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command).
 
 ## Companion Tools
 
@@ -127,8 +127,8 @@ In WSL mode:
   WSL interop, so an agent that's only installed on the Windows side is correctly reported as
   not installed in the distro.
 - A few agents that are hidden on native Windows because they have no native Windows build
-  (ForgeCode, LeanCTL, Plandex, Command Code) become available, since they run as Linux binaries
-  inside the distro.
+  (ForgeCode, LeanCTL, Muse Code, Plandex, Command Code) become available, since they run as Linux
+  binaries inside the distro.
 - If `pip`/`npm` is missing in the distro, install/update commands show a friendly hint
   (e.g. `sudo apt install python3-pip`) instead of failing silently.
 

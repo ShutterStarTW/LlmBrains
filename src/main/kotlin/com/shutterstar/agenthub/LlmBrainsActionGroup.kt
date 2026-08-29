@@ -87,8 +87,19 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         }
         actions += SimpleRunAction("Update all agents", AllIcons.Actions.Download) {
             project?.let { proj ->
+                val outdatedIds = settings.getOutdatedAgentIds()
+                val outdatedAgents = installedAgents.filter { it.id in outdatedIds }
+                if (outdatedAgents.isEmpty()) {
+                    DetectionResultsWatcher.showNotification(
+                        proj,
+                        "Update",
+                        "No known updates — run \"Check for updates\" first.",
+                        NotificationType.INFORMATION,
+                    )
+                    return@let
+                }
                 val tempFile = Files.createTempFile("llmbrains-update-", ".txt")
-                val command = buildUpdateScript(installedAgents, tempFile)
+                val command = buildUpdateScript(outdatedAgents, tempFile)
                 TerminalCommandRunner.runRespectingSettings(proj, "Update Agents", "🔄 Update Agents", command)
                 DetectionResultsWatcher.watchForUpdateResults(tempFile) { ok, uptodate, failed, updatedNames: List<String> ->
                     AgentSettingsState.getInstance().saveOutdatedAgents(emptyList())

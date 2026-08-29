@@ -78,7 +78,7 @@
             <li><a href="https://vinhnx.github.io/">VT Code</a> &mdash; vinhnx</li>
         </ul>
 
-        <p><i>Command Code, ForgeCode, LeanCTL and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
+        <p><i>Command Code, ForgeCode, LeanCTL, Muse Code and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
 
         <p><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents (off by default):</p>
         <ul>
@@ -97,6 +97,13 @@
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.1.2</b></p>
+        <ul>
+            <li>Fix: <b>"Update all agents"</b> ran every installed agent's update command
+                regardless of whether a newer version was actually available &mdash; it now only
+                updates agents flagged outdated by the last "Check for updates" run, matching the
+                per-agent Update button in Settings</li>
+        </ul>
         <p><b>1.1.1</b></p>
         <ul>
             <li>New agent: <b>Muse Code</b> (Meta) &mdash; terminal coding agent for
