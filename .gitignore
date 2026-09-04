@@ -4,6 +4,8 @@
 /.gradle/
 /.kotlin/
 /.cache/
+/.intellijPlatform/
+/runide-log.txt
 
 # Scratch / temp dirs
 /tmp/

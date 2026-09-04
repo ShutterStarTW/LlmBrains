@@ -10,6 +10,7 @@ import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.shutterstar.agenthub.projects.discovery.ProjectDiscoverySmokeCommand
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.Icon
@@ -116,6 +117,10 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         }
         actions += Separator.getInstance()
         actions += SimpleLabelAction("AgentHub v${pluginVersion()}")
+        if (ProjectDiscoverySmokeCommand.findScript(project?.basePath) != null) {
+            actions += Separator.getInstance()
+            actions += LlmBrainsProjectDiscoverySmokeAction(project)
+        }
         return actions.toTypedArray()
     }
 
@@ -264,6 +269,38 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         override fun actionPerformed(e: AnActionEvent) {}
         override fun update(e: AnActionEvent) {
             e.presentation.isEnabled = false
+        }
+    }
+
+    private class LlmBrainsProjectDiscoverySmokeAction(
+        private val project: Project?,
+    ) : AnAction(
+        "Run project discovery",
+        "Run project discovery in the terminal",
+        AllIcons.Actions.Execute,
+    ), DumbAware {
+        override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+        override fun update(e: AnActionEvent) {
+            val activeProject = e.project ?: project
+            val script = ProjectDiscoverySmokeCommand.findScript(activeProject?.basePath)
+            e.presentation.isEnabled = activeProject != null && script != null
+            e.presentation.description =
+                if (script != null) {
+                    "Run project discovery in the terminal"
+                } else {
+                    "The project discovery script is not available in this project"
+                }
+        }
+
+        override fun actionPerformed(e: AnActionEvent) {
+            val activeProject = e.project ?: project ?: return
+            val script = ProjectDiscoverySmokeCommand.findScript(activeProject.basePath) ?: return
+            TerminalCommandRunner.runNative(
+                activeProject,
+                "Project Discovery",
+                ProjectDiscoverySmokeCommand.build(script),
+            )
         }
     }
 }

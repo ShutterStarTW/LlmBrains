@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A JetBrains IDE plugin that adds a toolbar button to launch popular **CLI coding agents**
-(Claude Code, Codex, Qodo and 27 more) directly in their own IDE terminal window.
+(Claude Code, Codex, Qodo and 38 more) directly in their own IDE terminal window.
 Works with all JetBrains IDEs (IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, etc.).
 
 📦 **Marketplace:** [plugins.jetbrains.com/plugin/32310-agenthub](https://plugins.jetbrains.com/plugin/32310-agenthub)
@@ -71,6 +71,7 @@ Key components:
 | `LlmBrainsStartupActivity` | Runs auto-detect on plugin update and a once-per-session update check |
 | `TerminalCommandRunner` | Runs commands in a new IDE terminal window |
 | `LlmBrainsScriptInstaller` / `OsDetector` | Install the OS-appropriate helper script |
+| `ProjectEnvironmentDiscoveryService` | Merges project skills, MCP servers, and instruction sources for inspection |
 
 ### Coding conventions
 
@@ -119,6 +120,67 @@ See also: [`CHANGES.md`](CHANGES.md)
 - **Configurable** — enable/disable agents via Settings > Tools > AgentHub
 - **Cross-platform** — works on macOS, Linux, and Windows
 - **WSL mode** (Windows) — optionally run every agent inside a WSL distribution instead of natively
+
+## Project & Agent Environment Discovery
+
+Beyond launching agents, AgentHub is also a read-only, local-first inspector for the projects
+and environment (skills, MCP servers, instructions) your coding agents already know about.
+Nothing leaves your machine, and no agent file is ever modified.
+
+### Features
+
+- **Project discovery** — unifies local Antigravity, Claude Code, Cline, Codex CLI, GitHub Copilot
+  CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode, and Qwen Code session metadata into unified **Projects** and **Agents** views
+- **Cross-agent project merging** — normalizes local paths and Git remotes (SSH/HTTPS), so
+  sessions reported by multiple agents for the same repository appear as one project
+- **Environment discovery** — inspects Skills, MCP servers, and instruction files (`AGENTS.md`,
+  `CLAUDE.md`, `.cursor/rules`, …) for Antigravity, Claude, Cline, Codex, Copilot, Cursor, Grok,
+  Kiro, OpenCode, and Qwen Code
+- **Duplicate & conflict detection** — flags skills/MCP servers that exist under multiple agents
+  and whether the copies are identical or diverge
+- **Secret-safe** — MCP environment values, commands, arguments, URLs, and headers are never
+  rendered; only variable *names* and normalized metadata are shown
+- **IDE-aware project opening** — recommends an installed JetBrains product from project-root
+  markers (Gradle, Composer, npm, Python, Go, .NET, Android, …) and opens it in the current IDE
+  or as a separate process
+- **Project-scoped agent launch** — starts any participating agent with the project directory as
+  the working directory, reusing the same terminal launch path as the toolbar
+- **Cached & background refresh** — the project/environment index survives IDE restarts, rescans
+  run off the UI thread, and a manual refresh is always one click away
+
+### Using the tool window
+
+Open the **AgentHub** tool window on the right side of the IDE to browse projects previously
+used with Antigravity, Claude Code, Cline, Codex CLI, GitHub Copilot CLI, Cursor CLI, Grok Build,
+Kiro CLI, OpenCode, or Qwen Code.
+
+- **Projects** lists repositories by recent activity with participating agents and session totals.
+- **Agents** lists every discovered agent and all projects used with it.
+- Select a project to inspect its path, Git remote, branch, per-agent activity, and session counts.
+- Open its **Environment** tab to inspect normalized Skills, MCP servers, and Instructions;
+  duplicate or conflicting definitions are highlighted without exposing MCP secrets.
+- Use **Open in IDE** to choose a detected JetBrains product, or **Launch** to start an agent in
+  the project's working directory.
+- Search filters both project and agent views; the refresh button rescans local metadata in the
+  background.
+
+### Provider coverage
+
+| Agent               | Project discovery | Skills | MCP servers | Instructions |
+|----------------------|:---:|:---:|:---:|:---:|
+| Antigravity CLI      | ✅ | ✅ | ✅ | ✅ |
+| Claude Code          | ✅ | ✅ | ✅ | ✅ |
+| Cline                | ✅ | ✅ | ✅ | ✅ |
+| Codex CLI            | ✅ | ✅ | ✅ | ✅ |
+| GitHub Copilot CLI   | ✅ | ✅ | ✅ | ✅ |
+| Cursor CLI           | ✅ | ✅ | ✅ | ✅ |
+| Grok Build           | ✅ | ✅ | ✅ | ✅ |
+| Kiro CLI             | ✅ | ✅ | ✅ | ✅ |
+| OpenCode             | ✅ | ✅ | ✅ | ✅ |
+| Qwen Code            | ✅ | ✅ | ✅ | ✅ |
+
+Discovery is read-only and metadata-oriented — AgentHub does not display or index conversation
+content, and never writes to any agent's files or databases.
 
 ## Supported CLI Agents
 

@@ -58,10 +58,34 @@ object TerminalCommandRunner {
     }
 
     fun run(project: Project, title: String, command: String) {
-        val workingDir = project.basePath ?: ""
+        run(project, title, command, project.basePath)
+    }
+
+    fun run(
+        project: Project,
+        title: String,
+        command: String,
+        workingDirectory: String?,
+    ) {
         // WSL mode: wrap for the (PowerShell) terminal line. wsl.exe maps the terminal's working
         // directory to the matching /mnt/<drive> path, so the command starts in the project dir.
         val effectiveCommand = if (WslSupport.isActive()) WslSupport.wrapForTerminal(command) else command
+
+        runInTerminal(project, title, effectiveCommand, workingDirectory)
+    }
+
+    /** Runs a host command in the IDE terminal without applying the optional WSL wrapper. */
+    fun runNative(project: Project, title: String, command: String) {
+        runInTerminal(project, title, command, project.basePath)
+    }
+
+    private fun runInTerminal(
+        project: Project,
+        title: String,
+        command: String,
+        workingDirectory: String?,
+    ) {
+        val workingDir = workingDirectory ?: project.basePath ?: ""
 
         // Candidates ordered newest → oldest API; TerminalView is deprecated but present in 2023.x/2024.x,
         // TerminalToolWindowManager is the oldest fallback.
@@ -70,12 +94,12 @@ object TerminalCommandRunner {
             "org.jetbrains.plugins.terminal.TerminalView",
             "org.jetbrains.plugins.terminal.TerminalToolWindowManager",
         )
-        if (terminalApiClasses.any { tryRunViaReflection(it, project, workingDir, title, effectiveCommand) }) return
+        if (terminalApiClasses.any { tryRunViaReflection(it, project, workingDir, title, command) }) return
 
         DetectionResultsWatcher.showNotification(
             project,
             "Error",
-            "Could not open a terminal window. Please run manually: $effectiveCommand",
+            "Could not open a terminal window. Please run manually: $command",
             NotificationType.ERROR,
         )
     }

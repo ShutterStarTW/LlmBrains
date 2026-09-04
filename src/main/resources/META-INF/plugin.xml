@@ -18,6 +18,9 @@
             <li><b>One-click launch</b> from the toolbar &mdash; or install a missing agent
                 through a confirmation dialog.</li>
             <li><b>Auto-detection</b> of installed agents on startup.</li>
+            <li><b>Project discovery</b> &mdash; browse local Antigravity, Claude Code, Cline,
+                Codex CLI, GitHub Copilot CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode and Qwen Code
+                project/session metadata in unified Projects and Agents views.</li>
             <li><b>Update notifications</b> &mdash; a background check flags agents that
                 have a newer version.</li>
             <li><b>Manage from Settings</b> &mdash; install, update or remove any agent.</li>
@@ -98,6 +101,23 @@
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.2.0</b></p>
+        <ul>
+            <li>New <b>AgentHub Projects tool window</b> with read-only project and session
+                metadata discovery for Antigravity, Claude Code, Cline, Codex CLI,
+                GitHub Copilot CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode and Qwen Code</li>
+            <li>Unified Projects and Agents views with search, per-agent session totals,
+                last activity, normalized Git identity and a persistent cached index</li>
+            <li>Open a discovered project in a detected JetBrains IDE or launch a participating
+                coding agent directly in the project's working directory</li>
+            <li>Inspect normalized Skills, MCP servers and instruction sources in the new
+                read-only project and agent <b>Environment</b> tabs, with availability comparison,
+                duplicate and conflict indicators for Antigravity, Claude, Cline, Codex, Copilot,
+                Cursor, Grok, Kiro, OpenCode and Qwen Code</li>
+            <li>MCP secrets and executable configuration are never rendered in the UI</li>
+            <li>Discovery runs outside the UI thread, isolates malformed provider records and
+                is covered by a 10,000-session performance regression test</li>
+        </ul>
         <p><b>1.1.2</b></p>
         <ul>
             <li>New agent: <b>Oh My Pi</b> (can1357) &mdash; coding-first fork of Pi with
@@ -160,6 +180,9 @@
         <notificationGroup id="AgentHub" displayType="BALLOON"/>
         <applicationConfigurable instance="com.shutterstar.agenthub.AgentSettingsConfigurable" displayName="AgentHub"/>
         <backgroundPostStartupActivity implementation="com.shutterstar.agenthub.LlmBrainsStartupActivity"/>
+        <toolWindow id="AgentHub" anchor="right"
+                    factoryClass="com.shutterstar.agenthub.projects.ui.AgentHubToolWindowFactory"
+                    icon="/icons/terminal-prompt.svg"/>
     </extensions>
     <actions>
         <group id="com.shutterstar.agenthub.Dropdown" class="com.shutterstar.agenthub.LlmBrainsActionGroup"

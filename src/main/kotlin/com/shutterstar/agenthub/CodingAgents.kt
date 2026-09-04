@@ -69,9 +69,9 @@ object CodingAgents {
             id = "amp",
             name = "Amp",
             command = "amp",
-            installHint = "npm install -g @sourcegraph/amp",
-            updateHint = "npm update --quiet --no-fund -g @sourcegraph/amp",
-            uninstallHint = "npm uninstall -g @sourcegraph/amp",
+            installHint = "npm install -g @ampcode/cli",
+            updateHint = "npm update --quiet --no-fund -g @ampcode/cli",
+            uninstallHint = "npm uninstall -g @ampcode/cli",
             provider = "Sourcegraph",
             url = "https://ampcode.com",
         ),
@@ -431,6 +431,10 @@ object CodingAgents {
             installHint = "npm install -g opencode-ai",
             updateHint = "npm update --quiet --no-fund -g opencode-ai",
             uninstallHint = "npm uninstall -g opencode-ai",
+            // opencode-ai's postinstall (which downloads the real opencode-win32-x64 binary) is known to
+            // silently fail/skip on Windows global npm installs, leaving a placeholder opencode.exe
+            // (upstream: sst/opencode#1192, anomalyco/opencode#36737, #29270) - re-run it defensively.
+            installHintWindows = "npm install -g opencode-ai; \$p = \"\$(npm root -g)\\opencode-ai\\postinstall.mjs\"; if (Test-Path \$p) { node \$p }",
             provider = "SST",
             url = "https://opencode.ai",
             devUrl = "https://github.com/anomalyco/opencode",
