@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable
 import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
@@ -97,6 +98,7 @@ class UiSpacingAndDetailsRegressionTest {
             }
         } finally { host.removeNotify(); panel.dispose() }
     }
+    @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "needs a display; the CI runner is headless")
     @Test fun `real click on an environment row inside a tab shows the info strip immediately`() = onEdt {
         val panel = environment()
         val table = field<JTable>(panel, "comparisonTable")

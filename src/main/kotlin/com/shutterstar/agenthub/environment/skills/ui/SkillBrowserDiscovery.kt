@@ -71,9 +71,11 @@ internal class SkillBrowserDiscovery(
         val root = runCatching { Path.of(sourcePath) }.getOrNull() ?: return emptyList()
         if (!Files.isDirectory(root)) return emptyList()
         return runCatching {
-            Files.walk(root, 4).use { paths ->
+            // A symlinked skill folder must be walked through its real path: Files.walk does not follow a link root.
+            val walkRoot = runCatching { root.toRealPath() }.getOrDefault(root)
+            Files.walk(walkRoot, 4).use { paths ->
                 paths.filter(Files::isRegularFile).limit(200)
-                    .map { root.relativize(it).toString() }
+                    .map { walkRoot.relativize(it).toString() }
                     .sorted().toList()
             }
         }.getOrDefault(emptyList())
@@ -96,10 +98,12 @@ internal class SkillBrowserDiscovery(
         if (!Files.isDirectory(root)) return SourceStat(0, 0, isLink)
 
         return runCatching {
-            Files.walk(root, MAX_STAT_DEPTH + 1).use { paths ->
+            // Same as findFiles: a symlink root is walked through its real path (a Windows junction resolves itself).
+            val walkRoot = runCatching { root.toRealPath() }.getOrDefault(root)
+            Files.walk(walkRoot, MAX_STAT_DEPTH + 1).use { paths ->
                 val depthLimited = AtomicBoolean(false)
                 val files = paths.filter { path ->
-                    if (root.relativize(path).nameCount > MAX_STAT_DEPTH) {
+                    if (walkRoot.relativize(path).nameCount > MAX_STAT_DEPTH) {
                         if (Files.isRegularFile(path) ||
                             (Files.isDirectory(path) && Files.newDirectoryStream(path).use { it.iterator().hasNext() })
                         ) {

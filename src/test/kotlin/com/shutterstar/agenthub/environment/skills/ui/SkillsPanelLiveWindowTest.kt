@@ -10,6 +10,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillSource
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable
 import java.awt.image.BufferedImage
 import java.nio.file.Files
 import java.nio.file.Path
@@ -26,6 +27,7 @@ import javax.swing.SwingUtilities
  * is driven by hand.
  */
 class SkillsPanelLiveWindowTest {
+    @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "needs a display; the CI runner is headless")
     @Test fun `navigating to a distant skill scrolls its selected row into view`() {
         var frame: JFrame? = null
         try {
@@ -60,6 +62,7 @@ class SkillsPanelLiveWindowTest {
         }
     }
 
+    @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "needs a display; the CI runner is headless")
     @Test fun `a real visible frame renders content in both wide and narrow layouts`() {
         var frame: JFrame? = null
         try {

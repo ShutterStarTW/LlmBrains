@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable
 import java.awt.Font
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
@@ -68,6 +69,7 @@ class SettingsTableUiTest {
         assertTrue(progress.preferredSize.width <= table.columnModel.getColumn(4).width)
     }
 
+    @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "needs a display; the CI runner is headless")
     @Test fun `clicking an action preserves the existing row selection`() = SwingUtilities.invokeAndWait {
         var actionCount = 0
         val table = agentTable(onAction = { actionCount++ }).table
