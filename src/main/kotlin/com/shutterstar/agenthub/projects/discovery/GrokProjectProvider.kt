@@ -1,5 +1,7 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.ScanBudget
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -9,9 +11,10 @@ import java.util.logging.Logger
 import kotlin.io.path.name
 
 /**
- * Discovers Grok Build sessions from `summary.json` metadata without reading transcripts.
+ * Discovers Grok Build sessions from `summary.json` metadata, plus the user's prompts from
+ * `chat_history.jsonl`.
  *
- * Layout: `~/.grok/sessions/<percent-encoded-cwd>/<session-id>/summary.json`
+ * Layout: `~/.grok/sessions/<percent-encoded-cwd>/<session-id>/{summary.json,chat_history.jsonl}`
  */
 class GrokProjectProvider(
     private val grokDirectory: Path = defaultGrokDirectory(),
@@ -28,8 +31,8 @@ class GrokProjectProvider(
         var skippedSessions = 0
         val budget = ScanBudget(maxScanEntries)
         val sessions = runCatching {
-            listDirectories(sessionsDirectory, MAX_WORKSPACE_ENTRIES).flatMap { workspaceDirectory ->
-                listDirectories(workspaceDirectory, budget).mapNotNull { sessionDirectory ->
+            LocalSessionSupport.listDirectories(sessionsDirectory, MAX_WORKSPACE_ENTRIES).flatMap { workspaceDirectory ->
+                LocalSessionSupport.listDirectories(workspaceDirectory, budget).mapNotNull { sessionDirectory ->
                     runCatching { parseSession(sessionDirectory, workspaceDirectory) }
                         .getOrNull()
                         .also { if (it == null) skippedSessions++ }
@@ -40,28 +43,6 @@ class GrokProjectProvider(
             LOG.fine("[ProjectDiscovery] Grok: skipped $skippedSessions malformed or unreadable sessions")
         }
         return LocalSessionSupport.deduplicate(sessions)
-    }
-
-    private fun listDirectories(
-        root: Path,
-        budget: ScanBudget,
-    ): List<Path> {
-        if (!budget.hasRemaining()) return emptyList()
-        return listDirectories(root, budget.remaining()).also { budget.consume(it.size) }
-    }
-
-    private fun listDirectories(
-        root: Path,
-        maximumEntries: Int,
-    ): List<Path> {
-        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return emptyList()
-        return Files.list(root).use { paths ->
-            paths
-                .limit(maximumEntries.coerceAtLeast(0).toLong())
-                .toList()
-                .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
-                .sorted()
-        }
     }
 
     private fun parseSession(sessionDirectory: Path, workspaceDirectory: Path): RawAgentProject? {
@@ -93,6 +74,8 @@ class GrokProjectProvider(
             LocalSessionSupport.modifiedAt(sourceFile),
         )
         val title = fields[GENERATED_TITLE_FIELD]?.takeIf { it.isNotBlank() }
+        val statistics = SessionStatisticsAccumulator(agentId)
+        val updates = UserMessageTally.scanJsonl(sessionDirectory.resolve("updates.jsonl"), listOf("\"params\"")) { line -> statistics.record(line) }
         return RawAgentProject(
             agentId = agentId,
             rawProjectPath = projectPath,
@@ -100,15 +83,36 @@ class GrokProjectProvider(
             startedAt = startedAt,
             updatedAt = updatedAt,
             sourcePath = sourceFile.toAbsolutePath().normalize().toString(),
-            metadata = title?.let { mapOf(TITLE_FIELD to it) }.orEmpty(),
+            metadata = title?.let { mapOf(TITLE_FIELD to it) }.orEmpty() +
+                userMessages(sessionDirectory.resolve(CHAT_HISTORY_FILE))?.metadata().orEmpty(),
+            statistics = if (updates != null) statistics.snapshot() else emptyMap(),
         )
     }
+
+    /**
+     * `type:"user"` records, except what Grok injects itself: records with a `synthetic_reason`
+     * and context blocks such as `<user_info>` (the typed prompt comes wrapped in `<user_query>`).
+     */
+    private fun userMessages(chatHistory: Path): UserMessageTally? =
+        UserMessageTally.scanJsonl(chatHistory, USER_MARKERS) { line ->
+            val fields = MetadataJsonParser.topLevelStringFields(line, CHAT_FIELDS)
+            if (fields[TYPE_FIELD] != USER_TYPE || fields[SYNTHETIC_REASON_FIELD] != null) return@scanJsonl
+            val text = MessageContentExtractor.text(MetadataJsonParser.rawTopLevelField(line, CONTENT_FIELD))
+            if (!MessageContentExtractor.isInjectedContext(text)) add(text)
+        }
 
     companion object {
         private const val AGENT_ID = "grok"
         private const val GROK_DIRECTORY = ".grok"
         private const val SESSIONS_DIRECTORY = "sessions"
         private const val SUMMARY_FILE = "summary.json"
+        private const val CHAT_HISTORY_FILE = "chat_history.jsonl"
+        private const val TYPE_FIELD = "type"
+        private const val USER_TYPE = "user"
+        private const val SYNTHETIC_REASON_FIELD = "synthetic_reason"
+        private const val CONTENT_FIELD = "content"
+        private val CHAT_FIELDS = setOf(TYPE_FIELD, SYNTHETIC_REASON_FIELD)
+        private val USER_MARKERS = listOf("\"user\"")
         private const val MAX_SCAN_ENTRIES = 20_000
         private const val MAX_WORKSPACE_ENTRIES = 4_096
         private const val MAX_JSON_CHARACTERS = 256 * 1024
@@ -131,11 +135,7 @@ class GrokProjectProvider(
         )
         private val LOG = Logger.getLogger(GrokProjectProvider::class.java.name)
 
-        fun defaultGrokDirectory(): Path {
-            val configured = System.getenv("GROK_HOME")?.trim()?.takeIf(String::isNotEmpty)
-            return configured?.let { runCatching { Path.of(it) }.getOrNull() }
-                ?: Path.of(System.getProperty("user.home"), GROK_DIRECTORY)
-        }
+        fun defaultGrokDirectory(): Path = EnvHomeDirectorySupport.resolve("GROK_HOME", GROK_DIRECTORY)
 
         internal fun percentDecode(value: String): String? {
             if (value.isEmpty()) return null

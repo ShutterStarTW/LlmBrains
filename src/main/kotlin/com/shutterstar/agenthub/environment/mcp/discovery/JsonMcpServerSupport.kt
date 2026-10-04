@@ -122,7 +122,7 @@ internal object JsonMcpServerSupport {
         is JsonString -> sequenceOf(value)
         is JsonArray -> values.asSequence().flatMap { it.stringValuesRecursive() }
         is JsonObject -> fields.values.asSequence().flatMap { it.stringValuesRecursive() }
-        JsonScalar -> emptySequence()
+        JsonScalar, is JsonBoolean -> emptySequence()
     }
 
     private fun privateFingerprint(value: JsonValue?): String? {
@@ -141,7 +141,7 @@ internal object JsonMcpServerSupport {
             .joinToString(prefix = "{", postfix = "}", separator = ",") { (key, value) ->
                 "${key.length}:$key=${value.canonicalForm()}"
             }
-        JsonScalar -> "scalar"
+        JsonScalar, is JsonBoolean -> "scalar"
     }
 
     private const val TYPE_FIELD = "type"

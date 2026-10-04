@@ -14,6 +14,8 @@ internal data class JsonString(
     val value: String,
 ) : JsonValue
 
+internal data class JsonBoolean(val value: Boolean) : JsonValue
+
 internal data object JsonScalar : JsonValue
 
 internal object SafeJsonParser {
@@ -134,7 +136,11 @@ internal object SafeJsonParser {
         private fun parseLiteral(literal: String): JsonValue {
             require(content.startsWith(literal, index))
             index += literal.length
-            return JsonScalar
+            return when (literal) {
+                "true" -> JsonBoolean(true)
+                "false" -> JsonBoolean(false)
+                else -> JsonScalar
+            }
         }
 
         private fun parseNumber(): JsonValue {

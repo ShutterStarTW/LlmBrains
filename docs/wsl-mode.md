@@ -1,8 +1,8 @@
 # WSL Mode
 
 On Windows, AgentHub can run every agent and companion tool either **natively** (the default)
-or inside a **WSL (Windows Subsystem for Linux) distribution**. This is useful if your toolchain
-(node/npm, python/pip, etc.) already lives in WSL rather than on the Windows side.
+or inside a **WSL (Windows Subsystem for Linux) distribution**. Use it if your toolchain
+(node/npm, python/pip, etc.) is installed in WSL rather than on the Windows side.
 
 ## Enabling it
 
@@ -31,16 +31,16 @@ of "installed" tools.
 - **Linux/WSL-only agents become available.** ForgeCode, LeanCTL, Muse Code, Plandex and Command
   Code have no native Windows build and are normally hidden on Windows; in WSL mode they run as
   regular Linux binaries inside the distro and show up like any other agent.
-- **Missing toolchain gets a friendly hint, not a silent failure.** A fresh distro often lacks
-  `pip` or `npm`. Install/update commands first check for the tool: if only `pip3` is available,
-  they use that instead of `pip`; if neither exists, you get a one-line hint
-  (e.g. `sudo apt install python3-pip`, or `sudo apt install nodejs npm`) instead of a cryptic
+- **A missing toolchain produces a hint, not a silent failure.** A fresh distro often lacks
+  `pip` or `npm`. Install and update commands first check for the tool: if only `pip3` exists,
+  they use it instead of `pip`; if neither exists, they print a one-line hint
+  (e.g. `sudo apt install python3-pip` or `sudo apt install nodejs npm`) instead of a bare
   "command not found".
 
 ## Limitations
 
-- Windows-only (the setting doesn't appear on macOS/Linux, where there's nothing to toggle).
-- Requires WSL to already be installed on the machine; if `wsl --list` returns nothing, the WSL
-  option can't be selected and a status label says so.
+- Windows only. The setting does not appear on macOS or Linux.
+- WSL must already be installed. If `wsl --list` returns nothing, the WSL option cannot be
+  selected and a status label says so.
 - If a distribution disables the `/mnt` drive mount (a non-default `/etc/wsl.conf` setting), the
-  scripted detect/update paths that rely on Windows↔WSL path translation won't work.
+  scripted detect and update paths, which translate Windows paths to WSL paths, do not work.

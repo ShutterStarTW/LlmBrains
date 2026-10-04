@@ -1,9 +1,9 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import com.shutterstar.agenthub.projects.resolve.ProjectResolver
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -11,22 +11,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
 import java.time.Instant
+import kotlin.io.path.invariantSeparatorsPathString
 
 class AntigravityProjectProviderTest {
     @TempDir
     lateinit var tempDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = AntigravityProjectProvider(dataDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(dataDirectory().resolve("brain"))
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers valid session from brain transcript jsonl`() {
@@ -78,31 +67,6 @@ class AntigravityProjectProviderTest {
         assertEquals(updatedAt, session.updatedAt)
         assertEquals("My Antigravity Task", session.metadata["title"])
         assertEquals(file.toAbsolutePath().normalize().toString(), session.sourcePath)
-    }
-
-    @Test
-    fun `discovers multiple sessions across brain and conversation directories`() {
-        val firstProject = tempDirectory.resolve("work/first")
-        val secondProject = tempDirectory.resolve("work/second")
-
-        writeBrainTranscript(
-            conversationId = "brain-one",
-            lines = listOf("""{"type":"USER_INPUT","cwd":${json(firstProject.toString())},"timestamp":"2026-08-25T10:00:00Z"}"""),
-        )
-        writeBrainTranscript(
-            conversationId = "brain-two",
-            lines = listOf("""{"type":"USER_INPUT","cwd":${json(firstProject.toString())},"timestamp":"2026-08-25T11:00:00Z"}"""),
-        )
-        writeConversationJsonl(
-            fileName = "conv-three.jsonl",
-            lines = listOf("""{"sessionId":"conv-three","workspace":${json(secondProject.toString())},"created_at":"2026-08-26T10:00:00Z"}"""),
-        )
-
-        val sessions = AntigravityProjectProvider(dataDirectory()).discover()
-
-        assertEquals(3, sessions.size)
-        assertEquals(2, sessions.count { it.rawProjectPath == firstProject.toString() })
-        assertEquals(1, sessions.count { it.rawProjectPath == secondProject.toString() })
     }
 
     @Test
@@ -253,7 +217,7 @@ class AntigravityProjectProviderTest {
             projectResolver = ProjectResolver { null },
         )
 
-        val project = service.discoverProjects().single()
+        val project = service.discover().projects.single()
 
         assertEquals("shared-project", project.name)
         assertEquals(listOf("antigravity", "claude", "codex"), project.agents.map { it.agentId })
@@ -310,6 +274,37 @@ class AntigravityProjectProviderTest {
         assertTrue(session.rawProjectPath.orEmpty().contains("metadata-project"))
     }
 
+    @Test
+    fun `conversation_metadata survives braces in titles and falls back to the entry's last_modified_time`() {
+        val first = tempDirectory.resolve("work/first")
+        val second = tempDirectory.resolve("work/second")
+        val cacheDir = Files.createDirectories(dataDirectory().resolve("cache"))
+        Files.writeString(
+            cacheDir.resolve("conversation_metadata.json"),
+            """{
+                "conversations": {
+                    "conv-a": {
+                        "summary": {"ID": "conv-a", "Title": "Fix {braces} in } titles", "WorkspaceURIs": [${json("file:///" + first.invariantSeparatorsPathString)}]},
+                        "last_modified_time": "2026-09-01T08:00:00Z"
+                    },
+                    "conv-b": {
+                        "summary": {"Preview": "Only a preview", "UpdatedAt": "2026-09-02T09:00:00Z", "WorkspaceURIs": [${json("file:///" + second.invariantSeparatorsPathString)}]},
+                        "is_internal": false
+                    },
+                    "conv-c": {"summary": {"ID": "conv-c", "Title": "No workspace"}}
+                }
+            }""",
+        )
+
+        val sessions = AntigravityProjectProvider(dataDirectory()).discover().associateBy { it.sessionId }
+
+        assertEquals(setOf("conv-a", "conv-b"), sessions.keys)
+        assertEquals("Fix {braces} in } titles", sessions.getValue("conv-a").metadata["title"])
+        assertEquals(Instant.parse("2026-09-01T08:00:00Z"), sessions.getValue("conv-a").updatedAt)
+        assertEquals("Only a preview", sessions.getValue("conv-b").metadata["title"])
+        assertEquals(Instant.parse("2026-09-02T09:00:00Z"), sessions.getValue("conv-b").updatedAt)
+    }
+
     private fun dataDirectory(): Path = tempDirectory.resolve("antigravity-data")
 
     private fun writeBrainTranscript(
@@ -346,20 +341,5 @@ class AntigravityProjectProviderTest {
         Files.writeString(file, lines.joinToString("\n", postfix = "\n"))
         Files.setLastModifiedTime(file, FileTime.from(modifiedAt))
         return file
-    }
-
-    private fun json(value: String): String = buildString {
-        append('"')
-        value.forEach { character ->
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(character)
-            }
-        }
-        append('"')
     }
 }

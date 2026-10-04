@@ -11,6 +11,11 @@ class SharedSkillProvider(
     override val agentId: String? = null
     private val scanner = SkillDirectoryScanner()
 
+    internal fun resolveGlobalDirectory(): Path = userHome.resolve(RELATIVE_SKILL_DIRECTORY)
+
+    internal fun resolveProjectDirectory(project: DiscoveredProject): Path? =
+        ProjectPathResolver.resolveExistingRoot(project)?.resolve(RELATIVE_SKILL_DIRECTORY)
+
     override fun discoverGlobal(): List<SkillSourceRecord> =
         scanner.discover(
             root = userHome.resolve(RELATIVE_SKILL_DIRECTORY),

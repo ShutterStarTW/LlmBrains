@@ -1,9 +1,8 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
-import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -70,6 +69,17 @@ class AntigravityCopilotInstructionProviderTest {
     }
 
     @Test
+    fun `should discover Antigravity CLI global rules`() {
+        val cliRules = Files.createDirectories(temporaryDirectory.resolve(".gemini/antigravity-cli/rules"))
+        Files.writeString(cliRules.resolve("security.md"), "CLI rule")
+
+        val sources = AntigravityInstructionProvider(temporaryDirectory).discoverGlobal()
+
+        assertEquals(1, sources.size)
+        assertTrue(sources.single().path.endsWith("security.md"))
+    }
+
+    @Test
     fun `should discover Copilot personal repository and compatible agent instructions`() {
         val copilotHome = Files.createDirectories(temporaryDirectory.resolve(".copilot"))
         Files.writeString(copilotHome.resolve("copilot-instructions.md"), "Personal instructions")
@@ -119,15 +129,4 @@ class AntigravityCopilotInstructionProviderTest {
         assertEquals(setOf("antigravity", "copilot"), instructions.getValue(InstructionType.AGENTS_MD).agentIds)
         assertEquals(setOf("antigravity", "copilot"), instructions.getValue(InstructionType.GEMINI_MD).agentIds)
     }
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

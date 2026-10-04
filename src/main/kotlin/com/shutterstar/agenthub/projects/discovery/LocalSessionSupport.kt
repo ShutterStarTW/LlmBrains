@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.projects.model.ProjectComparators
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.io.BufferedReader
@@ -96,24 +97,68 @@ internal object LocalSessionSupport {
 
     fun latest(vararg values: Instant?): Instant? = values.filterNotNull().maxOrNull()
 
+    /**
+     * Keeps one record per session id: the most recently active one (ties go to the greater source
+     * path, so the choice is deterministic), with metadata merged so the winner keeps what the other
+     * copy knew (e.g. a first message found only in one of them).
+     */
     fun deduplicate(sessions: List<RawAgentProject>): List<RawAgentProject> {
         val bySessionId = linkedMapOf<String, RawAgentProject>()
         sessions.forEach { candidate ->
             val existing = bySessionId[candidate.sessionId]
-            val candidateActivity = candidate.updatedAt ?: candidate.startedAt ?: Instant.MIN
-            val existingActivity = existing?.updatedAt ?: existing?.startedAt ?: Instant.MIN
-            if (existing == null || candidateActivity > existingActivity) {
+            if (existing == null || compareSessions(candidate, existing) > 0) {
                 bySessionId[candidate.sessionId] = candidate.copy(
                     metadata = existing?.metadata.orEmpty() + candidate.metadata,
+                    statistics = existing?.statistics.orEmpty() + candidate.statistics,
                 )
-            } else if (candidate.metadata.isNotEmpty()) {
+            } else if (candidate.metadata.isNotEmpty() || candidate.statistics.isNotEmpty()) {
                 bySessionId[candidate.sessionId] = existing.copy(
                     metadata = candidate.metadata + existing.metadata,
+                    statistics = candidate.statistics + existing.statistics,
                 )
             }
         }
         return bySessionId.values.sortedWith(ProjectComparators.rawAgentProjectByRecency)
     }
 
+    private fun compareSessions(first: RawAgentProject, second: RawAgentProject): Int {
+        val activityComparison = (first.updatedAt ?: first.startedAt ?: Instant.MIN)
+            .compareTo(second.updatedAt ?: second.startedAt ?: Instant.MIN)
+        if (activityComparison != 0) return activityComparison
+        return first.sourcePath.orEmpty().compareTo(second.sourcePath.orEmpty())
+    }
+
+    /** The newest timestamp [extract] finds in the last lines of [file] (most recent line first). */
+    fun lastTimestamp(
+        file: Path,
+        maxTailBytes: Int,
+        maxTailLines: Int,
+        extract: (String) -> Instant?,
+    ): Instant? = readTailLines(file, maxTailBytes, maxTailLines).asSequence().mapNotNull(extract).firstOrNull()
+
+    /** Sorted child directories of [root], counted against [budget]; empty when [root] is not a directory. */
+    fun listDirectories(root: Path, budget: ScanBudget): List<Path> {
+        if (!budget.hasRemaining()) return emptyList()
+        return listDirectories(root, budget.remaining()).also { budget.consume(it.size) }
+    }
+
+    /** Sorted child directories among the first [maximumEntries] entries of [root]. */
+    fun listDirectories(root: Path, maximumEntries: Int): List<Path> {
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return emptyList()
+        return Files.list(root).use { paths ->
+            paths
+                .limit(maximumEntries.coerceAtLeast(0).toLong())
+                .toList()
+                .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
+                .sorted()
+        }
+    }
+
     private const val EPOCH_MILLIS_THRESHOLD = 1_000_000_000_000L
 }
+
+/** Sessions found in one directory, plus how many entries could not be read. */
+internal data class DirectoryDiscoveryResult(
+    val sessions: List<RawAgentProject>,
+    val skippedSessions: Int,
+)

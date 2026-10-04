@@ -21,4 +21,8 @@ data class SkillSourceRecord(
     val fingerprint: String,
     val displayTitle: String? = null,
     val projectName: String? = null,
+    /** Vendor-shipped or account-synced (e.g. Claude's `skills/synced`, Codex's `skills/.system`,
+     * Cursor's `skills-cursor`, Antigravity's `builtin/skills`) rather than something the user
+     * created or shared themselves. */
+    val system: Boolean = false,
 )

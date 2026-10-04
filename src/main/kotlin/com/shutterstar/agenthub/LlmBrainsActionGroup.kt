@@ -7,15 +7,22 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
-import com.shutterstar.agenthub.projects.discovery.ProjectDiscoverySmokeCommand
+import com.intellij.openapi.util.IconLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.Icon
 
 class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent in a new terminal window.", null), DumbAware {
+    companion object {
+        // Same glyph as the toolbar/group icon — used as a per-row fallback when an agent has no
+        // cached brand favicon, so a menu row never ends up with a blank icon slot.
+        private val fallbackIcon = IconLoader.getIcon("/icons/terminal-prompt.svg", LlmBrainsActionGroup::class.java)
+    }
+
     override fun getChildren(e: AnActionEvent?): Array<AnAction> {
         val project = e?.project
         val actions = mutableListOf<AnAction>()
@@ -26,15 +33,18 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
             CodingAgents.detectable().filter { detectionResults[it.id] == true }
         else
             activeAgents
+
+        val customAgent = settings.getCustomAgent()
+        // Labeled separators (rather than bare Separator.getInstance()) give the menu visible
+        // section headers — Agents / Companion Tools / Utilities — instead of one flat list that
+        // gets harder to scan as more agents/companions are enabled.
+        if (activeAgents.isNotEmpty() || customAgent != null) {
+            actions += Separator("Agents")
+        }
         activeAgents.forEach { agent ->
             actions += AgentDirectAction(agent, project)
         }
-
-        val customAgent = settings.getCustomAgent()
         if (customAgent != null) {
-            if (activeAgents.isNotEmpty()) {
-                actions += Separator.getInstance()
-            }
             actions += AgentDirectAction(customAgent, project)
         }
 
@@ -51,17 +61,15 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
             }
         } else {
             // Once a companion is enabled the header is redundant — whoever enabled it already knows
-            // it is a companion tool — so list the active tools directly under a separator.
+            // it is a companion tool — so list the active tools directly under a labeled separator.
             companionSectionShown = true
-            actions += Separator.getInstance()
+            actions += Separator("Companion Tools")
             activeCompanions.forEach { tool ->
                 actions += AgentDirectAction(tool, project)
             }
         }
 
-        if (activeAgents.isNotEmpty() || customAgent != null || companionSectionShown) {
-            actions += Separator.getInstance()
-        }
+        actions += Separator("Utilities")
         actions += SimpleRunAction("Agent settings…", AllIcons.General.Settings) {
             ShowSettingsUtil.getInstance().showSettingsDialog(project, "AgentHub")
         }
@@ -80,15 +88,25 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         }
         actions += SimpleRunAction("Check for updates", AllIcons.Actions.Refresh) {
             project?.let { proj ->
-                val tempFile = Files.createTempFile("llmbrains-version-", ".txt")
-                val command = buildVersionAllScript(installedAgents + listOfNotNull(customAgent), tempFile)
-                TerminalCommandRunner.runRespectingSettings(proj, "Check Updates", "📋 Check Updates", command)
-                DetectionResultsWatcher.watchForVersionResults(proj, tempFile)
+                if (settings.getState().runInBackground) {
+                    // The in-process check also covers agents the terminal script cannot see
+                    // (native installs, GitHub-release based agents) — same as "Detect installed agents".
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        AgentDetector.checkForUpdates(proj, notifyIfUpToDate = true)
+                    }
+                } else {
+                    val tempFile = Files.createTempFile("llmbrains-version-", ".txt")
+                    val command = buildVersionAllScript(installedAgents + listOfNotNull(customAgent), tempFile)
+                    TerminalCommandRunner.runRespectingSettings(proj, "Check Updates", "📋 Check Updates", command)
+                    DetectionResultsWatcher.watchForVersionResults(proj, tempFile)
+                }
             }
         }
-        actions += SimpleRunAction("Update all agents", AllIcons.Actions.Download) {
+        val outdatedIds = settings.getOutdatedAgentIds()
+        val outdatedCount = installedAgents.count { it.id in outdatedIds }
+        val updateAllText = if (outdatedCount > 0) "Update all agents ($outdatedCount)" else "Update all agents"
+        actions += SimpleRunAction(updateAllText, AllIcons.Actions.Download) {
             project?.let { proj ->
-                val outdatedIds = settings.getOutdatedAgentIds()
                 val outdatedAgents = installedAgents.filter { it.id in outdatedIds }
                 if (outdatedAgents.isEmpty()) {
                     DetectionResultsWatcher.showNotification(
@@ -106,21 +124,13 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
                     AgentSettingsState.getInstance().saveOutdatedAgents(emptyList())
                     AgentSettingsConfigurable.scheduleRefresh()
                     val type = if (failed > 0) NotificationType.WARNING else NotificationType.INFORMATION
-                    val msg = when {
-                        updatedNames.isNotEmpty() -> "Updated: ${updatedNames.joinToString(", ")} · $uptodate up to date" + if (failed > 0) " · $failed failed" else ""
-                        ok == 0 && failed == 0 -> DetectionResultsWatcher.allUpToDateMsg(uptodate)
-                        else -> "$ok updated · $uptodate up to date" + if (failed > 0) " · $failed failed" else ""
-                    }
+                    val msg = DetectionResultsWatcher.updateSummaryMessage(ok, uptodate, failed, updatedNames)
                     DetectionResultsWatcher.showNotification(proj, "Update", msg, type)
                 }
             }
         }
         actions += Separator.getInstance()
         actions += SimpleLabelAction("AgentHub v${pluginVersion()}")
-        if (ProjectDiscoverySmokeCommand.findScript(project?.basePath) != null) {
-            actions += Separator.getInstance()
-            actions += LlmBrainsProjectDiscoverySmokeAction(project)
-        }
         return actions.toTypedArray()
     }
 
@@ -215,8 +225,9 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
         override fun update(e: AnActionEvent) {
-            val icon = FaviconLoader.get(agent)
-            if (icon != null) e.presentation.icon = icon
+            // Fall back to the plugin's own terminal glyph when no brand favicon is cached/found,
+            // so rows never end up with a blank icon slot.
+            e.presentation.icon = FaviconLoader.get(agent) ?: fallbackIcon
 
             val installed = AgentSettingsState.getInstance().getDetectionResults()?.get(agent.id)
             if (installed == false) {
@@ -243,11 +254,11 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
                 TerminalCommandRunner.runRespectingSettings(proj, label, label, agent.platformInstallHint)
                 DetectionResultsWatcher.watchCommandAvailability(proj, agent, expectInstalled = true) {
                     if (background && AgentSettingsState.getInstance().getDetectionResults()?.get(agent.id) == true) {
-                        TerminalCommandRunner.run(proj, launchTitle, agent.command)
+                        TerminalCommandRunner.runAgent(proj, launchTitle, agent)
                     }
                 }
             } else {
-                TerminalCommandRunner.run(proj, launchTitle, agent.command)
+                TerminalCommandRunner.runAgent(proj, launchTitle, agent)
             }
         }
     }
@@ -269,38 +280,6 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         override fun actionPerformed(e: AnActionEvent) {}
         override fun update(e: AnActionEvent) {
             e.presentation.isEnabled = false
-        }
-    }
-
-    private class LlmBrainsProjectDiscoverySmokeAction(
-        private val project: Project?,
-    ) : AnAction(
-        "Run project discovery",
-        "Run project discovery in the terminal",
-        AllIcons.Actions.Execute,
-    ), DumbAware {
-        override fun getActionUpdateThread() = ActionUpdateThread.BGT
-
-        override fun update(e: AnActionEvent) {
-            val activeProject = e.project ?: project
-            val script = ProjectDiscoverySmokeCommand.findScript(activeProject?.basePath)
-            e.presentation.isEnabled = activeProject != null && script != null
-            e.presentation.description =
-                if (script != null) {
-                    "Run project discovery in the terminal"
-                } else {
-                    "The project discovery script is not available in this project"
-                }
-        }
-
-        override fun actionPerformed(e: AnActionEvent) {
-            val activeProject = e.project ?: project ?: return
-            val script = ProjectDiscoverySmokeCommand.findScript(activeProject.basePath) ?: return
-            TerminalCommandRunner.runNative(
-                activeProject,
-                "Project Discovery",
-                ProjectDiscoverySmokeCommand.build(script),
-            )
         }
     }
 }

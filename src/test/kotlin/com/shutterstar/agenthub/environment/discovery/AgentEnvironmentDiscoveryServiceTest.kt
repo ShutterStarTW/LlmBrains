@@ -39,6 +39,45 @@ class AgentEnvironmentDiscoveryServiceTest {
         assertEquals(1, result.instructions.size)
     }
 
+    @Test fun `should build cached agent view from related projects without discovery`() {
+        val discovery = ProjectEnvironmentDiscoveryService(persist = { _, _ -> })
+        val related = project("related", "claude")
+        val unrelated = project("unrelated", "codex")
+        val global = skill("global", SkillScope.GLOBAL, "/home/.claude/skills/review")
+        val cached = mapOf(
+            "related" to com.shutterstar.agenthub.environment.model.ProjectEnvironment("related", setOf("claude"), listOf(global), emptyList(), emptyList()),
+            "unrelated" to com.shutterstar.agenthub.environment.model.ProjectEnvironment("unrelated", setOf("claude"), listOf(skill("unrelated", SkillScope.PROJECT, "/other/skill")), emptyList(), emptyList()),
+        )
+        val service = AgentEnvironmentDiscoveryService(discovery, cachedEnvironments = { cached })
+        val result = service.cached("claude", listOf(related, unrelated))!!
+        assertEquals(listOf("global"), result.skills.map { it.identity.id })
+        org.junit.jupiter.api.Assertions.assertNull(discovery.cachedGlobalConfigsForAgent("claude"), "Cached lookup must not trigger global discovery")
+        org.junit.jupiter.api.Assertions.assertNull(service.cached("claude", listOf(unrelated)))
+        assertEquals(emptyList<AgentSkill>(), AgentEnvironmentDiscoveryService(discovery, cachedEnvironments = { error("Hidden agent must not read snapshots") }, isAgentVisible = { false })
+            .cached("claude", listOf(related))!!.skills)
+    }
+
+    @Test fun `should reuse global snapshot without projects and drop it on invalidation`() {
+        val discovery = ProjectEnvironmentDiscoveryService(
+            skillDiscovery = com.shutterstar.agenthub.environment.skills.discovery.SkillDiscoveryService(emptyList()),
+            mcpDiscovery = com.shutterstar.agenthub.environment.mcp.discovery.McpDiscoveryService(emptyList()),
+            instructionDiscovery = com.shutterstar.agenthub.environment.instructions.discovery.InstructionDiscoveryService(emptyList()),
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
+            persist = { _, _ -> },
+        )
+        val service = AgentEnvironmentDiscoveryService(discovery, cachedEnvironments = { emptyMap() })
+        org.junit.jupiter.api.Assertions.assertNull(service.cached("claude", emptyList()))
+        discovery.globalConfigsForAgent("claude")
+        org.junit.jupiter.api.Assertions.assertNotNull(service.cached("claude", emptyList()))
+        discovery.invalidateAll()
+        org.junit.jupiter.api.Assertions.assertNull(service.cached("claude", emptyList()))
+    }
+
+    private fun project(id: String, agentId: String) = com.shutterstar.agenthub.projects.model.DiscoveredProject(
+        com.shutterstar.agenthub.projects.model.ProjectIdentity(id, null, null, null), id, null, null, null, null,
+        listOf(com.shutterstar.agenthub.projects.model.AgentProject(agentId, id, 0, null, emptyList())), null,
+    )
+
     private fun skill(
         id: String,
         scope: SkillScope,

@@ -12,8 +12,8 @@ the toolbar dropdown under a *Companion Tools* heading.
 
 ## ccusage — by ryoppippi
 
-Token & cost usage analysis for coding-agent CLIs, read from local log files (Claude Code, Codex,
-OpenCode, Amp, Droid, Codebuff/Freebuff, Hermes and more). Privacy-first: nothing is uploaded.
+Token and cost usage analysis for coding-agent CLIs, read from local log files (Claude Code, Codex,
+OpenCode, Amp, Droid, Codebuff/Freebuff, Hermes and more). Nothing is uploaded.
 
 ```shell
 # Install
@@ -214,8 +214,8 @@ npm uninstall -g repomix
 
 ## Semgrep CLI — by Semgrep
 
-Static analysis security scanner that finds bugs, vulnerabilities and anti-patterns using
-lightweight, language-aware rules — runs in seconds and works with pre-commit hooks and CI.
+Static analysis security scanner that finds bugs, vulnerabilities and anti-patterns with
+language-aware rules. It works with pre-commit hooks and CI.
 
 ```shell
 # Install

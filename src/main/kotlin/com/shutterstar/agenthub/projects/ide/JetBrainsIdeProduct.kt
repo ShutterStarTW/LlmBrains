@@ -22,9 +22,5 @@ enum class JetBrainsIdeProduct(
         fun fromProductCode(productCode: String?): JetBrainsIdeProduct? = entries.firstOrNull { product ->
             productCode?.uppercase() in product.productCodes
         }
-
-        fun fromLauncherName(fileName: String?): JetBrainsIdeProduct? = entries.firstOrNull { product ->
-            product.launcherNames.any { it.equals(fileName, ignoreCase = true) }
-        }
     }
 }

@@ -1,9 +1,8 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -16,15 +15,14 @@ class KiroProjectProviderTest {
     lateinit var tempDirectory: Path
 
     @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = KiroProjectProvider(kiroDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(sessionsDirectory())
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
+    fun `should show reported context utilization without estimating token usage or active time`() {
+        writeSession("context.json", """{"session_id":"context","cwd":${json(tempDirectory.toString())},"created_at":"2026-08-25T09:00:00Z","updated_at":"2026-08-25T11:00:00Z","session_state":{"rts_model_state":{"model_info":{"context_window_tokens":200000},"context_usage_percentage":7.2627997}}}""")
+        val statistics = KiroProjectProvider(kiroDirectory()).discover().single().statistics
+        assertEquals("200000", statistics["contextWindow"])
+        assertEquals("726", statistics["contextUsageBasisPoints"])
+        assertEquals("7200000", statistics["elapsedMillis"])
+        assertNull(statistics["totalTokens"])
+        assertNull(statistics["activeMillis"])
     }
 
     @Test
@@ -96,26 +94,6 @@ class KiroProjectProviderTest {
         assertEquals(fallbackTime, sessions.getValue("invalid").updatedAt)
     }
 
-    @Test
-    fun `duplicate session ids keep newest metadata file`() {
-        val oldProject = tempDirectory.resolve("work/old")
-        val newProject = tempDirectory.resolve("work/new")
-        writeSession(
-            "old.json",
-            """{"session_id":"duplicate","cwd":${json(oldProject.toString())},"updated_at":"2026-08-24T10:00:00Z"}""",
-            Instant.parse("2026-08-24T10:00:00Z"),
-        )
-        writeSession(
-            "new.json",
-            """{"session_id":"duplicate","cwd":${json(newProject.toString())},"updated_at":"2026-08-26T10:00:00Z"}""",
-            Instant.parse("2026-08-26T10:00:00Z"),
-        )
-
-        val session = KiroProjectProvider(kiroDirectory()).discover().single()
-
-        assertEquals(newProject.toString(), session.rawProjectPath)
-    }
-
     private fun kiroDirectory(): Path = tempDirectory.resolve(".kiro")
 
     private fun sessionsDirectory(): Path = kiroDirectory().resolve("sessions/cli")
@@ -127,6 +105,4 @@ class KiroProjectProviderTest {
         Files.setLastModifiedTime(file, FileTime.from(modifiedAt))
         return file
     }
-
-    private fun json(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 }

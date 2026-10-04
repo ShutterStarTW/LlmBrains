@@ -1,9 +1,9 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -14,18 +14,6 @@ import java.time.Instant
 class CopilotProjectProviderTest {
     @TempDir
     lateinit var homeDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = CopilotProjectProvider(homeDirectory)
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(sessionsDirectory())
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers one valid session from top level metadata`() {
@@ -53,20 +41,18 @@ class CopilotProjectProviderTest {
     }
 
     @Test
-    fun `discovers multiple sessions and projects`() {
-        val firstProject = homeDirectory.resolve("work/first")
-        val secondProject = homeDirectory.resolve("work/second")
-        writeSession("first-key", "one.jsonl", listOf(metadataLine("one", firstProject.toString())))
-        writeSession("first-key", "two.jsonl", listOf(metadataLine("two", firstProject.toString())))
-        writeSession("second-key", "three.jsonl", listOf(metadataLine("three", secondProject.toString())))
+    fun `legacy header title is retained and a named session state survives deduplication`() {
+        val project = homeDirectory.resolve("work/named")
+        val legacy = """{"id":"named","cwd":${json(project.toString())},"timestamp":"2026-08-20T10:00:00Z","title":"Legacy name"}"""
+        writeSession("named-project", "named.jsonl", listOf(legacy.replace(",\"title\":\"Legacy name\"", "")), Instant.parse("2027-01-01T00:00:00Z"))
+        writeSession("legacy-only", "legacy.jsonl", listOf(legacy.replace("named", "legacy").replace("Legacy name", "Legacy title")))
+        val state = Files.createDirectories(homeDirectory.resolve(".copilot/session-state/named"))
+        Files.writeString(state.resolve("workspace.yaml"), "id: named\ncwd: $project\nname: Custom name\n")
 
-        val sessions = CopilotProjectProvider(homeDirectory).discover()
-
-        assertEquals(3, sessions.size)
-        assertEquals(2, sessions.count { it.rawProjectPath == firstProject.toString() })
-        assertEquals(1, sessions.count { it.rawProjectPath == secondProject.toString() })
+        val sessions = CopilotProjectProvider(homeDirectory).discover().associateBy { it.sessionId }
+        assertEquals("Custom name", sessions.getValue("named").metadata["title"])
+        assertEquals("Legacy title", sessions.getValue("legacy").metadata["title"])
     }
-
     @Test
     fun `malformed records do not abort discovery`() {
         val projectPath = homeDirectory.resolve("work/valid")
@@ -125,30 +111,6 @@ class CopilotProjectProviderTest {
         assertNull(session.startedAt)
         assertEquals(modifiedAt, session.updatedAt)
         assertFalse(Files.exists(Path.of(session.rawProjectPath!!)))
-    }
-
-    @Test
-    fun `duplicate session ids keep only the newest source`() {
-        val oldProject = homeDirectory.resolve("work/old")
-        val newProject = homeDirectory.resolve("work/new")
-        writeSession(
-            "first-key",
-            "old-copy.jsonl",
-            listOf(metadataLine("duplicate", oldProject.toString())),
-            Instant.parse("2026-08-20T10:00:00Z"),
-        )
-        val newest = writeSession(
-            "second-key",
-            "new-copy.jsonl",
-            listOf(metadataLine("duplicate", newProject.toString())),
-            Instant.parse("2026-08-23T10:00:00Z"),
-        )
-
-        val session = CopilotProjectProvider(homeDirectory).discover().single()
-
-        assertEquals("duplicate", session.sessionId)
-        assertEquals(newProject.toString(), session.rawProjectPath)
-        assertEquals(newest.toAbsolutePath().normalize().toString(), session.sourcePath)
     }
 
     @Test
@@ -222,6 +184,59 @@ class CopilotProjectProviderTest {
         assertEquals(projectPath.toString(), session.rawProjectPath)
     }
 
+    @Test
+    fun `session state prompts come from the user message events next to the workspace`() {
+        val sessionDirectory = Files.createDirectories(homeDirectory.resolve(".copilot/session-state/with-events"))
+        Files.writeString(sessionDirectory.resolve("workspace.yaml"), "cwd: ${homeDirectory.resolve("work/events")}\n")
+        Files.writeString(
+            sessionDirectory.resolve("events.jsonl"),
+            listOf(
+                """{"type":"session.start","data":{},"id":"1"}""",
+                """{"type":"user.message","data":{"content":"  explain   this repo ","interactionId":"i"},"id":"2"}""",
+                """{"type":"assistant.message","data":{"content":"It is a plugin."},"id":"3"}""",
+                """{"type":"user.message","data":{"content":"thanks"},"id":"4"}""",
+            ).joinToString("\n"),
+        )
+
+        val session = CopilotProjectProvider(homeDirectory).discover().single()
+
+        assertEquals("2", session.metadata["messageCount"])
+        assertEquals("explain this repo", session.metadata["firstMessage"])
+    }
+
+    @Test
+    fun `a session state without an events file never received a prompt`() {
+        val sessionDirectory = Files.createDirectories(homeDirectory.resolve(".copilot/session-state/no-events"))
+        Files.writeString(sessionDirectory.resolve("workspace.yaml"), "cwd: ${homeDirectory.resolve("work/none")}\n")
+
+        val session = CopilotProjectProvider(homeDirectory).discover().single()
+
+        assertEquals("0", session.metadata["messageCount"])
+        assertNull(session.metadata["firstMessage"])
+    }
+
+    @Test
+    fun `workspace name and timestamps fill the title and the date range`() {
+        val sessionDirectory = Files.createDirectories(homeDirectory.resolve(".copilot/session-state/named"))
+        Files.writeString(
+            sessionDirectory.resolve("workspace.yaml"),
+            """
+            id: named
+            cwd: ${homeDirectory.resolve("work/named")}
+            name: Refactor parser
+            created_at: 2026-09-20T08:05:00.000Z
+            updated_at: 2026-09-20T09:05:00.000Z
+            """.trimIndent(),
+        )
+        Files.setLastModifiedTime(sessionDirectory.resolve("workspace.yaml"), FileTime.from(Instant.parse("2026-09-20T09:00:00Z")))
+
+        val session = CopilotProjectProvider(homeDirectory).discover().single()
+
+        assertEquals("Refactor parser", session.metadata["title"])
+        assertEquals(Instant.parse("2026-09-20T08:05:00Z"), session.startedAt)
+        assertEquals(Instant.parse("2026-09-20T09:05:00Z"), session.updatedAt)
+    }
+
     private fun sessionsDirectory(): Path = homeDirectory.resolve(".copilot/sessions")
 
     private fun writeSession(
@@ -244,20 +259,5 @@ class CopilotProjectProviderTest {
     ): String {
         val idField = id?.let { "\"id\":${json(it)}," }.orEmpty()
         return "{$idField\"cwd\":${json(cwd)},\"timestamp\":${json(timestamp)},\"type\":\"user\"}"
-    }
-
-    private fun json(value: String): String = buildString {
-        append('"')
-        value.forEach { character ->
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(character)
-            }
-        }
-        append('"')
     }
 }

@@ -1,9 +1,9 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.writeFile
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.environment.mcp.model.McpTransport
-import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -18,12 +18,12 @@ class AdditionalAgentMcpProviderTest {
 
     @Test
     fun `should discover Cline global and project MCP settings`() {
-        write(
+        writeFile(
             temporaryDirectory.resolve(".cline/data/settings/cline_mcp_settings.json"),
             stdioConfig("global"),
         )
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("cline-project"))
-        write(projectRoot.resolve(".cline/mcp.json"), httpConfig("project", "url"))
+        writeFile(projectRoot.resolve(".cline/mcp.json"), httpConfig("project", "url"))
 
         val provider = ClineMcpProvider(temporaryDirectory)
         assertSafeStdio(provider.discoverGlobal().single(), "cline", McpScope.GLOBAL)
@@ -32,9 +32,9 @@ class AdditionalAgentMcpProviderTest {
 
     @Test
     fun `should discover Kiro global and project MCP settings`() {
-        write(temporaryDirectory.resolve(".kiro/settings/mcp.json"), stdioConfig("global"))
+        writeFile(temporaryDirectory.resolve(".kiro/settings/mcp.json"), stdioConfig("global"))
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("kiro-project"))
-        write(projectRoot.resolve(".kiro/settings/mcp.json"), httpConfig("project", "url"))
+        writeFile(projectRoot.resolve(".kiro/settings/mcp.json"), httpConfig("project", "url"))
 
         val provider = KiroMcpProvider(temporaryDirectory)
         assertSafeStdio(provider.discoverGlobal().single(), "kiro", McpScope.GLOBAL)
@@ -43,9 +43,9 @@ class AdditionalAgentMcpProviderTest {
 
     @Test
     fun `should recognize Qwen httpUrl and ignore malformed settings`() {
-        write(temporaryDirectory.resolve(".qwen/settings.json"), "{ malformed")
+        writeFile(temporaryDirectory.resolve(".qwen/settings.json"), "{ malformed")
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("qwen-project"))
-        write(
+        writeFile(
             projectRoot.resolve(".qwen/settings.json"),
             """{"mcpServers":{"project":{"httpUrl":"https://example.test/mcp?token=secret"},"legacy":{"url":"https://example.test/sse"}}}""",
         )
@@ -89,20 +89,4 @@ class AdditionalAgentMcpProviderTest {
 
     private fun httpConfig(name: String, urlField: String): String =
         """{"mcpServers":{"$name":{"$urlField":"https://example.test/mcp?token=secret"}}}"""
-
-    private fun write(path: Path, content: String) {
-        Files.createDirectories(path.parent)
-        Files.writeString(path, content)
-    }
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

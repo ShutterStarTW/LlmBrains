@@ -6,7 +6,7 @@ data class ProjectIndexState(
     var projects: MutableList<ProjectIndexProjectState> = mutableListOf(),
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = 3
     }
 }
 
@@ -32,4 +32,8 @@ data class ProjectIndexSessionState(
     var updatedAtEpochMillis: Long? = null,
     var sourcePath: String? = null,
     var nativeResumeId: String? = null,
+    var messageCount: Int? = null,
+    var title: String? = null,
+    var firstMessage: String? = null,
+    var statistics: MutableMap<String, String> = mutableMapOf(),
 )

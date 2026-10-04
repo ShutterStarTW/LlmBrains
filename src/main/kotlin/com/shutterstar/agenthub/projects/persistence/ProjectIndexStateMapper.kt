@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.projects.model.AgentSession
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectComparators
 import com.shutterstar.agenthub.projects.model.ProjectIdentity
+import com.shutterstar.agenthub.projects.model.SessionStatistics
 import java.time.Instant
 
 object ProjectIndexStateMapper {
@@ -17,7 +18,7 @@ object ProjectIndexStateMapper {
     )
 
     fun decode(state: ProjectIndexState): List<DiscoveredProject> {
-        if (state.schemaVersion != ProjectIndexState.CURRENT_SCHEMA_VERSION) return emptyList()
+        if (state.schemaVersion !in 1..ProjectIndexState.CURRENT_SCHEMA_VERSION) return emptyList()
 
         return state.projects.mapNotNull(::decodeProject)
             .sortedWith(ProjectComparators.discoveredProjectByRecency)
@@ -45,6 +46,10 @@ object ProjectIndexStateMapper {
         updatedAtEpochMillis = session.updatedAt?.toEpochMilli(),
         sourcePath = session.sourcePath,
         nativeResumeId = session.nativeResumeId,
+        messageCount = session.messageCount,
+        title = session.title,
+        firstMessage = session.firstMessage,
+        statistics = SessionStatistics.sanitize(session.statistics).toMutableMap(),
     )
 
     private fun decodeProject(project: ProjectIndexProjectState): DiscoveredProject? {
@@ -102,8 +107,11 @@ object ProjectIndexStateMapper {
             startedAt = session.startedAtEpochMillis?.let(Instant::ofEpochMilli),
             updatedAt = session.updatedAtEpochMillis?.let(Instant::ofEpochMilli),
             sourcePath = session.sourcePath,
-            title = null,
+            title = session.title,
             nativeResumeId = session.nativeResumeId,
+            messageCount = session.messageCount,
+            firstMessage = session.firstMessage,
+            statistics = SessionStatistics.sanitize(session.statistics),
         )
     }
 }

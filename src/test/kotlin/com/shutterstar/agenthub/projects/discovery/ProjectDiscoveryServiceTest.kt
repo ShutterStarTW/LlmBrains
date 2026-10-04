@@ -34,7 +34,7 @@ class ProjectDiscoveryServiceTest {
             provider("cursor", raw("cursor", projectB, "u1", "2026-08-04T10:00:00Z")),
         )
 
-        val projects = service.discoverProjects()
+        val projects = service.discover().projects
 
         assertEquals(2, projects.size)
         val discoveredA = projects.single { it.name == "A" }
@@ -64,7 +64,7 @@ class ProjectDiscoveryServiceTest {
             projectResolver = resolver,
         )
 
-        val projects = service.discoverProjects()
+        val projects = service.discover().projects
 
         assertEquals(1, projects.size)
         assertEquals("github.com/team/repository", projects.single().gitRemote)
@@ -80,11 +80,31 @@ class ProjectDiscoveryServiceTest {
             raw("claude", project, "same", "2026-08-03T10:00:00Z", title = "Latest title"),
         )
 
-        val discovered = service(provider).discoverProjects().single().agents.single()
+        val discovered = service(provider).discover().projects.single().agents.single()
 
         assertEquals(1, discovered.sessionCount)
         assertEquals("Latest title", discovered.sessions.single().title)
         assertEquals(Instant.parse("2026-08-03T10:00:00Z"), discovered.lastActivity)
+    }
+
+    @Test
+    fun `a raw session's messageCount metadata becomes a typed field`() {
+        val project = Files.createDirectories(tempDirectory.resolve("counted"))
+        val provider = provider("claude", raw("claude", project, "s1", "2026-08-01T10:00:00Z", messageCount = 24))
+
+        val session = service(provider).discover().projects.single().agents.single().sessions.single()
+
+        assertEquals(24, session.messageCount)
+    }
+
+    @Test
+    fun `missing or unparsable messageCount metadata leaves the field null`() {
+        val project = Files.createDirectories(tempDirectory.resolve("uncounted"))
+        val provider = provider("claude", raw("claude", project, "s1", "2026-08-01T10:00:00Z"))
+
+        val session = service(provider).discover().projects.single().agents.single().sessions.single()
+
+        assertEquals(null, session.messageCount)
     }
 
     @Test
@@ -136,7 +156,7 @@ class ProjectDiscoveryServiceTest {
             provider("cline", raw("cline", project, "cline-session", "2026-08-01T10:00:00Z")),
         )
 
-        val agents = service.discoverProjects().single().agents.associateBy { it.agentId }
+        val agents = service.discover().projects.single().agents.associateBy { it.agentId }
 
         assertEquals("claude-session", agents.getValue("claude").sessions.single().nativeResumeId)
         assertEquals("codex-session", agents.getValue("codex").sessions.single().nativeResumeId)
@@ -151,7 +171,7 @@ class ProjectDiscoveryServiceTest {
             provider("claude", raw("codex", project, "wrong", "2026-08-01T10:00:00Z")),
         )
 
-        assertTrue(service.discoverProjects().isEmpty())
+        assertTrue(service.discover().projects.isEmpty())
     }
 
     @Test
@@ -206,7 +226,7 @@ class ProjectDiscoveryServiceTest {
 
         val projects = assertTimeout(
             Duration.ofSeconds(5),
-            ThrowingSupplier { service.discoverProjects() },
+            ThrowingSupplier { service.discover().projects },
         )
 
         assertEquals(1, projects.size)
@@ -248,6 +268,7 @@ class ProjectDiscoveryServiceTest {
         sessionId: String,
         updatedAt: String,
         title: String? = null,
+        messageCount: Int? = null,
     ) = RawAgentProject(
         agentId = agentId,
         rawProjectPath = path.toString(),
@@ -255,6 +276,9 @@ class ProjectDiscoveryServiceTest {
         startedAt = Instant.parse(updatedAt).minusSeconds(60),
         updatedAt = Instant.parse(updatedAt),
         sourcePath = "fixture/$sessionId.jsonl",
-        metadata = title?.let { mapOf("title" to it) }.orEmpty(),
+        metadata = buildMap {
+            title?.let { put("title", it) }
+            messageCount?.let { put("messageCount", it.toString()) }
+        },
     )
 }

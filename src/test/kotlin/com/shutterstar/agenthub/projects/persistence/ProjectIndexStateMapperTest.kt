@@ -28,15 +28,30 @@ class ProjectIndexStateMapperTest {
         assertEquals(project.lastActivity, restored.lastActivity)
         assertEquals(project.agents.single().sessions.single().sourcePath, restored.agents.single().sessions.single().sourcePath)
         assertEquals(project.agents.single().sessions.single().nativeResumeId, restored.agents.single().sessions.single().nativeResumeId)
+        assertEquals(42, restored.agents.single().sessions.single().messageCount)
+        assertEquals(project.agents.single().sessions.single().statistics, restored.agents.single().sessions.single().statistics)
     }
 
     @Test
-    fun `conversation-derived session title is not persisted`() {
+    fun `session names survive persistence`() {
         val restored = ProjectIndexStateMapper.decode(
             ProjectIndexStateMapper.encode(listOf(project()), Instant.EPOCH),
         ).single()
 
-        assertNull(restored.agents.single().sessions.single().title)
+        assertEquals("private conversation title", restored.agents.single().sessions.single().title)
+        assertEquals("private first prompt", restored.agents.single().sessions.single().firstMessage)
+    }
+
+    @Test
+    fun `previous schema still restores sessions without names`() {
+        val old = ProjectIndexStateMapper.encode(listOf(project()), Instant.EPOCH).copy(schemaVersion = 1)
+        old.projects.single().agents.single().sessions.single().apply {
+            title = null
+            firstMessage = null
+        }
+        val restored = ProjectIndexStateMapper.decode(old).single().agents.single().sessions.single()
+        assertEquals("session-1", restored.id)
+        assertNull(restored.firstMessage)
     }
 
     @Test
@@ -74,6 +89,9 @@ class ProjectIndexStateMapperTest {
             sourcePath = "C:/Users/example/.codex/sessions/session-1.jsonl",
             title = "private conversation title",
             nativeResumeId = "session-1",
+            messageCount = 42,
+            firstMessage = "private first prompt",
+            statistics = mapOf("models" to "gpt-test", "totalTokens" to "12345", "activeMillis" to "60000"),
         )
         val agent = AgentProject(
             agentId = "codex",

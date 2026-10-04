@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import java.nio.file.Path
 
 class QwenSkillProvider(
@@ -9,4 +10,5 @@ class QwenSkillProvider(
     userHome = homeDirectory,
     relativeSkillDirectory = Path.of(".qwen", "skills"),
     shared = false,
+    globalSkillDirectory = EnvHomeDirectorySupport.resolveGuarded("QWEN_HOME", homeDirectory, ".qwen").resolve("skills"),
 )

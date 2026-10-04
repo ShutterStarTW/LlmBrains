@@ -8,7 +8,7 @@ internal object McpSecretSanitizer {
         "(?i)(api[-_]?key|access[-_]?token|auth(?:orization)?|client[-_]?secret|password|secret|token)(=|:)([^\\s&]+)",
     )
     private val querySecret = Regex(
-        "(?i)([?&](?:api[-_]?key|access[-_]?token|auth(?:orization)?|client[-_]?secret|password|secret|token)=)[^&#\\s]*",
+        "(?i)([?&](?:api[-_]?key|key|access[-_]?token|auth(?:orization)?|client[-_]?secret|password|secret|token)=)[^&#\\s]*",
     )
     private val uriUserInfo = Regex("(://)[^/@\\s]+@")
     private val bearerToken = Regex("(?i)(Bearer\\s+)[^\\s]+")

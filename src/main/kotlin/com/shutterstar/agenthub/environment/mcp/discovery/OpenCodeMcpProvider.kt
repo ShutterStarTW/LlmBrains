@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
@@ -12,7 +13,12 @@ class OpenCodeMcpProvider(
     homeDirectory: Path = Path.of(System.getProperty("user.home")),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
-    private val globalDirectory = homeDirectory.resolve(".config").resolve(OPENCODE_DIRECTORY)
+    private val globalDirectory = EnvHomeDirectorySupport.resolveXdgGuarded(
+        "XDG_CONFIG_HOME",
+        homeDirectory,
+        ".config",
+        OPENCODE_DIRECTORY,
+    )
 
     override fun discoverGlobal(): List<RawMcpServer> =
         discoverConfig(findConfig(globalDirectory), McpScope.GLOBAL)

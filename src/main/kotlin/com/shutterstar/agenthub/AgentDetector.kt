@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 object AgentDetector {
     private const val TIMEOUT_MS = 5000L
-    private val WHITESPACE_REGEX = "\\s+".toRegex()
+    private const val VERSION_TIMEOUT_SECONDS = 30L
 
     private val EXTRA_PATHS = listOf(
         "/opt/homebrew/bin",      // Homebrew on Apple Silicon
@@ -28,7 +28,14 @@ object AgentDetector {
         (EXTRA_PATHS + currentPath.split(":")).joinToString(":")
     }
 
-    fun isCommandAvailable(command: String): Boolean {
+    fun isCommandAvailable(command: String): Boolean = probeCommand(command) == true
+
+    /**
+     * Tri-state probe: `true`/`false` when the shell answered, `null` when the check itself could
+     * not run (shell missing, timeout, interruption). Detection uses this so a broken probe is
+     * "unknown" rather than a false "not installed" that would hide the agent's data.
+     */
+    fun probeCommand(command: String): Boolean? {
         return try {
             val process = if (WslSupport.isActive()) {
                 // nativeCheck, not plain `command -v`: WSL's interop PATH would report every
@@ -54,40 +61,56 @@ object AgentDetector {
             val completed = process.waitFor(TIMEOUT_MS, TimeUnit.MILLISECONDS)
             if (!completed) {
                 process.destroyForcibly()
-                return false
+                return null
             }
 
             process.exitValue() == 0
         } catch (_: IOException) {
-            false
+            null
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-            false
+            null
         }
     }
 
+    /** Definitive results only: an agent whose probe could not run is left out (= unknown). */
     fun detectAllAgents(): Map<String, Boolean> {
         val agents = CodingAgents.detectable()
         val pool = Executors.newFixedThreadPool(minOf(agents.size, 16))
         return try {
             agents
-                .map { agent -> agent.id to pool.submit(Callable { isCommandAvailable(agent.command) }) }
-                .associate { (id, future) ->
-                    id to try {
+                .map { agent -> agent.id to pool.submit(Callable { probeCommand(agent.command) }) }
+                .mapNotNull { (id, future) ->
+                    val installed = try {
                         future.get()
                     } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
-                        false
+                        null
                     } catch (_: ExecutionException) {
-                        false
+                        null
                     }
+                    installed?.let { id to it }
                 }
+                .toMap()
         } finally {
             pool.shutdownNow()
         }
     }
 
-    fun autoDetectAndConfigure(): Pair<Int, Int> = DetectionResultsWatcher.applyResults(detectAllAgents())
+    /**
+     * Runs a full detection and stores it; `null` when the pass produced nothing usable (the
+     * failure is recorded so the tool window can offer a retry — it is never read as "nothing
+     * installed").
+     */
+    fun autoDetectAndConfigure(): Pair<Int, Int>? = applyDetection(detectAllAgents())
+
+    private fun applyDetection(results: Map<String, Boolean>): Pair<Int, Int>? {
+        if (results.isEmpty()) {
+            AgentSettingsState.getInstance().markDetectionFailed()
+            return null
+        }
+        return DetectionResultsWatcher.applyResults(results)
+    }
 
     // [onDone] runs on the EDT after detection finishes.
     fun detectAndNotify(project: Project?, onDone: () -> Unit = {}) {
@@ -95,14 +118,23 @@ object AgentDetector {
             val results = detectAllAgents()
             // ModalityState.any() so this runs while the modal Settings dialog is open (else deferred until close).
             ApplicationManager.getApplication().invokeLater({
-                val (enabled, total) = DetectionResultsWatcher.applyResults(results)
+                val applied = applyDetection(results)
                 AgentSettingsConfigurable.scheduleRefresh()
-                DetectionResultsWatcher.showNotification(
-                    project,
-                    "Detect",
-                    "$enabled / $total agents installed",
-                    NotificationType.INFORMATION,
-                )
+                if (applied != null) {
+                    DetectionResultsWatcher.showNotification(
+                        project,
+                        "Detect",
+                        "${applied.first} / ${applied.second} agents installed",
+                        NotificationType.INFORMATION,
+                    )
+                } else {
+                    DetectionResultsWatcher.showNotification(
+                        project,
+                        "Detect",
+                        "Could not detect installed agents — check the shell/WSL setup and try again",
+                        NotificationType.WARNING,
+                    )
+                }
                 onDone()
             }, ModalityState.any())
         }
@@ -114,48 +146,13 @@ object AgentDetector {
         val installedAgents = CodingAgents.detectable().filter { detectionResults[it.id] == true }
         if (installedAgents.isEmpty()) return
 
-        val outdatedIds = mutableListOf<String>()
-        val outdatedNames = mutableListOf<String>()
+        val outcome = UpdateChecker(runCommand = { runSilent(shellArgv(it), VERSION_TIMEOUT_SECONDS) }).check(installedAgents)
+        settings.saveOutdatedAgents(outcome.outdated)
+        settings.saveUnverifiedAgents(outcome.unverified)
 
-        val npmAgents = installedAgents.filter { "npm" in it.updateHint }
-        if (npmAgents.isNotEmpty()) {
-            // --json exits with code 1 when packages are outdated; runSilent captures stdout regardless
-            val output = runSilent(
-                when {
-                    WslSupport.isActive() -> WslSupport.wrapArgv("npm outdated -g --json 2>/dev/null").toTypedArray()
-                    OsDetector.isWindows() -> arrayOf("cmd", "/c", "npm outdated -g --json")
-                    else -> arrayOf("bash", "-lc", "npm outdated -g --json 2>/dev/null")
-                }
-            )
-            npmAgents.forEach { agent ->
-                val pkg = packageNameFrom(agent.updateHint)
-                if (pkg.isBlank()) return@forEach
-                // JSON keys are always quoted — "\"pkg\"" avoids false matches on substrings
-                if ("\"$pkg\"" in output) { outdatedIds += agent.id; outdatedNames += agent.name }
-            }
-        }
-
-        val pipAgents = installedAgents.filter { "pip" in it.updateHint }
-        if (pipAgents.isNotEmpty()) {
-            val output = runSilent(
-                when {
-                    WslSupport.isActive() -> WslSupport.wrapArgv("pip list --outdated --format=json 2>/dev/null").toTypedArray()
-                    OsDetector.isWindows() -> arrayOf("cmd", "/c", "pip list --outdated --format=json")
-                    else -> arrayOf("bash", "-lc", "pip list --outdated --format=json 2>/dev/null")
-                }
-            ).lowercase()
-            pipAgents.forEach { agent ->
-                val pkg = packageNameFrom(agent.updateHint).lowercase()
-                if (pkg.isBlank()) return@forEach
-                // Match exact "name":"pkg" — handles both compact and spaced JSON
-                if ("\"name\":\"$pkg\"" in output || "\"name\": \"$pkg\"" in output) {
-                    outdatedIds += agent.id; outdatedNames += agent.name
-                }
-            }
-        }
-
-        settings.saveOutdatedAgents(outdatedIds)
-
+        val byId = installedAgents.associateBy { it.id }
+        val outdatedNames = outcome.outdated.mapNotNull { byId[it]?.name }
+        val unverifiedNames = outcome.unverified.mapNotNull { byId[it]?.name }
         ApplicationManager.getApplication().invokeLater({
             AgentSettingsConfigurable.scheduleRefresh()
             when {
@@ -168,24 +165,35 @@ object AgentDetector {
                 notifyIfUpToDate -> DetectionResultsWatcher.showNotification(
                     project,
                     "Update",
-                    "All agents are up to date",
+                    if (unverifiedNames.isEmpty()) {
+                        "All agents are up to date"
+                    } else {
+                        "No updates found · could not verify: ${unverifiedNames.joinToString(", ")}"
+                    },
                     NotificationType.INFORMATION,
                 )
             }
         }, ModalityState.any())
     }
 
-    // Drops flags (tokens starting with `-`) so trailing options like `--registry=...` aren't
-    // mistaken for the package name; returns the last remaining token.
-    private fun packageNameFrom(updateHint: String): String =
-        updateHint.trim().split(WHITESPACE_REGEX).filterNot { it.startsWith("-") }.lastOrNull() ?: ""
+    // Runs a command line in the active shell (WSL distro / cmd / login bash); 2>&1 because several
+    // CLIs print their version on stderr.
+    private fun shellArgv(command: String): Array<String> = when {
+        WslSupport.isActive() -> WslSupport.wrapArgv("$command 2>&1").toTypedArray()
+        OsDetector.isWindows() -> arrayOf("cmd", "/c", command)
+        else -> arrayOf("bash", "-lc", "$command 2>&1")
+    }
 
-    private fun runSilent(cmd: Array<String>): String = try {
+    /** Combined stdout+stderr of [commandLine] in the active shell ("" on failure/timeout); blocking. */
+    internal fun shellOutput(commandLine: String, timeoutSeconds: Long = 10): String =
+        runSilent(shellArgv(commandLine), timeoutSeconds)
+
+    private fun runSilent(cmd: Array<String>, timeoutSeconds: Long): String = try {
         val process = ProcessBuilder(*cmd).redirectErrorStream(true).start()
         val output = StringBuilder()
         val reader = Thread { output.append(process.inputStream.bufferedReader().readText()) }
             .also { it.isDaemon = true; it.start() }
-        val finished = process.waitFor(30, TimeUnit.SECONDS)
+        val finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!finished) process.destroyForcibly()
         reader.join(1000)
         output.toString()

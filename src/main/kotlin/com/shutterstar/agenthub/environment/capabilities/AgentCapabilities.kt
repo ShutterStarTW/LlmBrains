@@ -6,6 +6,7 @@ data class AgentCapabilities(
     val supportsMcp: Boolean,
     val supportsProjectMcp: Boolean,
     val supportsInstructions: Boolean,
+    val supportsConfig: Boolean = false,
 ) {
     companion object {
         val NONE = AgentCapabilities(

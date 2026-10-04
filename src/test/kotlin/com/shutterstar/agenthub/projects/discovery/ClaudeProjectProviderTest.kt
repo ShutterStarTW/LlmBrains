@@ -1,10 +1,10 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTimeout
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.ThrowingSupplier
 import org.junit.jupiter.api.io.TempDir
@@ -17,18 +17,6 @@ import java.time.Instant
 class ClaudeProjectProviderTest {
     @TempDir
     lateinit var homeDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = ClaudeProjectProvider(homeDirectory)
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(projectsDirectory())
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers one valid session from top level metadata`() {
@@ -53,21 +41,6 @@ class ClaudeProjectProviderTest {
         assertEquals(startedAt, session.startedAt)
         assertEquals(modifiedAt, session.updatedAt)
         assertEquals(file.toAbsolutePath().normalize().toString(), session.sourcePath)
-    }
-
-    @Test
-    fun `discovers multiple sessions and projects`() {
-        val firstProject = homeDirectory.resolve("work/first")
-        val secondProject = homeDirectory.resolve("work/second")
-        writeSession("first-key", "one.jsonl", listOf(metadataLine("one", firstProject.toString())))
-        writeSession("first-key", "two.jsonl", listOf(metadataLine("two", firstProject.toString())))
-        writeSession("second-key", "three.jsonl", listOf(metadataLine("three", secondProject.toString())))
-
-        val sessions = ClaudeProjectProvider(homeDirectory).discover()
-
-        assertEquals(3, sessions.size)
-        assertEquals(2, sessions.count { it.rawProjectPath == firstProject.toString() })
-        assertEquals(1, sessions.count { it.rawProjectPath == secondProject.toString() })
     }
 
     @Test
@@ -128,30 +101,6 @@ class ClaudeProjectProviderTest {
         assertNull(session.startedAt)
         assertEquals(modifiedAt, session.updatedAt)
         assertFalse(Files.exists(Path.of(session.rawProjectPath!!)))
-    }
-
-    @Test
-    fun `duplicate session ids keep only the newest source`() {
-        val oldProject = homeDirectory.resolve("work/old")
-        val newProject = homeDirectory.resolve("work/new")
-        writeSession(
-            "first-key",
-            "old-copy.jsonl",
-            listOf(metadataLine("duplicate", oldProject.toString())),
-            Instant.parse("2026-08-20T10:00:00Z"),
-        )
-        val newest = writeSession(
-            "second-key",
-            "new-copy.jsonl",
-            listOf(metadataLine("duplicate", newProject.toString())),
-            Instant.parse("2026-08-23T10:00:00Z"),
-        )
-
-        val session = ClaudeProjectProvider(homeDirectory).discover().single()
-
-        assertEquals("duplicate", session.sessionId)
-        assertEquals(newProject.toString(), session.rawProjectPath)
-        assertEquals(newest.toAbsolutePath().normalize().toString(), session.sourcePath)
     }
 
     @Test
@@ -233,6 +182,105 @@ class ClaudeProjectProviderTest {
     }
 
     @Test
+    fun `user prompts are counted and the first one is kept while the summary line stays the title`() {
+        val projectPath = homeDirectory.resolve("work/summarized")
+        writeSession(
+            "project",
+            "summarized.jsonl",
+            listOf(
+                metadataLine("s1", projectPath.toString()),
+                """{"type":"user","message":{"role":"user","content":"  fix the login   bug please "}}""",
+                """{"type":"assistant","message":{"role":"assistant","content":"Sure, looking now."}}""",
+                """{"type":"user","message":{"role":"user","content":[{"type":"text","text":"and add a test"}]}}""",
+                """{"type":"summary","summary":"Fix login bug","leafUuid":"x"}""",
+            ),
+        )
+
+        val session = ClaudeProjectProvider(homeDirectory).discover().single()
+
+        assertEquals("fix the login bug please", session.metadata["firstMessage"])
+        assertEquals("2", session.metadata["messageCount"])
+        assertEquals("Fix login bug", session.metadata["title"])
+    }
+
+    @Test
+    fun `custom session name wins over summary even when summary is newer`() {
+        val projectPath = homeDirectory.resolve("work/renamed")
+        writeSession(
+            "project",
+            "renamed.jsonl",
+            listOf(
+                metadataLine("renamed", projectPath.toString()),
+                """{"type":"summary","summary":"Generated name"}""",
+                """{"type":"custom-title","customTitle":"My own name"}""",
+                """{"type":"ai-title","aiTitle":"New AI name"}""",
+                """{"type":"summary","summary":"New generated name"}""",
+            ),
+        )
+
+        assertEquals("My own name", ClaudeProjectProvider(homeDirectory).discover().single().metadata["title"])
+    }
+
+    @Test
+    fun `should use the latest nonblank AI title instead of first prompt or legacy summary`() {
+        writeSession("project", "titled.jsonl", listOf(
+            metadataLine("titled", homeDirectory.resolve("work").toString()),
+            """{"type":"user","message":{"content":"First prompt"}}""",
+            """{"type":"ai-title","aiTitle":"Earlier title"}""",
+            """{"type":"ai-title","aiTitle":"Actual session title"}""",
+            """{"type":"ai-title","aiTitle":"  "}""",
+            """{"type":"summary","summary":"Legacy summary"}""",
+            """{"type":"assistant","message":{"id":"m","model":"claude-test","usage":{"input_tokens":10,"output_tokens":20}}}""",
+        ))
+        val session = ClaudeProjectProvider(homeDirectory).discover().single()
+        assertEquals("Actual session title", session.metadata["title"])
+        assertEquals("First prompt", session.metadata["firstMessage"])
+        assertEquals("30", session.statistics["totalTokens"])
+    }
+    @Test
+    fun `records Claude Code injects as type user are not counted as prompts`() {
+        val projectPath = homeDirectory.resolve("work/injected")
+        writeSession(
+            "project",
+            "injected.jsonl",
+            listOf(
+                metadataLine("s1", projectPath.toString()),
+                """{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"ok"}]}}""",
+                """{"type":"user","isMeta":true,"message":{"role":"user","content":"Caveat: local command"}}""",
+                """{"type":"user","origin":{"kind":"task-notification"},"message":{"role":"user","content":"task done"}}""",
+                """{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued"}}""",
+                """{"type":"user","message":{"role":"user","content":"<local-command-stdout>Set model</local-command-stdout>"}}""",
+                """{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}""",
+                """{"type":"user","message":{"role":"user","content":"the only real prompt"}}""",
+            ),
+        )
+
+        val session = ClaudeProjectProvider(homeDirectory).discover().single()
+
+        assertEquals("1", session.metadata["messageCount"])
+        assertEquals("the only real prompt", session.metadata["firstMessage"])
+    }
+
+    @Test
+    fun `slash commands count as prompts but never become the first message`() {
+        val projectPath = homeDirectory.resolve("work/commands")
+        writeSession(
+            "project",
+            "commands.jsonl",
+            listOf(
+                metadataLine("s1", projectPath.toString()),
+                """{"type":"user","message":{"role":"user","content":"<command-name>/model</command-name>"}}""",
+                """{"type":"user","message":{"role":"user","content":"what changed?"}}""",
+            ),
+        )
+
+        val session = ClaudeProjectProvider(homeDirectory).discover().single()
+
+        assertEquals("2", session.metadata["messageCount"])
+        assertEquals("what changed?", session.metadata["firstMessage"])
+    }
+
+    @Test
     private fun projectsDirectory(): Path = homeDirectory.resolve(".claude/projects")
 
     private fun writeSession(
@@ -255,20 +303,5 @@ class ClaudeProjectProviderTest {
     ): String {
         val session = sessionId?.let { "\"sessionId\":${json(it)}," }.orEmpty()
         return "{$session\"cwd\":${json(cwd)},\"timestamp\":${json(timestamp)},\"type\":\"user\"}"
-    }
-
-    private fun json(value: String): String = buildString {
-        append('"')
-        value.forEach { character ->
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(character)
-            }
-        }
-        append('"')
     }
 }

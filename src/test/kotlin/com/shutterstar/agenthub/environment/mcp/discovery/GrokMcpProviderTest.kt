@@ -1,9 +1,8 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.environment.mcp.model.McpTransport
-import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -15,6 +14,26 @@ import java.nio.file.Path
 class GrokMcpProviderTest {
     @TempDir
     lateinit var temporaryDirectory: Path
+
+    @Test
+    fun `should discover compatible Claude and Cursor MCP configs without exposing secrets`() {
+        Files.writeString(
+            temporaryDirectory.resolve(".claude.json"),
+            """{"mcpServers":{"claude":{"command":"npx","args":["--token=secret-value"]}}}""",
+        )
+        val cursorConfig = temporaryDirectory.resolve(".cursor/mcp.json")
+        Files.createDirectories(cursorConfig.parent)
+        Files.writeString(
+            cursorConfig,
+            """{"mcpServers":{"cursor":{"url":"https://example.test/mcp?key=secret-value"}}}""",
+        )
+
+        val servers = GrokMcpProvider(grokDirectory()).discoverGlobal().associateBy { it.name }
+
+        assertEquals(setOf("claude", "cursor"), servers.keys)
+        assertTrue(servers.values.all { it.agentId == "grok" })
+        assertFalse(servers.toString().contains("secret-value"))
+    }
 
     @Test
     fun `should discover global stdio and HTTP servers from TOML`() {
@@ -108,15 +127,4 @@ class GrokMcpProviderTest {
     }
 
     private fun grokDirectory(): Path = temporaryDirectory.resolve(".grok")
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

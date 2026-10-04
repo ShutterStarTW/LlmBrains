@@ -22,4 +22,7 @@ object OsDetector {
 
     fun isWindows(): Boolean = currentOs == OsType.WINDOWS
     fun isMac(): Boolean = currentOs == OsType.MAC
+
+    /** Key for comparing paths: Windows file systems are case-insensitive. */
+    fun pathKey(path: String): String = if (isWindows()) path.lowercase(Locale.ROOT) else path
 }

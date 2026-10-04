@@ -1,14 +1,14 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
-import com.shutterstar.agenthub.projects.model.ProjectComparators
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.time.Instant
-import java.time.format.DateTimeParseException
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
@@ -18,7 +18,11 @@ class CopilotProjectProvider(
 ) : AgentProjectProvider {
     override val agentId: String = AGENT_ID
 
-    private val copilotDirectory = homeDirectory.resolve(COPILOT_DIRECTORY)
+    private val copilotDirectory = EnvHomeDirectorySupport.resolveGuarded(
+        "COPILOT_HOME",
+        homeDirectory,
+        COPILOT_DIRECTORY,
+    )
     private val projectsDirectory = copilotDirectory.resolve(SESSIONS_DIRECTORY)
     private val sessionStateDirectories = listOf(
         copilotDirectory.resolve(SESSION_STATE_DIRECTORY),
@@ -35,13 +39,13 @@ class CopilotProjectProvider(
         var skippedSessions = 0
         val sessions = mutableListOf<RawAgentProject>()
         if (Files.isDirectory(projectsDirectory, LinkOption.NOFOLLOW_LINKS)) {
-            val scanBudget = ScanBudget()
+            val scanBudget = ScanBudget(MAX_TOTAL_SESSION_ENTRIES)
             Files.list(projectsDirectory).use { projectDirectories ->
                 projectDirectories
                     .limit(MAX_PROJECT_DIRECTORY_ENTRIES.toLong())
                     .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
                     .sorted()
-                    .takeWhile { scanBudget.remainingSessionEntries > 0 }
+                    .takeWhile { scanBudget.hasRemaining() }
                     .forEach { projectDirectory ->
                         val result = discoverProjectDirectory(projectDirectory, scanBudget)
                         sessions += result.sessions
@@ -57,7 +61,7 @@ class CopilotProjectProvider(
         if (skippedSessions > 0) {
             LOG.fine("[ProjectDiscovery] Copilot: skipped $skippedSessions malformed or unreadable sessions")
         }
-        return deduplicate(sessions)
+        return LocalSessionSupport.deduplicate(sessions)
     }
 
     private fun discoverSessionStateDirectory(directory: Path): DirectoryDiscoveryResult {
@@ -92,16 +96,27 @@ class CopilotProjectProvider(
         val projectPath = readYamlScalar(workspace, CWD_FIELD)
             ?: readYamlScalar(workspace, GIT_ROOT_FIELD)
             ?: return null
-        val updatedAt = runCatching {
-            Files.getLastModifiedTime(workspace, LinkOption.NOFOLLOW_LINKS).toInstant()
-        }.getOrNull()
+        val events = sessionDirectory.resolve(EVENTS_FILE)
+        val startedAt = LocalSessionSupport.parseTimestamp(readYamlScalar(workspace, CREATED_AT_FIELD))
+        val updatedAt = latest(
+            startedAt,
+            LocalSessionSupport.parseTimestamp(readYamlScalar(workspace, UPDATED_AT_FIELD)),
+            LocalSessionSupport.modifiedAt(workspace),
+            LocalSessionSupport.modifiedAt(events),
+        )
+        // No events file at all: the session was opened and closed without a single prompt.
+        val statistics = SessionStatisticsAccumulator(agentId)
+        val prompts = if (Files.exists(events, LinkOption.NOFOLLOW_LINKS)) userMessages(events, statistics) else UserMessageTally()
         return RawAgentProject(
             agentId = agentId,
             rawProjectPath = projectPath,
             sessionId = sessionId,
-            startedAt = null,
+            startedAt = startedAt,
             updatedAt = updatedAt,
             sourcePath = workspace.toAbsolutePath().normalize().toString(),
+            metadata = readYamlScalar(workspace, NAME_FIELD)?.let { mapOf(TITLE_FIELD to it) }.orEmpty() +
+                prompts?.metadata().orEmpty(),
+            statistics = statistics.snapshot(),
         )
     }
 
@@ -124,11 +139,11 @@ class CopilotProjectProvider(
     ): DirectoryDiscoveryResult = try {
         val sessions = mutableListOf<RawAgentProject>()
         var skippedSessions = 0
-        val entryLimit = minOf(MAX_SESSION_ENTRIES_PER_PROJECT, scanBudget.remainingSessionEntries)
+        val entryLimit = minOf(MAX_SESSION_ENTRIES_PER_PROJECT, scanBudget.remaining())
         Files.list(projectDirectory).use { files ->
             files
                 .limit(entryLimit.toLong())
-                .peek { scanBudget.remainingSessionEntries-- }
+                .peek { scanBudget.consume() }
                 .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
                 .filter { it.extension.equals(JSONL_EXTENSION, ignoreCase = true) }
                 .sorted()
@@ -150,6 +165,7 @@ class CopilotProjectProvider(
         var sessionId = sessionFile.nameWithoutExtension.takeIf { it.isNotBlank() }
         var projectPath: String? = null
         var startedAt: Instant? = null
+        var title: String? = null
         var sawTimestamp = false
         var remainingCharacters = MAX_HEADER_CHARACTERS
         var linesRead = 0
@@ -163,9 +179,11 @@ class CopilotProjectProvider(
                 val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
                 fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }?.let { sessionId = it }
                 fields[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }?.let { projectPath = it }
+                fields[NAME_FIELD]?.takeIf { it.isNotBlank() }?.let { title = it }
+                fields[TITLE_FIELD]?.takeIf { it.isNotBlank() }?.let { title = it }
                 fields[TIMESTAMP_FIELD]?.let { timestamp ->
                     sawTimestamp = true
-                    startedAt = parseTimestamp(timestamp)
+                    startedAt = LocalSessionSupport.parseTimestamp(timestamp)
                 }
                 if (sessionId != null && projectPath != null && sawTimestamp) break
             }
@@ -173,6 +191,8 @@ class CopilotProjectProvider(
 
         val resolvedSessionId = sessionId ?: return null
         val resolvedProjectPath = projectPath ?: return null
+        val statistics = SessionStatisticsAccumulator(agentId)
+        val prompts = userMessages(sessionFile, statistics)
         val fileModifiedAt = runCatching { Files.getLastModifiedTime(sessionFile, LinkOption.NOFOLLOW_LINKS) }
             .getOrNull()
             ?.toInstant()
@@ -183,36 +203,22 @@ class CopilotProjectProvider(
             startedAt = startedAt,
             updatedAt = latest(startedAt, fileModifiedAt),
             sourcePath = sessionFile.toAbsolutePath().normalize().toString(),
+            metadata = title?.let { mapOf(TITLE_FIELD to it) }.orEmpty() +
+                prompts?.metadata().orEmpty(),
+            statistics = statistics.snapshot(),
         )
     }
 
-    private fun deduplicate(sessions: List<RawAgentProject>): List<RawAgentProject> {
-        val bySessionId = linkedMapOf<String, RawAgentProject>()
-        sessions.forEach { candidate ->
-            val existing = bySessionId[candidate.sessionId]
-            if (existing == null || compareSessions(candidate, existing) > 0) {
-                bySessionId[candidate.sessionId] = candidate
+    /** The user's prompts: `{"type":"user.message","data":{"content":"..."}}` events. */
+    private fun userMessages(eventsFile: Path, statistics: SessionStatisticsAccumulator): UserMessageTally? =
+        UserMessageTally.scanJsonl(eventsFile, USER_MESSAGE_MARKERS) { line ->
+            statistics.record(line)
+            if (MetadataJsonParser.topLevelStringFields(line, setOf(TYPE_FIELD))[TYPE_FIELD] == USER_MESSAGE_TYPE) {
+                val text = MetadataJsonParser.stringAtPath(line, DATA_FIELD, CONTENT_FIELD)
+                add(text)
+                statistics.userPrompt(text)
             }
         }
-        return bySessionId.values.sortedWith(ProjectComparators.rawAgentProjectByRecency)
-    }
-
-    private fun compareSessions(first: RawAgentProject, second: RawAgentProject): Int {
-        val activityComparison = (first.updatedAt ?: first.startedAt ?: Instant.MIN)
-            .compareTo(second.updatedAt ?: second.startedAt ?: Instant.MIN)
-        if (activityComparison != 0) return activityComparison
-        return first.sourcePath.orEmpty().compareTo(second.sourcePath.orEmpty())
-    }
-
-    private fun parseTimestamp(value: String?): Instant? = try {
-        value?.let(Instant::parse)
-    } catch (_: DateTimeParseException) {
-        null
-    }
-
-    private data class ScanBudget(
-        var remainingSessionEntries: Int = MAX_TOTAL_SESSION_ENTRIES,
-    )
 
     companion object {
         private const val AGENT_ID = "copilot"
@@ -235,13 +241,18 @@ class CopilotProjectProvider(
         private const val SESSION_ID_FIELD = "id"
         private const val WORKING_DIRECTORY_FIELD = "cwd"
         private const val TIMESTAMP_FIELD = "timestamp"
-        private val METADATA_FIELDS = setOf(SESSION_ID_FIELD, WORKING_DIRECTORY_FIELD, TIMESTAMP_FIELD)
+        private const val EVENTS_FILE = "events.jsonl"
+        private const val NAME_FIELD = "name"
+        private const val CREATED_AT_FIELD = "created_at"
+        private const val UPDATED_AT_FIELD = "updated_at"
+        private const val TITLE_FIELD = "title"
+        private const val TYPE_FIELD = "type"
+        private const val USER_MESSAGE_TYPE = "user.message"
+        private const val DATA_FIELD = "data"
+        private const val CONTENT_FIELD = "content"
+        private val USER_MESSAGE_MARKERS = listOf("\"type\"")
+        private val METADATA_FIELDS = setOf(SESSION_ID_FIELD, WORKING_DIRECTORY_FIELD, TIMESTAMP_FIELD, NAME_FIELD, TITLE_FIELD)
         private val YAML_SCALAR = Regex("""^\s*([A-Za-z0-9_-]+)\s*:\s*(.*?)\s*$""")
         private val LOG = Logger.getLogger(CopilotProjectProvider::class.java.name)
     }
 }
-
-internal data class DirectoryDiscoveryResult(
-    val sessions: List<RawAgentProject>,
-    val skippedSessions: Int,
-)

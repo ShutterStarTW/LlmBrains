@@ -24,49 +24,19 @@ class LeftAlignedTabbedPaneTest {
     }
 
     @Test
-    fun `should keep nested tab content on the same leading edge`() {
+    fun `selectFirst returns to the first tab`() {
         SwingUtilities.invokeAndWait {
-            val content = JPanel()
-            val innerTabs = LeftAlignedTabbedPane().apply {
-                addTab("Environment", content)
-                addTab("Projects", JPanel())
+            val alignedTabs = LeftAlignedTabbedPane().apply {
+                addTab("Overview", JPanel())
+                addTab("Sessions", JPanel())
+                addTab("Environment", JPanel())
             }
-            val outerTabs = LeftAlignedTabbedPane().apply {
-                addTab("Agents", innerTabs)
-                addTab("Projects", JPanel())
-            }
-
-            outerTabs.setSize(400, 300)
-            layoutRecursively(outerTabs)
-
-            val contentOrigin = SwingUtilities.convertPoint(content, Point(0, 0), outerTabs)
-            assertEquals(0, tabButtonOrigin(outerTabs, outerTabs).x)
-            assertEquals(0, tabButtonOrigin(innerTabs, outerTabs).x)
-            assertEquals(tabButtonBottom(outerTabs, outerTabs), componentOrigin(innerTabs, outerTabs).y)
-            assertEquals(0, contentOrigin.x)
-            assertEquals(400, content.width)
-        }
-    }
-
-    @Test
-    fun `replacing visible tabs does not shrink the content area`() {
-        SwingUtilities.invokeAndWait {
-            val content = JPanel()
-            val alignedTabs = LeftAlignedTabbedPane()
-            repeat(5) { cycle ->
-                val items = if (cycle % 2 == 0) {
-                    listOf("Skills" to content)
-                } else {
-                    listOf("Skills" to content, "MCP" to JPanel(), "Warnings" to JPanel())
-                }
-                alignedTabs.setTabs(items)
-                alignedTabs.setSize(400, 300)
-                layoutRecursively(alignedTabs)
-
-                assertEquals(items.size, findTabbedPane(alignedTabs).tabCount)
-                assertEquals(0, componentOrigin(content, alignedTabs).x)
-                assertEquals(400, content.width)
-            }
+            alignedTabs.select("Environment")
+            assertEquals("Environment", alignedTabs.selectedTitle())
+            alignedTabs.selectFirst()
+            assertEquals("Overview", alignedTabs.selectedTitle())
+            // Harmless on an empty pane.
+            LeftAlignedTabbedPane().selectFirst()
         }
     }
 

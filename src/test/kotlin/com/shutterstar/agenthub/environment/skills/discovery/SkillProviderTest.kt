@@ -1,10 +1,13 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.writeSkillMd
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -18,7 +21,7 @@ class SkillProviderTest {
 
     @Test
     fun `should discover global and project shared skills`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".agents/skills/global-review"),
             """
             ---
@@ -29,7 +32,7 @@ class SkillProviderTest {
             """.trimIndent(),
         )
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("project"))
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve(".agents/skills/project-review"),
             """
             ---
@@ -39,7 +42,7 @@ class SkillProviderTest {
             Instructions
             """.trimIndent(),
         )
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve("apps/web/.agents/skills/nested-review"),
             """
             ---
@@ -64,8 +67,8 @@ class SkillProviderTest {
 
     @Test
     fun `should discover Claude and legacy Codex skill locations`() {
-        writeSkill(temporaryDirectory.resolve(".claude/skills/claude-review"), "---\nname: claude-review\n---")
-        writeSkill(temporaryDirectory.resolve(".codex/skills/codex-review"), "---\nname: codex-review\n---")
+        writeSkillMd(temporaryDirectory.resolve(".claude/skills/claude-review"), "---\nname: claude-review\n---")
+        writeSkillMd(temporaryDirectory.resolve(".codex/skills/codex-review"), "---\nname: codex-review\n---")
 
         val claude = ClaudeSkillProvider(temporaryDirectory).discoverGlobal().single()
         val codex = CodexSkillProvider(temporaryDirectory).discoverGlobal().single()
@@ -77,12 +80,45 @@ class SkillProviderTest {
     }
 
     @Test
+    fun `should flag Claude's synced skills as system, distinct from and not duplicating the plain top-level ones`() {
+        writeSkillMd(temporaryDirectory.resolve(".claude/skills/own-skill"), validSkill("own-skill", "The user's own skill"))
+        // Claude Code caches skills synced from claude.ai under skills/synced/<bucket>/ - nested one
+        // level deeper than a plain skill directory.
+        writeSkillMd(
+            temporaryDirectory.resolve(".claude/skills/synced/bucket-1/pdf"),
+            validSkill("pdf", "Anthropic's built-in PDF skill"),
+        )
+
+        val skills = ClaudeSkillProvider(temporaryDirectory).discoverGlobal()
+
+        assertEquals(setOf("own-skill", "pdf"), skills.mapTo(mutableSetOf()) { it.name })
+        assertFalse(skills.single { it.name == "own-skill" }.system)
+        assertTrue(skills.single { it.name == "pdf" }.system)
+        assertTrue(skills.all { it.agentId == "claude" && it.scope == SkillScope.GLOBAL })
+    }
+
+    @Test
+    fun `should discover Codex's dot-prefixed system skills, invisible to the normal dot-directory skip`() {
+        writeSkillMd(temporaryDirectory.resolve(".codex/skills/own-skill"), validSkill("own-skill", "The user's own skill"))
+        writeSkillMd(
+            temporaryDirectory.resolve(".codex/skills/.system/skill-creator"),
+            validSkill("skill-creator", "Codex's built-in skill-creator"),
+        )
+
+        val skills = CodexSkillProvider(temporaryDirectory).discoverGlobal()
+
+        assertEquals(setOf("own-skill", "skill-creator"), skills.mapTo(mutableSetOf()) { it.name })
+        assertFalse(skills.single { it.name == "own-skill" }.system)
+        assertTrue(skills.single { it.name == "skill-creator" }.system)
+    }
+
+    @Test
     fun `should discover nested Cursor and OpenCode skill locations`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/team/cursor-review"),
             "---\nname: cursor-review\ndescription: Reviews Cursor changes\n---",
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".config/opencode/skills/team/opencode-review"),
             validSkill("opencode-review", "Reviews OpenCode changes"),
         )
@@ -98,16 +134,16 @@ class SkillProviderTest {
 
     @Test
     fun `should discover OpenCode native and Claude compatible skills`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".claude/skills/global-compat"),
             validSkill("global-compat", "Global OpenCode-compatible skill"),
         )
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("opencode-project"))
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve("packages/app/.opencode/skills/native-project"),
             validSkill("native-project", "Nested native OpenCode skill"),
         )
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve("packages/lib/.claude/skills/project-compat"),
             validSkill("project-compat", "Project OpenCode-compatible skill"),
         )
@@ -123,11 +159,11 @@ class SkillProviderTest {
 
     @Test
     fun `should discover Cursor native managed and compatibility global skills`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/native-review"),
             validSkill("native-review", "Reviews native Cursor changes"),
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills-cursor/managed-review"),
             """
             ---
@@ -138,11 +174,11 @@ class SkillProviderTest {
             ---
             """.trimIndent(),
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".claude/skills/claude-review"),
             validSkill("claude-review", "Cursor-compatible Claude skill"),
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".codex/skills/codex-review"),
             validSkill("codex-review", "Cursor-compatible Codex skill"),
         )
@@ -158,24 +194,28 @@ class SkillProviderTest {
             "Reviews managed Cursor changes",
             skills.single { it.name == "managed-review" }.description,
         )
+        // "skills-cursor" is Cursor's own vendor-managed pack (has a .sync-manifest.json Cursor
+        // itself writes) - flagged system, unlike everything the user placed in the other roots.
+        assertTrue(skills.single { it.name == "managed-review" }.system)
+        assertTrue(skills.filterNot { it.name == "managed-review" }.none { it.system })
     }
 
     @Test
     fun `should discover nested and compatibility Cursor project skills`() {
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("cursor-project"))
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve(".cursor/skills/root-review"),
             validSkill("root-review", "Reviews the repository"),
         )
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve("apps/web/.cursor/skills/web-review"),
             validSkill("web-review", "Reviews the web package"),
         )
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve(".claude/skills/claude-review"),
             validSkill("claude-review", "Cursor-compatible Claude skill"),
         )
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve(".codex/skills/codex-review"),
             validSkill("codex-review", "Cursor-compatible Codex skill"),
         )
@@ -192,19 +232,19 @@ class SkillProviderTest {
 
     @Test
     fun `should ignore Cursor skills with invalid required metadata`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/missing-description"),
             "---\nname: missing-description\n---",
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/folder-name"),
             validSkill("different-name", "Name does not match its directory"),
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/Valid_Name"),
             validSkill("Valid_Name", "Name does not use the supported format"),
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/valid-skill"),
             validSkill("valid-skill", "Valid Cursor skill"),
         )
@@ -218,7 +258,7 @@ class SkillProviderTest {
     fun `should discover a Cursor skill linked from its skills directory`() {
         assumeFalse(System.getProperty("os.name").startsWith("Windows", ignoreCase = true))
         val target = temporaryDirectory.resolve("linked-target")
-        writeSkill(target, validSkill("linked-skill", "Linked Cursor skill"))
+        writeSkillMd(target, validSkill("linked-skill", "Linked Cursor skill"))
         val skillsRoot = Files.createDirectories(temporaryDirectory.resolve(".cursor/skills"))
         Files.createSymbolicLink(skillsRoot.resolve("linked-skill"), target)
 
@@ -234,7 +274,7 @@ class SkillProviderTest {
             agentPlugin.resolve("plugin.json"),
             """{"${'$'}schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"agent-plugin"}""",
         )
-        writeSkill(
+        writeSkillMd(
             agentPlugin.resolve("skills/agent-skill"),
             validSkill("agent-skill", "Agent plugin skill"),
         )
@@ -245,7 +285,7 @@ class SkillProviderTest {
             customPlugin.resolve(".cursor-plugin/plugin.json"),
             """{"name":"custom-plugin","skills":"custom-skills"}""",
         )
-        writeSkill(
+        writeSkillMd(
             customPlugin.resolve("custom-skills/custom-skill"),
             validSkill("custom-skill", "Custom Cursor plugin skill"),
         )
@@ -266,8 +306,8 @@ class SkillProviderTest {
     @Test
     fun `nested skill discovery shares one scan budget across roots`() {
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("budget-project"))
-        writeSkill(projectRoot.resolve(".cursor/skills/first"), validSkill("first", "First skill"))
-        writeSkill(
+        writeSkillMd(projectRoot.resolve(".cursor/skills/first"), validSkill("first", "First skill"))
+        writeSkillMd(
             projectRoot.resolve("package/.cursor/skills/second"),
             validSkill("second", "Second skill"),
         )
@@ -289,16 +329,16 @@ class SkillProviderTest {
 
     @Test
     fun `should discover Antigravity global CLI and legacy project skills`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".gemini/config/skills/global-review"),
             "---\nname: global-review\n---",
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".gemini/antigravity-cli/skills/cli-review"),
             "---\nname: cli-review\n---",
         )
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("antigravity-project"))
-        writeSkill(projectRoot.resolve(".agent/skills/legacy-review"), "---\nname: legacy-review\n---")
+        writeSkillMd(projectRoot.resolve(".agent/skills/legacy-review"), "---\nname: legacy-review\n---")
 
         val provider = AntigravitySkillProvider(temporaryDirectory)
         val global = provider.discoverGlobal()
@@ -312,18 +352,18 @@ class SkillProviderTest {
 
     @Test
     fun `should discover Antigravity direct skills, builtin skills, alt project skills and plugin skills`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".gemini/skills/direct-user-skill"),
             "---\nname: direct-user-skill\n---",
         )
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".gemini/antigravity-cli/builtin/skills/builtin-skill"),
             "---\nname: builtin-skill\n---",
         )
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("antigravity-full-project"))
-        writeSkill(projectRoot.resolve("_agents/skills/alt-agents-skill"), "---\nname: alt-agents-skill\n---")
-        writeSkill(projectRoot.resolve(".gemini/skills/project-gemini-skill"), "---\nname: project-gemini-skill\n---")
-        writeSkill(
+        writeSkillMd(projectRoot.resolve("_agents/skills/alt-agents-skill"), "---\nname: alt-agents-skill\n---")
+        writeSkillMd(projectRoot.resolve(".gemini/skills/project-gemini-skill"), "---\nname: project-gemini-skill\n---")
+        writeSkillMd(
             projectRoot.resolve(".agents/plugins/dev-kit/skills/plugin-skill"),
             "---\nname: plugin-skill\n---",
         )
@@ -337,6 +377,10 @@ class SkillProviderTest {
             global.mapTo(mutableSetOf()) { it.name },
         )
         assertTrue(global.all { it.agentId == "antigravity" && it.scope == SkillScope.GLOBAL })
+        // Antigravity's own vendor-shipped pack lives under builtin/skills - flagged system, unlike
+        // the direct root above.
+        assertTrue(global.single { it.name == "builtin-skill" }.system)
+        assertFalse(global.single { it.name == "direct-user-skill" }.system)
         assertEquals(
             setOf("alt-agents-skill", "project-gemini-skill", "plugin-skill"),
             project.mapTo(mutableSetOf()) { it.name },
@@ -347,10 +391,10 @@ class SkillProviderTest {
     @Test
     fun `should discover Copilot personal and compatible project skills`() {
         val copilotHome = temporaryDirectory.resolve(".copilot")
-        writeSkill(copilotHome.resolve("skills/personal-review"), "---\nname: personal-review\n---")
+        writeSkillMd(copilotHome.resolve("skills/personal-review"), "---\nname: personal-review\n---")
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("copilot-project"))
-        writeSkill(projectRoot.resolve(".github/skills/github-review"), "---\nname: github-review\n---")
-        writeSkill(projectRoot.resolve(".claude/skills/claude-review"), "---\nname: claude-review\n---")
+        writeSkillMd(projectRoot.resolve(".github/skills/github-review"), "---\nname: github-review\n---")
+        writeSkillMd(projectRoot.resolve(".claude/skills/claude-review"), "---\nname: claude-review\n---")
 
         val provider = CopilotSkillProvider(copilotHome)
         val global = provider.discoverGlobal().single()
@@ -375,11 +419,11 @@ class SkillProviderTest {
 
     @Test
     fun `should tolerate malformed and empty skill metadata`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".claude/skills/malformed"),
             "---\nname: never-closed\ndescription: malformed",
         )
-        writeSkill(temporaryDirectory.resolve(".claude/skills/empty-skill"), "")
+        writeSkillMd(temporaryDirectory.resolve(".claude/skills/empty-skill"), "")
 
         val skills = ClaudeSkillProvider(temporaryDirectory).discoverGlobal().associateBy { it.name }
 
@@ -390,7 +434,7 @@ class SkillProviderTest {
 
     @Test
     fun `should parse quoted and block frontmatter values`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".claude/skills/folder-name"),
             """
             ---
@@ -412,7 +456,7 @@ class SkillProviderTest {
     @Test
     fun `should ignore a large asset directory while fingerprinting SKILL md`() {
         val skillDirectory = temporaryDirectory.resolve(".agents/skills/asset-heavy")
-        writeSkill(skillDirectory, "---\nname: asset-heavy\n---\nInstructions")
+        writeSkillMd(skillDirectory, "---\nname: asset-heavy\n---\nInstructions")
         val assets = Files.createDirectories(skillDirectory.resolve("assets"))
         Files.write(assets.resolve("large.bin"), ByteArray(2 * 1024 * 1024) { 7 })
 
@@ -424,7 +468,7 @@ class SkillProviderTest {
 
     @Test
     fun `should tag project-scoped skills with the project name and use the SKILL md heading as display title`() {
-        writeSkill(
+        writeSkillMd(
             temporaryDirectory.resolve(".agents/skills/global-review"),
             """
             ---
@@ -436,7 +480,7 @@ class SkillProviderTest {
             """.trimIndent(),
         )
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("project"))
-        writeSkill(
+        writeSkillMd(
             projectRoot.resolve(".agents/skills/project-review"),
             """
             ---
@@ -461,14 +505,14 @@ class SkillProviderTest {
     @Test
     fun `specialized providers tag every project skill with the project name`() {
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("named-project"))
-        writeSkill(projectRoot.resolve(".agent/skills/antigravity-review"), "---\nname: antigravity-review\n---")
-        writeSkill(projectRoot.resolve(".cline/skills/cline-review"), "---\nname: cline-review\n---")
-        writeSkill(projectRoot.resolve(".github/skills/copilot-review"), "---\nname: copilot-review\n---")
-        writeSkill(
+        writeSkillMd(projectRoot.resolve(".agent/skills/antigravity-review"), "---\nname: antigravity-review\n---")
+        writeSkillMd(projectRoot.resolve(".cline/skills/cline-review"), "---\nname: cline-review\n---")
+        writeSkillMd(projectRoot.resolve(".github/skills/copilot-review"), "---\nname: copilot-review\n---")
+        writeSkillMd(
             projectRoot.resolve(".opencode/skills/opencode-review"),
             validSkill("opencode-review", "Reviews OpenCode changes"),
         )
-        writeSkill(projectRoot.resolve(".grok/skills/grok-review"), "---\nname: grok-review\n---")
+        writeSkillMd(projectRoot.resolve(".grok/skills/grok-review"), "---\nname: grok-review\n---")
         val project = project(projectRoot).copy(name = "Named Project")
         val providers = listOf(
             AntigravitySkillProvider(temporaryDirectory),
@@ -490,7 +534,7 @@ class SkillProviderTest {
 
     @Test
     fun `should fall back to the frontmatter name when SKILL md has no heading`() {
-        writeSkill(temporaryDirectory.resolve(".agents/skills/no-heading"), "---\nname: no-heading\n---\nBody only")
+        writeSkillMd(temporaryDirectory.resolve(".agents/skills/no-heading"), "---\nname: no-heading\n---\nBody only")
 
         val skill = SharedSkillProvider(temporaryDirectory).discoverGlobal().single()
 
@@ -513,22 +557,6 @@ class SkillProviderTest {
         assertTrue(SharedSkillProvider(temporaryDirectory).discoverProject(project).isEmpty())
     }
 
-    private fun writeSkill(skillDirectory: Path, content: String) {
-        Files.createDirectories(skillDirectory)
-        Files.writeString(skillDirectory.resolve("SKILL.md"), content)
-    }
-
     private fun validSkill(name: String, description: String): String =
         "---\nname: $name\ndescription: $description\n---"
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

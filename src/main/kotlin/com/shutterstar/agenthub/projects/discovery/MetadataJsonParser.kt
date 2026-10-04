@@ -113,6 +113,91 @@ object MetadataJsonParser {
         return topLevelLongFields(json.substring(range), requestedFields)
     }
 
+    /** Raw JSON text (untouched, whatever the value's type) of a top-level field, or null if absent/malformed. */
+    fun rawTopLevelField(json: String, requestedField: String): String? {
+        val range = topLevelValueRange(json, requestedField) ?: return null
+        return json.substring(range)
+    }
+
+    /** Raw JSON text at a nested object path, e.g. `rawPath(line, "payload", "item", "content")`. */
+    fun rawPath(json: String, vararg path: String): String? {
+        var current = json
+        for (field in path) {
+            val range = topLevelValueRange(current, field) ?: return null
+            current = current.substring(range)
+        }
+        return current
+    }
+
+    /** The string value at a nested object path; the last segment names the string field. */
+    fun stringAtPath(json: String, vararg path: String): String? {
+        if (path.isEmpty()) return null
+        val parent = if (path.size == 1) json else rawPath(json, *path.copyOfRange(0, path.size - 1)) ?: return null
+        return topLevelStringFields(parent, setOf(path.last()))[path.last()]
+    }
+
+    /** The raw JSON text of each element of a JSON array, or null if [rawArray] is not a well-formed array. */
+    fun arrayElements(rawArray: String): List<String>? {
+        var index = skipWhitespace(rawArray, 0)
+        if (index >= rawArray.length || rawArray[index] != '[') return null
+        index = skipWhitespace(rawArray, index + 1)
+        val elements = mutableListOf<String>()
+        if (index < rawArray.length && rawArray[index] == ']') return elements
+        while (index < rawArray.length) {
+            val end = skipArrayElement(rawArray, index) ?: return null
+            elements += rawArray.substring(index, end).trim()
+            index = skipWhitespace(rawArray, end)
+            when {
+                index >= rawArray.length -> return null
+                rawArray[index] == ',' -> index = skipWhitespace(rawArray, index + 1)
+                rawArray[index] == ']' -> return elements
+                else -> return null
+            }
+        }
+        return null
+    }
+
+    /** The string elements of a JSON array (other element types are skipped), or null if [rawArray] is not a well-formed array. */
+    fun arrayStringElements(rawArray: String): List<String>? =
+        arrayElements(rawArray)?.mapNotNull { element ->
+            if (element.startsWith('"')) parseString(element, 0, MAX_VALUE_CHARACTERS)?.value else null
+        }
+
+    /** The key and raw JSON text of each member of a JSON object, or null if [rawObject] is not a well-formed object. */
+    fun objectEntries(rawObject: String): List<Pair<String, String>>? {
+        var index = skipWhitespace(rawObject, 0)
+        if (index >= rawObject.length || rawObject[index] != '{') return null
+        index = skipWhitespace(rawObject, index + 1)
+        val entries = mutableListOf<Pair<String, String>>()
+        if (index < rawObject.length && rawObject[index] == '}') return entries
+        while (index < rawObject.length) {
+            val key = parseString(rawObject, index, MAX_KEY_CHARACTERS) ?: return null
+            index = skipWhitespace(rawObject, key.nextIndex)
+            if (index >= rawObject.length || rawObject[index] != ':') return null
+            val valueStart = skipWhitespace(rawObject, index + 1)
+            val valueEnd = skipValue(rawObject, valueStart) ?: return null
+            key.value?.let { entries += it to rawObject.substring(valueStart, valueEnd).trim() }
+            index = skipWhitespace(rawObject, valueEnd)
+            when {
+                index >= rawObject.length -> return null
+                rawObject[index] == ',' -> index = skipWhitespace(rawObject, index + 1)
+                rawObject[index] == '}' -> return entries
+                else -> return null
+            }
+        }
+        return null
+    }
+
+    // skipValue stops scalars only at ',' or '}', so inside an array a trailing scalar would run past ']'.
+    private fun skipArrayElement(json: String, startIndex: Int): Int? {
+        if (startIndex >= json.length) return null
+        val first = json[startIndex]
+        if (first == '"' || first == '{' || first == '[') return skipValue(json, startIndex)
+        var index = startIndex
+        while (index < json.length && json[index] != ',' && json[index] != ']') index++
+        return index
+    }
+
     private fun topLevelValueRange(json: String, requestedField: String): IntRange? {
         var index = skipWhitespace(json, 0)
         if (index >= json.length || json[index] != '{') return null

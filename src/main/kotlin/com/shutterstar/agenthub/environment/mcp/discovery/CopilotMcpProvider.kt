@@ -1,6 +1,7 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
+import com.shutterstar.agenthub.environment.discovery.CopilotPluginDiscoverySupport
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
@@ -12,10 +13,17 @@ class CopilotMcpProvider(
 ) : McpProvider {
     override val agentId: String = AGENT_ID
 
-    override fun discoverGlobal(): List<RawMcpServer> = discoverConfig(
-        copilotDirectory.resolve(GLOBAL_MCP_FILE),
-        McpScope.GLOBAL,
-    )
+    override fun discoverGlobal(): List<RawMcpServer> {
+        val own = discoverConfig(copilotDirectory.resolve(GLOBAL_MCP_FILE), McpScope.GLOBAL)
+        val plugins = CopilotPluginDiscoverySupport.discover(copilotDirectory).flatMap { plugin ->
+            val fromFiles = plugin.mcpConfigPaths.flatMap { discoverConfig(it, McpScope.GLOBAL) }
+            val inline = plugin.inlineMcpServers?.let { container ->
+                JsonMcpServerSupport.parseServers(agentId, container, plugin.manifestPath, McpScope.GLOBAL)
+            }.orEmpty()
+            fromFiles + inline
+        }
+        return (own + plugins).distinctBy { it.configPath to it.name }
+    }
 
     override fun discoverProject(project: DiscoveredProject): List<RawMcpServer> {
         val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()

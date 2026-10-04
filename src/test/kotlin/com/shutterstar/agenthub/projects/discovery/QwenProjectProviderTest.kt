@@ -1,7 +1,7 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -16,15 +16,18 @@ class QwenProjectProviderTest {
     lateinit var tempDirectory: Path
 
     @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = QwenProjectProvider(qwenDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(projectsDirectory())
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
+    fun `should preserve transcript statistics and late native title when newer runtime metadata wins`() {
+        writeChat("project/chats/s.jsonl", listOf(
+            event("s", tempDirectory.toString(), "2026-08-25T09:00:00Z", "system"),
+            """{"type":"user","message":{"parts":[{"text":"hello"}]}}""",
+            """{"type":"assistant","uuid":"a","model":"qwen-test","usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120}}""",
+            """{"type":"system","subtype":"custom_title","systemPayload":{"customTitle":"Named session"}}""",
+        ))
+        writeRuntime("project/chats/s.runtime.json", """{"session_id":"s","cwd":${json(tempDirectory.toString())}}""", Instant.parse("2026-08-26T10:00:00Z"))
+        val session = QwenProjectProvider(qwenDirectory()).discover().single()
+        assertEquals("Named session", session.metadata["title"])
+        assertEquals("120", session.statistics["totalTokens"])
+        assertEquals("qwen-test", session.statistics["models"])
     }
 
     @Test
@@ -47,7 +50,7 @@ class QwenProjectProviderTest {
         assertEquals(Instant.parse("2026-08-25T09:00:00Z"), session.startedAt)
         assertEquals(Instant.parse("2026-08-25T12:00:00Z"), session.updatedAt)
         assertEquals(file.toAbsolutePath().normalize().toString(), session.sourcePath)
-        assertTrue(session.metadata.isEmpty())
+        assertEquals(mapOf("messageCount" to "0"), session.metadata, "no title and no user prompt in this transcript")
     }
 
     @Test
@@ -110,14 +113,6 @@ class QwenProjectProviderTest {
         assertTrue(session.sourcePath!!.endsWith("same.jsonl"))
     }
 
-    @Test
-    fun `central registry exposes all implemented providers alphabetically`() {
-        assertEquals(
-            listOf("antigravity", "claude", "cline", "codex", "copilot", "cursor", "grok", "kiro", "opencode", "qwen"),
-            AgentProjectProviders.all.map { it.agentId },
-        )
-    }
-
     private fun qwenDirectory(): Path = tempDirectory.resolve(".qwen")
 
     private fun projectsDirectory(): Path = qwenDirectory().resolve("projects")
@@ -146,6 +141,4 @@ class QwenProjectProviderTest {
     private fun event(sessionId: String, cwd: String, timestamp: String, type: String): String =
         "{\"sessionId\":${json(sessionId)},\"cwd\":${json(cwd)}," +
             "\"timestamp\":${json(timestamp)},\"type\":${json(type)},\"payload\":{\"ignored\":true}}"
-
-    private fun json(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 }

@@ -6,24 +6,27 @@
     <description><![CDATA[
         <p>
             <b>AgentHub</b> adds a toolbar button to every JetBrains IDE that launches any popular
-            <b>CLI coding agent</b> in its own terminal window &mdash; one click, no setup.
+            <b>CLI coding agent</b> in its own IDE terminal tab.
             Works with IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, GoLand, Rider and the rest.
         </p>
 
         <p><b>Highlights</b></p>
         <ul>
-            <li><b>30+ built-in agents</b> &mdash; Claude Code (Anthropic), Codex CLI (OpenAI),
+            <li><b>40+ built-in agents</b> &mdash; Claude Code (Anthropic), Codex CLI (OpenAI),
                 Grok Build (xAI), Antigravity CLI (Google), Copilot CLI (GitHub), Cursor, Aider,
                 Qodo, Qwen Code, Goose, OpenCode and many more.</li>
-            <li><b>One-click launch</b> from the toolbar &mdash; or install a missing agent
-                through a confirmation dialog.</li>
-            <li><b>Auto-detection</b> of installed agents on startup.</li>
-            <li><b>Project discovery</b> &mdash; browse local Antigravity, Claude Code, Cline,
-                Codex CLI, GitHub Copilot CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode and Qwen Code
-                project/session metadata in unified Projects and Agents views.</li>
+            <li><b>Launch from the toolbar</b> &mdash; or install a missing agent after a
+                confirmation dialog.</li>
+            <li><b>Detection</b> of installed agents on startup.</li>
+            <li><b>Project discovery</b> &mdash; browse the projects and sessions of Antigravity,
+                Claude Code, Cline, Codex CLI, GitHub Copilot CLI, Cursor CLI, Grok Build, Kiro CLI,
+                OpenCode and Qwen Code, and resume a session from the tool window.</li>
+            <li><b>Environment</b> &mdash; see the skills, MCP servers, instruction files and
+                configuration files each of those agents uses.</li>
+            <li><b>Shared skills</b> &mdash; share a skill between agents, with a preview, backups and Undo.</li>
             <li><b>Update notifications</b> &mdash; a background check flags agents that
                 have a newer version.</li>
-            <li><b>Manage from Settings</b> &mdash; install, update or remove any agent.</li>
+            <li><b>Manage from Settings</b> &mdash; install, update or remove agents.</li>
             <li><b>Custom agent</b> &mdash; add your own CLI tool with a name, command and URL.</li>
             <li><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents
                 (usage tracking, context packing, skills); off by default.</li>
@@ -101,6 +104,19 @@
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.3.0</b></p>
+        <ul>
+            <li>New <b>Skills</b> tab: browse global or project skills, search and filter them, and open or reveal their files.</li>
+            <li>Share skills between agents. <b>Share&#8230;</b> is one checklist: check an agent to share with it, uncheck it to stop. An agent-specific skill can be moved to the shared folder from the same button. <b>Resync / Repair</b>, <b>Stop Sharing</b> and conflict resolution (keep the shared version, the agent's version, or both) are included.</li>
+            <li>Every change shows a plan first and takes a backup before replacing anything. <b>Undo</b> and <b>Restore Backup&#8230;</b> still work after an IDE restart.</li>
+            <li><b>Migrate duplicates&#8230;</b> and <b>Clean up redundant copies&#8230;</b> tidy identical copies in one reviewed batch.</li>
+            <li>Settings: preferred Link or Copy mode, backups, an option to review plans before applying them, and <b>Manage existing skills</b> (off by default), which lets Stop Sharing also remove links and identical copies AgentHub did not create.</li>
+            <li>Skill ownership, history, settings and backups are shared by all JetBrains IDEs in <b>~/.agenthub</b>. Existing data is imported automatically.</li>
+            <li>The Environment tab also lists agent configuration files (Config), with warnings for approval-bypass or unrestricted sandbox modes. Credentials and raw file contents are never stored.</li>
+            <li>Projects, Agents and Skills share one layout. Sessions show the agent's title (or your first prompt), the prompt count and the time range, plus token, model, cost and tool statistics where the agent records them. <b>Resume</b> works for Claude Code, Codex CLI and OpenCode; <b>Transcript</b> opens the session file.</li>
+            <li>The tool window shows only agents whose CLI was found by the latest detection. Detection now runs on every IDE start.</li>
+            <li>Also: many smaller UI, layout, keyboard and accessibility fixes in the tool window and Settings.</li>
+        </ul>
         <p><b>1.2.0</b></p>
         <ul>
             <li>New <b>AgentHub Projects tool window</b> with read-only project and session
@@ -142,7 +158,7 @@
                 lets you run every agent/companion tool inside a WSL distribution instead of natively.
                 Detection is distro-native (ignores Windows binaries exposed through WSL interop),
                 Linux/WSL-only agents (ForgeCode, LeanCTL, Plandex, Command Code) become available,
-                and missing pip/npm in the distro gets a friendly install hint instead of failing silently</li>
+                and a missing pip/npm in the distro produces an install hint instead of failing silently</li>
             <li>New agent: <b>Pi</b> (Mario Zechner) &mdash; minimalist terminal coding agent harness</li>
             <li>New companion tools: <b>Claude Code Router</b>, <b>Claude-Code-Usage-Monitor</b>,
                 <b>code2prompt</b>, <b>CodeGrab</b>, <b>CodeRabbit CLI</b>, <b>LiteLLM</b> and

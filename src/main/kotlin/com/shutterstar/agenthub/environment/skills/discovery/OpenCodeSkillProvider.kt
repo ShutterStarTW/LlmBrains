@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
@@ -10,11 +11,17 @@ class OpenCodeSkillProvider(
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()
+    private val configRoot = EnvHomeDirectorySupport.resolveXdgGuarded(
+        "XDG_CONFIG_HOME",
+        userHome,
+        ".config",
+        OPENCODE_CONFIG_APP_NAME,
+    )
 
     override fun discoverGlobal(): List<SkillSourceRecord> {
         val budget = scanner.newBudget()
         return listOf(
-            userHome.resolve(OPENCODE_SKILLS),
+            configRoot.resolve(SKILLS_DIRECTORY),
             userHome.resolve(CLAUDE_SKILLS),
         ).flatMap { root ->
             scanner.discover(
@@ -48,8 +55,9 @@ class OpenCodeSkillProvider(
     private companion object {
         const val AGENT_ID = "opencode"
         const val OPENCODE_DIRECTORY = ".opencode"
+        const val OPENCODE_CONFIG_APP_NAME = "opencode"
         const val CLAUDE_DIRECTORY = ".claude"
-        val OPENCODE_SKILLS: Path = Path.of(".config", "opencode", "skills")
-        val CLAUDE_SKILLS: Path = Path.of(CLAUDE_DIRECTORY, "skills")
+        const val SKILLS_DIRECTORY = "skills"
+        val CLAUDE_SKILLS: Path = Path.of(CLAUDE_DIRECTORY, SKILLS_DIRECTORY)
     }
 }

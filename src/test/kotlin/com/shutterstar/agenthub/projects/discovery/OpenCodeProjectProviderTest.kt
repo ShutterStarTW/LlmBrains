@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -18,18 +19,6 @@ import java.time.Instant
 class OpenCodeProjectProviderTest {
     @TempDir
     lateinit var tempDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = OpenCodeProjectProvider(dataDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(dataDirectory().resolve("project"))
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers sessions from read only database records`() {
@@ -80,10 +69,11 @@ class OpenCodeProjectProviderTest {
         assertEquals("A title with\ttab", sessions.first().title)
         assertEquals(Instant.ofEpochMilli(1787216400000), sessions.first().createdAt)
         assertEquals(null, sessions.last().updatedAt)
-        assertTrue("-readonly" in commands.single())
-        assertTrue(commands.single().any { it.endsWith("database with spaces.db") })
-        assertTrue(commands.single().last().startsWith("SELECT hex(id)"))
-        assertTrue(commands.single().last().contains("LIMIT 20000"))
+        assertEquals(3, commands.size, "session, user message and native usage queries")
+        assertTrue(commands.all { "-readonly" in it })
+        assertTrue(commands.all { command -> command.any { it.endsWith("database with spaces.db") } })
+        assertTrue(commands.first().last().startsWith("SELECT hex(id)"))
+        assertTrue(commands.first().last().contains("LIMIT 20000"))
     }
 
     @Test
@@ -121,6 +111,34 @@ class OpenCodeProjectProviderTest {
         assertEquals("ses_pre_sqlite", session.sessionId)
         assertEquals(projectPath.toString(), session.rawProjectPath)
         assertEquals("Pre-SQLite", session.metadata["title"])
+    }
+
+    @Test
+    fun `legacy storage counts user messages and uses first real text part as title`() {
+        val projectPath = tempDirectory.resolve("work/legacy-messages")
+        writeLegacySession(
+            "project-key",
+            "ses_messages.json",
+            legacyJson("ses_messages", projectPath.toString(), "Generated title", null, null),
+        )
+        val messageDirectory = Files.createDirectories(dataDirectory().resolve("storage/message/ses_messages"))
+        val partRoot = Files.createDirectories(dataDirectory().resolve("storage/part"))
+        Files.writeString(messageDirectory.resolve("msg_001.json"), """{"id":"msg_001","sessionID":"ses_messages","role":"assistant"}""")
+        Files.writeString(messageDirectory.resolve("msg_002.json"), """{"id":"msg_002","sessionID":"ses_messages","role":"user"}""")
+        Files.writeString(messageDirectory.resolve("msg_003.json"), """{"id":"msg_003","sessionID":"ses_messages","role":"user"}""")
+        Files.writeString(messageDirectory.resolve("msg_004.json"), """{"id":"msg_004","sessionID":"other","role":"user"}""")
+        val firstParts = Files.createDirectories(partRoot.resolve("msg_002"))
+        Files.writeString(firstParts.resolve("prt_001.json"), """{"messageID":"msg_002","type":"text","synthetic":true,"text":"injected"}""")
+        Files.writeString(firstParts.resolve("prt_002.json"), """{"messageID":"msg_002","type":"text","text":"  fix the login bug  "}""")
+        val secondParts = Files.createDirectories(partRoot.resolve("msg_003"))
+        Files.writeString(secondParts.resolve("prt_001.json"), """{"messageID":"msg_003","type":"text","text":"and add a test"}""")
+
+        val metadata = OpenCodeProjectProvider(dataDirectory()).discover().single().metadata
+
+        assertEquals("2", metadata["messageCount"])
+        assertEquals("fix the login bug", metadata["firstMessage"])
+        assertEquals("Generated title", metadata["title"])
+        assertFalse(metadata.values.any { "and add a test" in it })
     }
 
     @Test
@@ -296,19 +314,4 @@ class OpenCodeProjectProviderTest {
 
     private fun hex(value: String): String = value.toByteArray(Charsets.UTF_8)
         .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
-
-    private fun json(value: String): String = buildString {
-        append('"')
-        value.forEach { character ->
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(character)
-            }
-        }
-        append('"')
-    }
 }

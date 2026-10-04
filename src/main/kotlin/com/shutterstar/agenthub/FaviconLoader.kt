@@ -1,5 +1,6 @@
 ﻿package com.shutterstar.agenthub
 
+import java.awt.Image
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
@@ -32,7 +33,7 @@ object FaviconLoader {
         val stream = FaviconLoader::class.java.getResourceAsStream("/favicons/$domain.png")
             ?: return null
         val img = stream.use { ImageIO.read(it) } ?: return null
-        val scaled = img.getScaledInstance(16, 16, java.awt.Image.SCALE_SMOOTH)
+        val scaled = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH)
         ImageIcon(scaled)
     }.getOrNull()
 }

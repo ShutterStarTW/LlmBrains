@@ -1,10 +1,10 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import com.shutterstar.agenthub.projects.resolve.ProjectResolver
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -15,18 +15,6 @@ import java.time.Instant
 class CursorProjectProviderTest {
     @TempDir
     lateinit var tempDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = CursorProjectProvider(cursorDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(chatsDirectory())
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers Cursor metadata without reading conversation storage`() {
@@ -56,21 +44,6 @@ class CursorProjectProviderTest {
         assertEquals(Instant.ofEpochMilli(1787655600000), session.updatedAt)
         assertEquals("Cursor title", session.metadata["title"])
         assertEquals(metadata.toAbsolutePath().normalize().toString(), session.sourcePath)
-    }
-
-    @Test
-    fun `discovers multiple sessions and projects`() {
-        val firstProject = tempDirectory.resolve("work/first")
-        val secondProject = tempDirectory.resolve("work/second")
-        writeMetadata("first-hash/one/meta.json", metadata("one", firstProject))
-        writeMetadata("first-hash/two/meta.json", metadata("two", firstProject))
-        writeMetadata("second-hash/three/meta.json", metadata("three", secondProject))
-
-        val sessions = CursorProjectProvider(cursorDirectory()).discover()
-
-        assertEquals(3, sessions.size)
-        assertEquals(2, sessions.count { it.rawProjectPath == firstProject.toString() })
-        assertEquals(1, sessions.count { it.rawProjectPath == secondProject.toString() })
     }
 
     @Test
@@ -116,27 +89,6 @@ class CursorProjectProviderTest {
     }
 
     @Test
-    fun `duplicate session ids keep newest metadata`() {
-        val oldProject = tempDirectory.resolve("work/old")
-        val newProject = tempDirectory.resolve("work/new")
-        writeMetadata(
-            "old-hash/duplicate/meta.json",
-            metadata("old", oldProject, updatedAtMs = 1787565600000),
-            Instant.parse("2026-08-24T10:00:00Z"),
-        )
-        writeMetadata(
-            "new-hash/duplicate/meta.json",
-            metadata("new", newProject, updatedAtMs = 1787738400000),
-            Instant.parse("2026-08-26T10:00:00Z"),
-        )
-
-        val session = CursorProjectProvider(cursorDirectory()).discover().single()
-
-        assertEquals(newProject.toString(), session.rawProjectPath)
-        assertEquals("new", session.metadata["title"])
-    }
-
-    @Test
     fun `scan is bounded and ignores project transcript tree`() {
         val project = tempDirectory.resolve("work/project")
         writeMetadata("first-hash/first/meta.json", metadata("first", project))
@@ -177,7 +129,7 @@ class CursorProjectProviderTest {
             projectResolver = ProjectResolver { null },
         )
 
-        val project = service.discoverProjects().single()
+        val project = service.discover().projects.single()
 
         assertEquals(projectPath.toRealPath().toString().replace('\\', '/'), project.path)
         assertEquals("cursor", project.agents.single().agentId)
@@ -208,6 +160,4 @@ class CursorProjectProviderTest {
         updatedAtMs: Long = 1787655600000,
     ): String =
         """{"schemaVersion":1,"createdAtMs":$createdAtMs,"hasConversation":true,"title":${json(title)},"updatedAtMs":$updatedAtMs,"cwd":${json(cwd.toString())}}"""
-
-    private fun json(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 }

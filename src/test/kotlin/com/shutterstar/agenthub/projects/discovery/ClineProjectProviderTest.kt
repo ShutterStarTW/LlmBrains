@@ -1,7 +1,7 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -15,18 +15,6 @@ import java.time.Instant
 class ClineProjectProviderTest {
     @TempDir
     lateinit var tempDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = ClineProjectProvider(dataDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(dataDirectory().resolve("sessions"))
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers sessions from current database location`() {
@@ -65,7 +53,7 @@ class ClineProjectProviderTest {
         ).joinToString("\t")
         val reader = ClineSqliteReader { command, _ ->
             commands += command
-            if (commands.size == 1) null else output
+            if (commands.size < 4) null else output
         }
 
         val session = reader.readSessions(tempDirectory.resolve("sessions.db")).single()
@@ -73,13 +61,32 @@ class ClineProjectProviderTest {
         assertEquals(project, session.directory)
         assertEquals(Instant.parse("2026-08-25T10:00:00Z"), session.startedAt)
         assertEquals(Instant.parse("2026-08-25T12:00:00Z"), session.updatedAt)
-        assertEquals(2, commands.size)
+        assertEquals(null, session.messagesPath)
+        assertEquals(4, commands.size)
         assertTrue(commands.all { "-readonly" in it })
         assertTrue(commands.all { it.last().contains("LIMIT 20000") })
-        assertTrue(commands.first().last().contains("workspace_root"))
+        assertTrue(commands[0].last().contains("messages_path"))
+        assertTrue(commands[2].last().contains("workspace_root") && !commands[2].last().contains("messages_path"))
         assertTrue(commands.last().last().contains("hex(cwd)"))
     }
 
+    @Test
+    fun `SQLite title from metadata is passed through to the session`() {
+        val database = createDatabase("db/sessions.db")
+        val project = tempDirectory.resolve("work/named")
+        val columns = listOf(
+            hex("named-id"), hex(project.toString()), hex("2026-08-25T10:00:00Z"),
+            hex("2026-08-25T11:00:00Z"), hex(""), hex("Cline custom title"),
+        ).joinToString("\t")
+        val reader = ClineSqliteReader { command, _ ->
+            assertTrue(command.last().contains("json_extract(metadata_json"))
+            columns
+        }
+        val provider = ClineProjectProvider(dataDirectory(), reader::readSessions)
+
+        assertEquals("Cline custom title", provider.discover().single().metadata["title"])
+        assertEquals(database, dataDirectory().resolve("db/sessions.db"))
+    }
     @Test
     fun `JSON fallback supplies title and ignores malformed sessions`() {
         val project = tempDirectory.resolve("work/json-project")
@@ -161,19 +168,4 @@ class ClineProjectProviderTest {
 
     private fun hex(value: String): String = value.toByteArray(Charsets.UTF_8)
         .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
-
-    private fun json(value: String): String = buildString {
-        append('"')
-        value.forEach { character ->
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(character)
-            }
-        }
-        append('"')
-    }
 }

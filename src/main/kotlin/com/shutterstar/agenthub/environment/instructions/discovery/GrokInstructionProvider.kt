@@ -33,7 +33,10 @@ class GrokInstructionProvider(
                 InstructionType.AGENT_SPECIFIC,
             )
         }
-        return (namedFiles + rules).distinctBy(InstructionSource::path)
+        val claudeCompatible = ClaudeInstructionProvider(homeDirectory).discoverGlobal().map { source ->
+            source.copy(agentIds = setOf(agentId))
+        }
+        return (namedFiles + rules + claudeCompatible).distinctBy(InstructionSource::path)
     }
 
     override fun discoverProject(project: DiscoveredProject): List<InstructionSource> {

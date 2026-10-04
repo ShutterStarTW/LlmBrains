@@ -9,8 +9,11 @@ A JetBrains IDE plugin that adds a toolbar button to launch popular **CLI coding
 (Claude Code, Codex, Qodo and 38 more) directly in their own IDE terminal window.
 Works with all JetBrains IDEs (IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, etc.).
 
-📦 **Marketplace:** [plugins.jetbrains.com/plugin/32310-agenthub](https://plugins.jetbrains.com/plugin/32310-agenthub)
-📖 **Docs:** see [`docs/`](docs/index.md) (published via MkDocs / GitHub Pages)
+A tool window also shows the projects, sessions, skills, MCP servers and instruction files your agents
+use, and lets you [share skills between agents](docs/skills.md).
+
+**Marketplace:** [plugins.jetbrains.com/plugin/32310-agenthub](https://plugins.jetbrains.com/plugin/32310-agenthub)
+**Docs:** see [`docs/`](docs/index.md) (published via MkDocs / GitHub Pages)
 
 ---
 
@@ -38,7 +41,6 @@ Run from the project root using the Gradle wrapper:
 ./gradlew build           # compile, verify, and build the ZIP
 ./gradlew runIde          # launch a sandbox IDE with the plugin installed
 ./gradlew test            # run the unit tests
-./gradlew ktlintFormat    # auto-format Kotlin before committing
 mkdocs serve              # preview the docs at http://localhost:8000
 ```
 
@@ -79,16 +81,16 @@ Key components:
 - PascalCase for classes/actions, camelCase for methods, SCREAMING_SNAKE_CASE for constants
 - Prefix AgentHub actions with `LlmBrains`
 - Actions that must work during indexing implement `DumbAware`
-- Run `./gradlew ktlintFormat` before committing
+- Follow the existing Kotlin formatting conventions; no ktlint Gradle task is configured
 
 ### Testing
 
-Tests live in `src/test/kotlin/com/shutterstar/agenthub/`:
+Tests live in `src/test/kotlin/com/shutterstar/agenthub/`, next to the package they cover
+(`projects/`, `environment/`, `environment/skills/sync/`, …). For example, `CodingAgentsTest.kt`
+validates the agent registry (ID uniqueness, ordering, install hints). Run the whole suite with
+`./gradlew test --offline` or `src/test/scripts/run-all-tests.ps1`.
 
-- `CodingAgentsTest.kt` — data-validation tests (agent count, ID uniqueness, install hints, …)
-- `OsDetectorTest.kt` — OS detection tests
-
-Use JUnit 5 (and MockK for mocks). Name test classes `<Subject>Test`.
+Use JUnit 5 with temporary filesystem fixtures and hand-written fakes. Name test classes `<Subject>Test`.
 
 ### Commit & PR guidelines
 
@@ -108,86 +110,69 @@ See also: [`CHANGES.md`](CHANGES.md)
 
 ## Features
 
-- **One-click launch** of any CLI coding agent directly from the IDE toolbar
-- **30+ built-in agents** with auto-detection of installed tools
-- **Auto-detect on install** — runs automatically on first install and after each plugin update
-- **Update notifications** — background check on IDE startup; notifies when npm/pip agents have newer versions available
-- **Install flow** — not-installed agents are labeled "(not installed)" and prompt to install with a confirmation dialog; success confirmed automatically in background
-- **Detection results persisted** across IDE restarts — no need to re-detect every session; last run timestamp displayed in Settings
-- **Custom agent support** — add your own CLI tool with configurable name, command, and URL
+- **Launch from the toolbar** — start any CLI coding agent in its own IDE terminal tab
+- **40+ built-in agents**, with detection of which ones are installed
+- **Automatic detection** — runs on every IDE start and after each plugin update
+- **Update notifications** — a background check on IDE startup reports agents that have a newer version
+- **Install from the menu** — agents that are not installed are labeled "(not installed)"; clicking one asks for confirmation, installs it, and launches it when the install finishes
+- **Saved detection results** — kept across IDE restarts; Settings shows when detection last ran
+- **Custom agent** — add your own CLI tool with a name, command and URL
 - **Companion tools** — optional CLI utilities that work alongside the agents (usage tracking, context packing, skills); off by default
-- **Check & Update utilities** — operate on all installed agents, not just enabled ones
-- **Configurable** — enable/disable agents via Settings > Tools > AgentHub
-- **Cross-platform** — works on macOS, Linux, and Windows
-- **WSL mode** (Windows) — optionally run every agent inside a WSL distribution instead of natively
+- **Check & Update utilities** — check installed agents and update those flagged outdated, including disabled ones
+- **Configurable** — enable or disable agents in Settings > Tools > AgentHub
+- **Cross-platform** — macOS, Linux and Windows
+- **WSL mode** (Windows) — run every agent inside a WSL distribution instead of natively
 
-## Project & Agent Environment Discovery
+## Projects, Environment and Skills
 
-Beyond launching agents, AgentHub is also a read-only, local-first inspector for the projects
-and environment (skills, MCP servers, instructions) your coding agents already know about.
-Nothing leaves your machine, and no agent file is ever modified.
+The **AgentHub** tool window (right side of the IDE) shows the projects your coding agents have worked
+on, and the skills, MCP servers, instruction files and configuration files they use. Everything is
+read from local files and nothing is uploaded. Discovery is read-only. Skill files change only after
+you review a plan and confirm it.
 
 ### Features
 
-- **Project discovery** — unifies local Antigravity, Claude Code, Cline, Codex CLI, GitHub Copilot
-  CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode, and Qwen Code session metadata into unified **Projects** and **Agents** views
-- **Cross-agent project merging** — normalizes local paths and Git remotes (SSH/HTTPS), so
-  sessions reported by multiple agents for the same repository appear as one project
-- **Environment discovery** — inspects Skills, MCP servers, and instruction files (`AGENTS.md`,
-  `CLAUDE.md`, `.cursor/rules`, …) for Antigravity, Claude, Cline, Codex, Copilot, Cursor, Grok,
-  Kiro, OpenCode, and Qwen Code
-- **Duplicate & conflict detection** — flags skills/MCP servers that exist under multiple agents
-  and whether the copies are identical or diverge
-- **Secret-safe** — MCP environment values, commands, arguments, URLs, and headers are never
-  rendered; only variable *names* and normalized metadata are shown
-- **IDE-aware project opening** — recommends an installed JetBrains product from project-root
-  markers (Gradle, Composer, npm, Python, Go, .NET, Android, …) and opens it in the current IDE
-  or as a separate process
-- **Project-scoped agent launch** — starts any participating agent with the project directory as
-  the working directory, reusing the same terminal launch path as the toolbar
-- **Cached & background refresh** — the project/environment index survives IDE restarts, rescans
-  run off the UI thread, and a manual refresh is always one click away
+- **Projects and Agents** — sessions from Antigravity, Claude Code, Cline, Codex CLI, GitHub Copilot
+  CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode and Qwen Code, grouped by project or by agent.
+  Sessions from several agents in the same repository appear as one project (local path and Git
+  remote are matched).
+- **Sessions** — each session shows the agent's title (or your first prompt), how many prompts you
+  sent and when it ran. **Resume** reopens a Claude Code, Codex CLI or OpenCode session in a
+  terminal; **Transcript** opens the session file. See [session statistics](docs/session-statistics.md) for the per-session usage details.
+- **Environment** — skills, MCP servers, instruction files (`AGENTS.md`, `CLAUDE.md`,
+  `.cursor/rules`, …) and configuration files per project or agent. Skills and MCP servers that
+  exist under several agents are marked as identical or different. MCP secrets are never shown,
+  only variable names. See the [environment discovery paths](docs/environment-paths.md).
+- **Skills** — share a skill between agents, resolve conflicts, restore backups and undo. See [the Skills page](docs/skills.md).
+- **Installed agents only** — only agents whose CLI the latest detection found are shown. Detection
+  runs on every IDE start and after Detect, Settings install/remove and WSL switches. If you
+  reinstall an agent, its data still on disk reappears.
+- **Open in IDE and Launch** — open a project in a detected JetBrains IDE, or start an agent with
+  the project directory as its working directory.
+- **Cached index** — kept across IDE restarts and refreshed in the background. The refresh button
+  rescans on demand.
 
 ### Using the tool window
 
-Open the **AgentHub** tool window on the right side of the IDE to browse projects previously
-used with Antigravity, Claude Code, Cline, Codex CLI, GitHub Copilot CLI, Cursor CLI, Grok Build,
-Kiro CLI, OpenCode, or Qwen Code.
+- **Projects** lists repositories by recent activity. Select one to see its path, Git remote,
+  per-agent activity, sessions and environment.
+- **Agents** lists each discovered agent with its projects. Double-click a project (or press
+  **Enter**) to open it on the Projects tab.
+- **Skills** lists global or project skills. One **Filters** popup narrows the list.
+- The search box under the tabs filters the selected tab. In a narrow window the details replace the
+  list, and a back button returns to it.
+- Row menus (right-click or **Shift+F10**) offer Open, Reveal in Files and Copy Path. With a session
+  selected, **Ctrl+Enter** resumes it and **Shift+Enter** opens its transcript.
 
-- **Projects** lists repositories by recent activity with participating agents and session totals.
-- **Agents** lists every discovered agent and all projects used with it.
-- Select a project to inspect its path, Git remote, branch, per-agent activity, and session counts.
-- Open its **Environment** tab to inspect normalized Skills, MCP servers, and Instructions;
-  duplicate or conflicting definitions are highlighted without exposing MCP secrets.
-- Use **Open in IDE** to choose a detected JetBrains product, or **Launch** to start an agent in
-  the project's working directory.
-- Search filters both project and agent views; the refresh button rescans local metadata in the
-  background.
-
-### Provider coverage
-
-| Agent               | Project discovery | Skills | MCP servers | Instructions |
-|----------------------|:---:|:---:|:---:|:---:|
-| Antigravity CLI      | ✅ | ✅ | ✅ | ✅ |
-| Claude Code          | ✅ | ✅ | ✅ | ✅ |
-| Cline                | ✅ | ✅ | ✅ | ✅ |
-| Codex CLI            | ✅ | ✅ | ✅ | ✅ |
-| GitHub Copilot CLI   | ✅ | ✅ | ✅ | ✅ |
-| Cursor CLI           | ✅ | ✅ | ✅ | ✅ |
-| Grok Build           | ✅ | ✅ | ✅ | ✅ |
-| Kiro CLI             | ✅ | ✅ | ✅ | ✅ |
-| OpenCode             | ✅ | ✅ | ✅ | ✅ |
-| Qwen Code            | ✅ | ✅ | ✅ | ✅ |
-
-Discovery is read-only and metadata-oriented — AgentHub does not display or index conversation
-content, and never writes to any agent's files or databases.
+Project, MCP and instruction data is read-only. Only confirmed Skills actions write to skill
+folders, with backups and rollback.
 
 ## Supported CLI Agents
 
 | Agent                                                                          | Command      | Provider    | Installation                                                                    |
 |--------------------------------------------------------------------------------|--------------|-------------|---------------------------------------------------------------------------------|
 | [Aider](https://aider.chat)                                                    | `aider`      | Aider AI    | `pip install aider-install && aider-install`                                    |
-| [Amp](https://ampcode.com)                                                     | `amp`        | Sourcegraph | `npm install -g @sourcegraph/amp`                                               |
+| [Amp](https://ampcode.com)                                                     | `amp`        | Sourcegraph | `npm install -g @ampcode/cli`                                                   |
 | [Antigravity CLI](https://antigravity.google/product/antigravity-cli)         | `agy`        | Google      | `curl -fsSL https://antigravity.google/cli/install.sh \| bash`                  |
 | [Auggie](https://www.augmentcode.com/product/CLI)                              | `auggie`     | Augment     | `npm install -g @augmentcode/auggie`                                            |
 | [Claude Code](https://claude.com/product/claude-code)                          | `claude`     | Anthropic   | `npm install -g @anthropic-ai/claude-code`                                      |
@@ -209,7 +194,7 @@ content, and never writes to any agent's files or databases.
 | [iFlow CLI](https://iflow.cn)                                                  | `iflow`      | iFlow       | `npm install -g @iflow-ai/iflow-cli`                                            |
 | [Junie CLI](https://junie.jetbrains.com)                                       | `junie`      | JetBrains   | `npm install -g @jetbrains/junie-cli`                                           |
 | [Kilo Code](https://kilo.ai)                                                   | `kilo`       | Kilo        | `npm install -g @kilocode/cli`                                                  |
-| [Kimi Code](https://www.kimi.com/code)                                         | `kimi`       | Moonshot AI | `pip install kimi-cli`                                                          |
+| [Kimi Code](https://www.kimi.com/code)                                         | `kimi`       | Moonshot AI | `npm install -g @moonshot-ai/kimi-code`                                          |
 | [Kiro CLI](https://kiro.dev/cli/)                                              | `kiro-cli`   | Kiro        | `curl -fsSL https://cli.kiro.dev/install \| bash`                               |
 | [Kode](https://www.npmjs.com/package/@shareai-lab/kode)                        | `kode`       | shareAI-lab | `npm install -g @shareai-lab/kode`                                             |
 | [LeanCTL](https://leanctl.com)                                                 | `leanctl`    | LeanCTL     | `npm install -g leanctl-bin`                                                    |
@@ -228,7 +213,7 @@ content, and never writes to any agent's files or databases.
 | [SWE-agent](https://swe-agent.com)                                             | `sweagent`   | SWE-agent   | `pip install sweagent`                                                          |
 | [VT Code](https://vinhnx.github.io/)                                           | `vtcode`     | vinhnx      | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com`           |
 
-> **Note:** Command Code, ForgeCode, LeanCTL, Muse Code, and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command).
+> **Note:** Command Code, ForgeCode, LeanCTL, Muse Code, and Plandex are hidden on Windows (they have no native Windows build, or their launch command collides with a built-in Windows command).
 
 ## Companion Tools
 
@@ -276,27 +261,26 @@ choose `WSL` and pick a distribution (or leave it on the default one).
 In WSL mode:
 
 - Every command — agent launch, detection, install/update/remove — runs inside the distro.
-- Detection uses the distro's own `command -v` and ignores Windows-side binaries exposed through
-  WSL interop, so an agent that's only installed on the Windows side is correctly reported as
-  not installed in the distro.
+- Detection uses the distro's own `command -v` and ignores Windows binaries exposed through WSL
+  interop, so an agent installed only on the Windows side is reported as not installed in the distro.
 - A few agents that are hidden on native Windows because they have no native Windows build
   (ForgeCode, LeanCTL, Muse Code, Plandex, Command Code) become available, since they run as Linux
   binaries inside the distro.
-- If `pip`/`npm` is missing in the distro, install/update commands show a friendly hint
+- If `pip` or `npm` is missing in the distro, install and update commands print a hint
   (e.g. `sudo apt install python3-pip`) instead of failing silently.
 
 Switching between native and WSL mode (or changing the distro) re-runs detection automatically,
-since the two environments have a different set of "installed" agents. See
+because each environment has its own set of installed agents. See
 [WSL Mode](https://ShutterStarTW.github.io/LlmBrains/wsl-mode/) in the docs for details.
 
 ## Usage
 
 Click the toolbar icon in the top right corner of the IDE to access:
 
-- **Agent actions** — Click any enabled agent to launch it in a new terminal tab. If not installed, a confirmation dialog offers to install it; success is confirmed automatically in background.
-- **Auto-detect installed agents** — Scans your PATH, saves results with timestamp; also runs automatically on first install and after plugin updates
-- **Check all CLI versions** — Shows version info for all installed agents; summary: `✓ N OK` or `✓ N OK   ⚠ M issues`
-- **Update all agents** — Updates all installed agents to their latest versions
+- **Agent actions** — click an enabled agent to launch it in a new terminal tab. If it is not installed, a dialog offers to install it; the install finishes in the background.
+- **Detect installed agents** — scans your PATH and saves the results with a timestamp; also runs on every IDE start and after plugin updates
+- **Check all CLI versions** — shows the version of every installed agent; the summary reads `✓ N OK` or `✓ N OK   ⚠ M issues`
+- **Update all agents** — updates the installed agents that the last update check flagged as outdated
 
 ## Installation
 
@@ -311,8 +295,10 @@ Or install from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin
 
 Go to **Settings/Preferences > Tools > AgentHub** to:
 
-- Enable or disable specific built-in agents in the dropdown menu
-- Configure a custom agent with your own CLI tool
+- Enable or disable built-in agents in the dropdown menu
+- Enable companion tools
+- Configure a custom agent
+- Choose whether operations run in the background, and (on Windows) whether agents run natively or in WSL
 
 ## Requirements
 

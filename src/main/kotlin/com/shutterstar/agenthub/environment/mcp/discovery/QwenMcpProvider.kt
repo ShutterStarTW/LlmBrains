@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
@@ -9,10 +10,11 @@ class QwenMcpProvider(
     private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
 ) : McpProvider {
     override val agentId: String = "qwen"
+    private val qwenDirectory = EnvHomeDirectorySupport.resolveGuarded("QWEN_HOME", homeDirectory, ".qwen")
 
     override fun discoverGlobal(): List<RawMcpServer> = JsonSettingsMcpSupport.discover(
         agentId,
-        homeDirectory.resolve(".qwen/settings.json"),
+        qwenDirectory.resolve("settings.json"),
         McpScope.GLOBAL,
         urlImpliesSse = true,
     )

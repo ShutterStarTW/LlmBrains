@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
@@ -12,7 +13,7 @@ class ClaudeInstructionProvider(
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
 
-    private val claudeDirectory = homeDirectory.resolve(CLAUDE_DIRECTORY)
+    private val claudeDirectory = EnvHomeDirectorySupport.resolveGuarded("CLAUDE_CONFIG_DIR", homeDirectory, CLAUDE_DIRECTORY)
 
     override fun discoverGlobal(): List<InstructionSource> {
         val mainInstruction = InstructionFileSupport.source(

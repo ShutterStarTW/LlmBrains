@@ -10,4 +10,5 @@ data class RawAgentProject(
     val updatedAt: Instant?,
     val sourcePath: String?,
     val metadata: Map<String, String> = emptyMap(),
+    val statistics: Map<String, String> = emptyMap(),
 )

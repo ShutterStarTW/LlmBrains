@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
@@ -62,6 +63,17 @@ class InstructionDiscoveryServiceTest {
 
         assertEquals(InstructionType.CURSOR_RULE, source.type)
         assertTrue(source.path.endsWith("components.mdc"))
+    }
+
+    @Test
+    fun `should discover legacy Cursor rules at the project root`() {
+        val projectRoot = projectRoot()
+        Files.writeString(projectRoot.resolve(".cursorrules"), "Legacy rule")
+
+        val source = CursorInstructionProvider(temporaryDirectory).discoverProject(project(projectRoot)).single()
+
+        assertEquals(InstructionType.CURSOR_RULE, source.type)
+        assertTrue(source.path.endsWith(".cursorrules"))
     }
 
     @Test
@@ -155,6 +167,30 @@ class InstructionDiscoveryServiceTest {
     }
 
     @Test
+    fun `should use nonempty Claude fallback when project AGENTS md is empty`() {
+        val projectRoot = projectRoot()
+        Files.writeString(projectRoot.resolve("AGENTS.md"), "")
+        Files.writeString(projectRoot.resolve("CLAUDE.md"), "Valid fallback")
+
+        val source = OpenCodeInstructionProvider(temporaryDirectory) { 1 }
+            .discoverProject(project(projectRoot)).single()
+
+        assertEquals(InstructionType.CLAUDE_MD, source.type)
+    }
+
+    @Test
+    fun `should not attribute Claude fallback to OpenCode V2`() {
+        val projectRoot = projectRoot()
+        Files.createDirectories(temporaryDirectory.resolve(".claude"))
+        Files.writeString(temporaryDirectory.resolve(".claude/CLAUDE.md"), "Legacy global")
+        Files.writeString(projectRoot.resolve("CLAUDE.md"), "Legacy project")
+        val provider = OpenCodeInstructionProvider(temporaryDirectory) { 2 }
+
+        assertTrue(provider.discoverGlobal().isEmpty())
+        assertTrue(provider.discoverProject(project(projectRoot)).isEmpty())
+    }
+
+    @Test
     fun `should ignore excluded dependency directories`() {
         val projectRoot = projectRoot()
         val dependency = Files.createDirectories(projectRoot.resolve("node_modules/package"))
@@ -220,15 +256,4 @@ class InstructionDiscoveryServiceTest {
     )
 
     private fun projectRoot(): Path = Files.createDirectories(temporaryDirectory.resolve("project"))
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

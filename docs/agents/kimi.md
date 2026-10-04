@@ -3,14 +3,14 @@
 ## Installation
 
 ```shell
-# Install with pip
-pip install kimi-cli
+# Install with npm
+npm install -g @moonshot-ai/kimi-code
 
 # Update to latest version
-pip install --upgrade --upgrade-strategy eager kimi-cli
+npm update -g @moonshot-ai/kimi-code
 
 # Uninstall
-pip uninstall -y kimi-cli
+npm uninstall -g @moonshot-ai/kimi-code
 ```
 
 > via [kimi.com/code](https://www.kimi.com/code)

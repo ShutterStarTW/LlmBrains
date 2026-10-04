@@ -5,6 +5,8 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.intellij.openapi.components.Service
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicLong
 
 @Service(Service.Level.APP)
 @State(name = "LlmBrainsAgentSettings", storages = [Storage("LlmBrainsAgentSettings.xml")])
@@ -20,11 +22,13 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         var detectionTimestamp: Long = 0L,
         var lastDetectedPluginVersion: String = "",
         var outdatedAgentIds: MutableList<String> = mutableListOf(),
+        var unverifiedAgentIds: MutableList<String> = mutableListOf(),
         var runInBackground: Boolean = true,
         var defaultsApplied: Boolean = false,
         var activeCompanionIds: MutableList<String> = mutableListOf(),
         var useWsl: Boolean = false,
         var wslDistro: String = "",
+        var dismissedMigrationIds: MutableList<String> = mutableListOf(),
     )
 
     private var state: State = State()
@@ -118,6 +122,8 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         state.detectedInstalledIds = installed.map { it.key }.toMutableList()
         state.detectedNotInstalledIds = notInstalled.map { it.key }.toMutableList()
         state.detectionTimestamp = System.currentTimeMillis()
+        detectionFailed = false
+        detectionChanged()
     }
 
     /**
@@ -129,7 +135,10 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         state.detectedInstalledIds = mutableListOf()
         state.detectedNotInstalledIds = mutableListOf()
         state.outdatedAgentIds = mutableListOf()
+        state.unverifiedAgentIds = mutableListOf()
         state.detectionTimestamp = 0L
+        detectionFailed = false
+        detectionChanged()
     }
 
     fun getDetectionTimestamp(): Long = state.detectionTimestamp
@@ -143,6 +152,57 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
             if (id !in state.detectedNotInstalledIds) state.detectedNotInstalledIds.add(id)
         }
         state.detectionTimestamp = System.currentTimeMillis()
+        detectionChanged()
+    }
+
+    // --- Installed-agent visibility (see InstalledAgentPolicy) -------------------------------
+
+    /**
+     * Bumped on every change to the detection result (new results, an install/uninstall watcher
+     * update, an environment reset). Long-running discovery captures it up front and discards its
+     * result if it moved, so a run that started before a detection finished never lands stale.
+     */
+    private val generation = AtomicLong()
+    val detectionGeneration: Long get() = generation.get()
+
+    /** True after a detection pass produced no usable result at all; cleared by any new result. */
+    @Volatile
+    var detectionFailed: Boolean = false
+        private set
+
+    private val detectionListeners = CopyOnWriteArrayList<() -> Unit>()
+
+    /** Listener runs on whichever thread changed the detection state — marshal to the EDT yourself. */
+    fun addDetectionListener(listener: () -> Unit): AutoCloseable {
+        detectionListeners += listener
+        return AutoCloseable { detectionListeners -= listener }
+    }
+
+    fun markDetectionFailed() {
+        detectionFailed = true
+        detectionChanged()
+    }
+
+    private fun detectionChanged() {
+        generation.incrementAndGet()
+        detectionListeners.forEach { listener -> runCatching { listener() } }
+    }
+
+    /** Whether the agent's sessions, skills, MCP servers and instructions may be shown. */
+    fun isAgentVisible(agentId: String): Boolean =
+        InstalledAgentPolicy.isVisible(agentId, getDetectionResults())
+
+    /** Ids of the launcher agents (never companion tools) detected as installed right now. */
+    fun visibleAgentIds(): Set<String> =
+        InstalledAgentPolicy.visibleIds(CodingAgents.all.map { it.id }, getDetectionResults())
+
+    /** False while there is no completed detection for the current environment. */
+    fun isInstallationKnown(): Boolean = getDetectionResults() != null
+
+    fun isMigrationDismissed(agentId: String): Boolean = agentId in state.dismissedMigrationIds
+
+    fun dismissMigration(agentId: String) {
+        if (agentId !in state.dismissedMigrationIds) state.dismissedMigrationIds.add(agentId)
     }
 
     fun getLastDetectedPluginVersion(): String = state.lastDetectedPluginVersion
@@ -155,6 +215,13 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
     fun saveOutdatedAgents(ids: List<String>) {
         state.outdatedAgentIds = ids.toMutableList()
+    }
+
+    /** Installed agents whose update status could not be determined by the last update check. */
+    fun getUnverifiedAgentIds(): Set<String> = state.unverifiedAgentIds.toSet()
+
+    fun saveUnverifiedAgents(ids: List<String>) {
+        state.unverifiedAgentIds = ids.toMutableList()
     }
 
     fun removeOutdatedAgent(id: String) {

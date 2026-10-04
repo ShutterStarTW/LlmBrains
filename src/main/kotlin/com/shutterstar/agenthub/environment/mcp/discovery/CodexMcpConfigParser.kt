@@ -102,7 +102,7 @@ internal object CodexMcpConfigParser {
         environmentVariables += McpEnvironmentVariables.collectFrom(*headerValues.toTypedArray())
     }
 
-    private fun parseValues(content: String): Map<List<String>, String> {
+    internal fun parseValues(content: String): Map<List<String>, String> {
         val values = linkedMapOf<List<String>, String>()
         var currentTable = emptyList<String>()
         statements(content).forEach { statement ->
@@ -194,7 +194,7 @@ internal object CodexMcpConfigParser {
             parseString(value) ?: value
         }
 
-    private fun parseString(rawValue: String): String? {
+    internal fun parseString(rawValue: String): String? {
         val value = rawValue.trim()
         if (value.length < 2) return null
         if (value.first() == '\'' && value.last() == '\'') {

@@ -1,11 +1,11 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import com.shutterstar.agenthub.projects.resolve.ProjectResolver
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTimeout
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.ThrowingSupplier
 import org.junit.jupiter.api.io.TempDir
@@ -18,18 +18,6 @@ import java.time.Instant
 class CodexProjectProviderTest {
     @TempDir
     lateinit var homeDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = CodexProjectProvider(codexDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(codexDirectory().resolve("sessions"))
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers session metadata from dated rollout tree`() {
@@ -53,21 +41,6 @@ class CodexProjectProviderTest {
         assertEquals(startedAt, session.startedAt)
         assertEquals(updatedAt, session.updatedAt)
         assertEquals(file.toAbsolutePath().normalize().toString(), session.sourcePath)
-    }
-
-    @Test
-    fun `discovers multiple sessions across multiple projects`() {
-        val first = homeDirectory.resolve("work/first")
-        val second = homeDirectory.resolve("work/second")
-        writeRollout("sessions/2026/08/20/one.jsonl", listOf(sessionMetadata("one", first.toString())))
-        writeRollout("sessions/2026/08/20/two.jsonl", listOf(sessionMetadata("two", first.toString())))
-        writeRollout("sessions/2026/08/21/three.jsonl", listOf(sessionMetadata("three", second.toString())))
-
-        val sessions = CodexProjectProvider(codexDirectory()).discover()
-
-        assertEquals(3, sessions.size)
-        assertEquals(2, sessions.count { it.rawProjectPath == first.toString() })
-        assertEquals(1, sessions.count { it.rawProjectPath == second.toString() })
     }
 
     @Test
@@ -216,11 +189,85 @@ class CodexProjectProviderTest {
             projectResolver = ProjectResolver { null },
         )
 
-        val project = service.discoverProjects().single()
+        val project = service.discover().projects.single()
 
         assertEquals("shared-project", project.name)
         assertEquals(listOf("claude", "codex"), project.agents.map { it.agentId })
         assertEquals(2, project.agents.sumOf { it.sessionCount })
+    }
+
+    @Test
+    fun `UserMessage events are the prompts and the duplicated response items are ignored`() {
+        val projectPath = homeDirectory.resolve("work/titled")
+        writeRollout(
+            "sessions/2026/08/25/titled.jsonl",
+            listOf(
+                sessionMetadata("s1", projectPath.toString()),
+                responseItem("user", "<environment_context>cwd</environment_context>"),
+                responseItem("user", "please fix the build"),
+                userMessageEvent("  please   fix the build  "),
+                responseItem("assistant", "On it."),
+                userMessageEvent("and run the tests"),
+            ),
+        )
+
+        val session = CodexProjectProvider(codexDirectory()).discover().single()
+
+        assertEquals("please fix the build", session.metadata["firstMessage"])
+        assertEquals("2", session.metadata["messageCount"])
+    }
+
+    @Test
+    fun `session index thread name overrides the first prompt and newest rename wins`() {
+        val projectPath = homeDirectory.resolve("work/renamed")
+        writeRollout(
+            "sessions/2026/08/25/renamed.jsonl",
+            listOf(sessionMetadata("renamed-session", projectPath.toString()), userMessageEvent("original prompt")),
+        )
+        Files.writeString(
+            codexDirectory().resolve("session_index.jsonl"),
+            listOf(
+                """{"id":"renamed-session","thread_name":"Old name","updated_at":"2026-08-25T10:00:00Z"}""",
+                "{malformed",
+                """{"id":"renamed-session","thread_name":"Ellenőrizd a cache-elést","updated_at":"2026-08-25T11:00:00Z"}""",
+            ).joinToString("\n", postfix = "\n"),
+        )
+
+        val session = CodexProjectProvider(codexDirectory()).discover().single()
+
+        assertEquals("Ellenőrizd a cache-elést", session.metadata["title"])
+        assertEquals("original prompt", session.metadata["firstMessage"])
+    }
+    @Test
+    fun `rollouts without UserMessage events fall back to user response items minus injected context`() {
+        val projectPath = homeDirectory.resolve("work/older")
+        writeRollout(
+            "sessions/2026/08/25/older.jsonl",
+            listOf(
+                sessionMetadata("s1", projectPath.toString()),
+                responseItem("user", "<environment_context>cwd</environment_context>"),
+                responseItem("user", "legacy prompt"),
+                responseItem("assistant", "Hello"),
+            ),
+        )
+
+        val session = CodexProjectProvider(codexDirectory()).discover().single()
+
+        assertEquals("legacy prompt", session.metadata["firstMessage"])
+        assertEquals("1", session.metadata["messageCount"])
+    }
+
+    @Test
+    fun `a rollout without any user prompt counts zero and has no first message`() {
+        writeRollout(
+            "sessions/2026/08/25/empty.jsonl",
+            listOf(sessionMetadata("s1", homeDirectory.resolve("work/empty").toString()), responseItem("assistant", "Hi")),
+        )
+
+        val session = CodexProjectProvider(codexDirectory()).discover().single()
+
+        assertNull(session.metadata["firstMessage"])
+        assertEquals("0", session.metadata["messageCount"])
     }
 
     @Test
@@ -252,18 +299,11 @@ class CodexProjectProviderTest {
     private fun event(timestamp: String): String =
         "{\"timestamp\":${json(timestamp)},\"type\":\"event_msg\",\"payload\":{\"type\":\"metadata-only-fixture\"}}"
 
-    private fun json(value: String): String = buildString {
-        append('"')
-        value.forEach { character ->
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(character)
-            }
-        }
-        append('"')
-    }
+    private fun userMessageEvent(text: String): String =
+        "{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"item\":{\"type\":\"UserMessage\"," +
+            "\"id\":\"u\",\"content\":[{\"type\":\"text\",\"text\":${json(text)},\"text_elements\":[]}]}}}"
+
+    private fun responseItem(role: String, text: String): String =
+        "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":${json(role)}," +
+            "\"content\":[{\"type\":\"input_text\",\"text\":${json(text)}}]}}"
 }

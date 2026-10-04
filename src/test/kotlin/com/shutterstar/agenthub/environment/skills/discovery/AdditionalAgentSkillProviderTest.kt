@@ -1,8 +1,8 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.writeSkill
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
-import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -66,21 +66,5 @@ class AdditionalAgentSkillProviderTest {
         assertTrue(GrokSkillProvider(temporaryDirectory).discoverGlobal().isEmpty())
     }
 
-    private fun writeSkill(directory: Path, name: String) {
-        Files.createDirectories(directory)
-        Files.writeString(directory.resolve("SKILL.md"), "---\nname: $name\ndescription: Test skill\n---\nInstructions")
-    }
-
     private fun List<SkillSourceRecord>.names(): Set<String> = mapTo(mutableSetOf()) { it.name }
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

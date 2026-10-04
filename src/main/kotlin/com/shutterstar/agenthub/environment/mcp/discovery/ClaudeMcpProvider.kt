@@ -8,6 +8,7 @@ import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.Locale
 import java.util.logging.Logger
+import com.shutterstar.agenthub.OsDetector
 
 class ClaudeMcpProvider(
     homeDirectory: Path = Path.of(System.getProperty("user.home")),
@@ -132,7 +133,7 @@ class ClaudeMcpProvider(
             return false
         }
         val normalizedProject = projectRoot.toString()
-        return if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        return if (OsDetector.isWindows()) {
             normalizedConfigured.equals(normalizedProject, ignoreCase = true)
         } else {
             normalizedConfigured == normalizedProject

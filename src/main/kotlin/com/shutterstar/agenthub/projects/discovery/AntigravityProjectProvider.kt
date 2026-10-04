@@ -1,11 +1,11 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.epochTimestamp
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.parseTimestamp
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedText
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readTailLines
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -283,6 +283,8 @@ class AntigravityProjectProvider(
         if (!title.isNullOrBlank()) {
             metadata[TITLE_FIELD] = title
         }
+        val statistics = SessionStatisticsAccumulator(agentId)
+        userMessages(sessionFile, statistics)?.takeIf { it.count > 0 }?.let { metadata += it.metadata() }
 
         return RawAgentProject(
             agentId = agentId,
@@ -292,23 +294,36 @@ class AntigravityProjectProvider(
             updatedAt = latest(startedAt, lastEventAt, fileModifiedAt),
             sourcePath = sessionFile.toAbsolutePath().normalize().toString(),
             metadata = metadata,
+            statistics = statistics.snapshot(),
         )
     }
 
+    /**
+     * Transcript steps the user typed: `{"source":"USER_EXPLICIT","type":"USER_INPUT","content":"..."}`.
+     * Other JSONL files this provider accepts have none, so their tally stays empty.
+     */
+    private fun userMessages(sessionFile: Path, statistics: SessionStatisticsAccumulator): UserMessageTally? =
+        UserMessageTally.scanJsonl(sessionFile, USER_INPUT_MARKERS) { line ->
+            statistics.record(line)
+            val fields = MetadataJsonParser.topLevelStringFields(line, STEP_FIELDS)
+            if (fields[STEP_TYPE_FIELD] == USER_INPUT_TYPE) {
+                add(fields[STEP_CONTENT_FIELD])
+                statistics.userPrompt(fields[STEP_CONTENT_FIELD])
+            }
+        }
+
     private fun findLastEventTimestamp(sessionFile: Path): Instant? =
-        readTailLines(sessionFile, MAX_TAIL_BYTES, MAX_TAIL_LINES)
-            .asSequence()
-            .mapNotNull { line ->
-                val fields = MetadataJsonParser.topLevelStringFields(line, TIMESTAMP_FIELDS)
+        LocalSessionSupport.lastTimestamp(sessionFile, MAX_TAIL_BYTES, MAX_TAIL_LINES) { line ->
+            val fields = MetadataJsonParser.topLevelStringFields(line, TIMESTAMP_FIELDS)
+            parseTimestamp(
                 fields[CREATED_AT_FIELD]
                     ?: fields[CREATED_AT_CAMEL_FIELD]
                     ?: fields[TIMESTAMP_FIELD]
                     ?: fields[TIME_FIELD]
                     ?: fields[UPDATED_AT_FIELD]
-                    ?: fields[UPDATED_AT_CAMEL_FIELD]
-            }
-            .mapNotNull(::parseTimestamp)
-            .firstOrNull()
+                    ?: fields[UPDATED_AT_CAMEL_FIELD],
+            )
+        }
 
     private fun sessionIdFromFileOrDirectory(sessionFile: Path): String {
         val fileName = sessionFile.fileName.toString()
@@ -366,60 +381,40 @@ class AntigravityProjectProvider(
 
     private fun parseConversationMetadata(sessionFile: Path): List<RawAgentProject> {
         val text = readBoundedText(sessionFile, MAX_JSON_FILE_CHARACTERS) ?: return emptyList()
-        if (!text.contains(CONVERSATIONS_FIELD)) return emptyList()
+        val conversations = MetadataJsonParser.rawTopLevelField(text, CONVERSATIONS_FIELD)
+            ?.let(MetadataJsonParser::objectEntries)
+            ?: return emptyList()
 
-        val results = mutableListOf<RawAgentProject>()
-        val convRegex = Regex(
-            """"([a-zA-Z0-9_-]+)"\s*:\s*\{[^{}]*"summary"\s*:\s*\{([^}]+)\}""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
         val fileModifiedAt = runCatching { Files.getLastModifiedTime(sessionFile, LinkOption.NOFOLLOW_LINKS) }
             .getOrNull()
             ?.toInstant()
+        val sourcePath = sessionFile.toAbsolutePath().normalize().toString()
 
-        convRegex.findAll(text).forEach { match ->
-            val convId = match.groupValues[1]
-            val summaryBody = match.groupValues[2]
+        return conversations.mapNotNull { (conversationId, rawConversation) ->
+            val summary = MetadataJsonParser.rawTopLevelField(rawConversation, SUMMARY_FIELD) ?: return@mapNotNull null
+            val rawPath = MetadataJsonParser.rawTopLevelField(summary, WORKSPACE_URIS_FIELD)
+                ?.let(MetadataJsonParser::arrayStringElements)
+                ?.firstOrNull { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val fields = MetadataJsonParser.topLevelStringFields(
+                summary,
+                setOf(SUMMARY_ID_FIELD, SUMMARY_TITLE_FIELD, SUMMARY_PREVIEW_FIELD, SUMMARY_UPDATED_AT_FIELD),
+            )
+            val lastModified = MetadataJsonParser.topLevelStringFields(rawConversation, setOf(LAST_MODIFIED_FIELD))[LAST_MODIFIED_FIELD]
+            val title = fields[SUMMARY_TITLE_FIELD]?.takeIf { it.isNotBlank() }
+                ?: fields[SUMMARY_PREVIEW_FIELD]?.takeIf { it.isNotBlank() }
 
-            val uriMatch = Regex(""""WorkspaceURIs"\s*:\s*\[\s*"([^"]+)"""").find(summaryBody)
-            val rawPath = uriMatch?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: return@forEach
-            val projectPath = normalizeProjectPath(rawPath)
-
-            val idMatch = Regex(""""ID"\s*:\s*"([^"]+)"""").find(summaryBody)
-            val sessionId = idMatch?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: convId
-
-            val titleMatch = Regex(""""Title"\s*:\s*"([^"]+)"""").find(summaryBody)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
-            val previewMatch = Regex(""""Preview"\s*:\s*"([^"]+)"""").find(summaryBody)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
-            val title = titleMatch ?: previewMatch
-
-            val updatedAtMatch = Regex(""""UpdatedAt"\s*:\s*"([^"]+)"""").find(summaryBody)?.groupValues?.get(1)
-            val lastModifiedMatch = Regex(""""last_modified_time"\s*:\s*"([^"]+)"""").find(match.value)?.groupValues?.get(1)
-            val updatedAt = parseTimestamp(updatedAtMatch) ?: parseTimestamp(lastModifiedMatch)
-
-            val metadata = mutableMapOf<String, String>()
-            if (!title.isNullOrBlank()) {
-                metadata[TITLE_FIELD] = title
-            }
-
-            results.add(
-                RawAgentProject(
-                    agentId = agentId,
-                    rawProjectPath = projectPath,
-                    sessionId = sessionId,
-                    startedAt = null,
-                    updatedAt = updatedAt ?: fileModifiedAt,
-                    sourcePath = sessionFile.toAbsolutePath().normalize().toString(),
-                    metadata = metadata,
-                ),
+            RawAgentProject(
+                agentId = agentId,
+                rawProjectPath = normalizeProjectPath(rawPath),
+                sessionId = fields[SUMMARY_ID_FIELD]?.takeIf { it.isNotBlank() } ?: conversationId,
+                startedAt = null,
+                updatedAt = parseTimestamp(fields[SUMMARY_UPDATED_AT_FIELD]) ?: parseTimestamp(lastModified) ?: fileModifiedAt,
+                sourcePath = sourcePath,
+                metadata = if (title != null) mapOf(TITLE_FIELD to title) else emptyMap(),
             )
         }
-        return results
     }
-
-    private data class DirectoryDiscoveryResult(
-        val sessions: List<RawAgentProject>,
-        val skippedSessions: Int,
-    )
 
     companion object {
         private const val AGENT_ID = "antigravity"
@@ -614,7 +609,18 @@ class AntigravityProjectProvider(
 
         private const val ARGS_FIELD = "args"
         private const val CONVERSATIONS_FIELD = "conversations"
+        private const val WORKSPACE_URIS_FIELD = "WorkspaceURIs"
+        private const val SUMMARY_ID_FIELD = "ID"
+        private const val SUMMARY_TITLE_FIELD = "Title"
+        private const val SUMMARY_PREVIEW_FIELD = "Preview"
+        private const val SUMMARY_UPDATED_AT_FIELD = "UpdatedAt"
+        private const val LAST_MODIFIED_FIELD = "last_modified_time"
         private const val CONVERSATION_METADATA_FILE = "conversation_metadata.json"
+        private const val STEP_TYPE_FIELD = "type"
+        private const val STEP_CONTENT_FIELD = "content"
+        private const val USER_INPUT_TYPE = "USER_INPUT"
+        private val STEP_FIELDS = setOf(STEP_TYPE_FIELD, STEP_CONTENT_FIELD)
+        private val USER_INPUT_MARKERS = listOf("\"type\"")
 
         private fun cleanMatchedPath(raw: String): String =
             raw.trim()
@@ -635,12 +641,9 @@ class AntigravityProjectProvider(
             return path
         }
 
-        private fun defaultDataDirectory(): Path {
-            val configured = System.getenv("ANTIGRAVITY_DATA_DIR")?.trim()?.takeIf { it.isNotEmpty() }
-                ?: System.getenv("ANTIGRAVITY_HOME")?.trim()?.takeIf { it.isNotEmpty() }
-                ?: System.getenv("GEMINI_HOME")?.trim()?.takeIf { it.isNotEmpty() }
-            return configured?.let { runCatching { Path.of(it) }.getOrNull() }
-                ?: Path.of(System.getProperty("user.home"), ".gemini", "antigravity-cli")
-        }
+        private fun defaultDataDirectory(): Path =
+            EnvHomeDirectorySupport.resolveFirst("ANTIGRAVITY_DATA_DIR", "ANTIGRAVITY_HOME", "GEMINI_HOME") {
+                Path.of(System.getProperty("user.home"), ".gemini", "antigravity-cli")
+            }
     }
 }

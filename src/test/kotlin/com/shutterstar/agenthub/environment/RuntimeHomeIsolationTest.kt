@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment
 
+import com.shutterstar.agenthub.writeSkill
 import com.shutterstar.agenthub.environment.instructions.discovery.ClaudeInstructionProvider
 import com.shutterstar.agenthub.environment.mcp.discovery.ClaudeMcpProvider
 import com.shutterstar.agenthub.environment.skills.discovery.ClaudeSkillProvider
@@ -69,11 +70,4 @@ class RuntimeHomeIsolationTest {
         assertTrue(wslInstructions.single().path.startsWith(wslHome.toAbsolutePath().toString()))
     }
 
-    private fun writeSkill(directory: Path, name: String) {
-        Files.createDirectories(directory)
-        Files.writeString(
-            directory.resolve("SKILL.md"),
-            "---\nname: $name\ndescription: Test skill\n---\nInstructions",
-        )
-    }
 }

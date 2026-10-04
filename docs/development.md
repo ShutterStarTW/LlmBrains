@@ -25,11 +25,32 @@ The output lands in `build/distributions/agenthub-<version>.zip`. Install it via
 ./gradlew runIde
 ```
 
+On the Windows development machine, run `.\gradlew.bat runIde --offline` from the repository root
+in an interactive terminal and keep it running while using the sandbox IDE. Confirm the IDE window
+actually opens; starting `idea64.exe` directly is not the plugin development workflow.
+
 ## Tests
 
 ```bash
 ./gradlew test
 ```
+
+Tests target the Java 17 toolchain. Coverage uses JaCoCo 0.8.14, which supports Java 25 class
+files when Gradle itself is launched by a newer local JDK.
+
+## Shared Skills synchronization
+
+The sync engine lives under `environment/skills/sync/`; keep it pure JDK except for the
+`persistence` package and the application-scoped `SkillSyncApplicationService` composition root.
+UI code must call that facade and must not mutate skill directories directly. Every new mutating
+request needs a dry-run plan, optimistic revalidation, target-isolated result, audit entry, and a
+recovery/undo story. Tests should use temporary real directories and injected stores/targets.
+
+Backups and operation journals are stored below the IDE system directory in
+`agenthub/skill-backups`. Never persist skill contents in IntelliJ XML state. Windows links are
+junctions; copy mode stages next to the destination and atomically renames into place. WSL launch
+mode is currently outside Skills discovery/sync scope, so do not infer a WSL home from launcher
+settings inside a target adapter.
 
 ## Verify project discovery without the UI
 
@@ -47,8 +68,8 @@ project identity and merging:
 pwsh -File .\src\test\scripts\run-project-discovery.ps1 -ShowPaths
 ```
 
-The command reads only bounded metadata from supported agents' local session stores. It does
-not modify agent files or print conversation content. The AgentHub menu also exposes
+The command reads bounded session data, including user prompts for counts and a first-prompt title.
+It does not modify agent files or print conversation content. The AgentHub menu also exposes
 **Run project discovery** as its final item while this source repository is open; it launches
 the same script in an IDE terminal. The script delegates compilation and execution to the
 `runProjectDiscovery` Gradle task.
@@ -74,9 +95,26 @@ Run the complete test suite with IDEA's bundled Java runtime and the standalone 
 pwsh -File .\src\test\scripts\run-all-tests.ps1
 ```
 
+For reproducible wide/narrow Swing screenshots during UI review:
+
+```powershell
+pwsh -File .\src\test\scripts\run-all-tests.ps1 -ScreenshotDir .\tmp\ui-screenshots
+```
+
 The script compiles test classes offline, then supplies the IntelliJ Platform runtime JARs used
 by persistence tests. Using IDEA's bundled runtime keeps the Java class-file version aligned
 with the locally installed IntelliJ Platform.
+
+If the script stops with `No cached version of org.junit.jupiter:junit-jupiter:5.10.2 available for
+offline mode` (the Gradle cache lost the JUnit aggregator artifact and Java has no network here),
+compile the tests with IDEA's `kotlinc` instead and run the same JUnit launcher: build the main
+classes with `gradle compileKotlin --offline`; compile every file under `src/test/kotlin` with
+`kotlinc` against `build/classes/kotlin/main`, the JARs in `tmp/junit-libs` and the IntelliJ
+platform JARs that `run-all-tests.ps1` lists, passing
+`-Xfriend-paths=build/classes/kotlin/main` (without it, tests cannot see `internal` declarations)
+and putting the long classpath and file list in an `@argfile` (the command line is too long for
+Windows otherwise); then start `junit-platform-console-standalone execute --scan-class-path=<test
+output dir>` with the same runtime classpath and `--add-opens` flags as the script.
 
 ## Verify IDE-aware project opening
 
@@ -93,9 +131,8 @@ available on `PATH`; it does not scan arbitrary drives.
 
 ## Code formatting
 
-```bash
-./gradlew ktlintFormat
-```
+Follow the existing Kotlin style (four-space indentation and trailing commas). No ktlint Gradle
+task is configured.
 
 ## Adding a new CLI agent
 
@@ -104,19 +141,19 @@ Every new built-in agent touches several files. Missing one of the easy-to-forge
 checklist, in order:
 
 1. **`src/main/kotlin/com/shutterstar/agenthub/CodingAgents.kt`** — add a new `CodingAgent(...)`
-   entry to the `all` list, inserted alphabetically **by `id`**. Required fields: `id`, `name`,
-   `command`, `installHint`, `updateHint`, `uninstallHint`, `provider`, `url`. Optional:
-   `versionArgs`, `installHintWindows`/`uninstallHintWindows`, `devUrl`, `unsupportedOnWindows`
+   entry to the `all` list, inserted alphabetically **by `id`**. The data class requires `id`,
+   `name`, `command`, `installHint`, `updateHint`, and `url`; set `uninstallHint` and `provider`
+   where applicable. Optional fields include `versionArgs`,
+   `installHintWindows`/`uninstallHintWindows`, `devUrl`, `unsupportedOnWindows`
    (for agents that are WSL-only or have no native Windows binary).
-2. \* **`src/test/kotlin/.../CodingAgentsTest.kt`** — bump the `agent count is N` assertion
-   (**and its test name**) from `N` to `N+1`.
+2. No test change is needed: `CodingAgentsTest` has no agent-count assertion.
 3. **`src/main/resources/META-INF/plugin.xml`**:
    - \* the *Supported agents* list — add a new `<a href="url">Name</a> &mdash; Provider` `<li>`
      (alphabetical).
    - \* `change-notes` — add a new version block describing the agent.
-   - The "30+ built-in agents" copy is not an exact count and does not need to change.
+   - The "40+ built-in agents" line is not an exact count and does not need to change.
 4. \* **`README.md`** — add a row to the *Supported CLI Agents* table (alphabetical). The
-   "30+ built-in agents" line stays as-is.
+   "40+ built-in agents" line stays as-is.
 5. \* **`docs/index.md`** — the same table row.
 6. \* **`docs/agents/<id>.md`** — a new agent page (copy the format of an existing one). The
    `awesome-pages` MkDocs plugin picks it up in the nav automatically — `mkdocs.yml` does not
@@ -156,8 +193,7 @@ agents — they live in a separate, opt-in registry so they don't affect the age
    name). The "no collision with agent IDs" test protects itself automatically.
 3. `plugin.xml` (companion tools list + change-notes), `README.md` / `docs/index.md`
    (Companion Tools table), `docs/companion-tools.md` (one section per tool), and a favicon.
-4. `CodingAgents.all`'s count, the `CodingAgentsTest` "agent count" test, and
-   `defaultActiveIds` do **not** change for a companion tool.
+4. `CodingAgents.all` and `defaultActiveIds` do **not** change for a companion tool.
 
 Companion tools are automatically picked up by detection (`CodingAgents.detectable()`), appear
 in the toolbar's "Companion Tools" section, and get a 🧩 marker on launch (agents get 🤖).

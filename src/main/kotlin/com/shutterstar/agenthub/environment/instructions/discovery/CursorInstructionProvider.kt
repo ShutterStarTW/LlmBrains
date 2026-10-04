@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.CursorPluginDiscoverySupport
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
@@ -15,7 +16,7 @@ class CursorInstructionProvider(
     override val agentId: String = AGENT_ID
 
     override fun discoverGlobal(): List<InstructionSource> {
-        val budget = InstructionFileSupport.ScanBudget()
+        val budget = InstructionFileSupport.newBudget()
         return CursorPluginDiscoverySupport.discover(userHome)
             .asSequence()
             .flatMap { plugin ->
@@ -32,6 +33,7 @@ class CursorInstructionProvider(
         return InstructionFileSupport.scan(projectRoot) { _, file ->
             val isAgentsFile = file.fileName.toString() == AGENTS_FILE
             val isClaudeFile = file == projectRoot.resolve(CLAUDE_FILE)
+            val isLegacyRule = file == projectRoot.resolve(LEGACY_RULE_FILE)
             val isCursorRule = file.extension.equals(MDC_EXTENSION, ignoreCase = true) &&
                 InstructionFileSupport.isWithinDirectory(
                     projectRoot,
@@ -39,7 +41,7 @@ class CursorInstructionProvider(
                     CURSOR_DIRECTORY,
                     RULES_DIRECTORY,
                 )
-            isAgentsFile || isClaudeFile || isCursorRule
+            isAgentsFile || isClaudeFile || isLegacyRule || isCursorRule
         }.mapNotNull { path ->
             val type = when (path.fileName.toString()) {
                 AGENTS_FILE -> InstructionType.AGENTS_MD
@@ -52,7 +54,7 @@ class CursorInstructionProvider(
 
     private fun discoverPluginRules(
         path: Path,
-        budget: InstructionFileSupport.ScanBudget,
+        budget: ScanBudget,
     ): List<InstructionSource> {
         if (Files.isRegularFile(path)) {
             return if (path.extension.lowercase() in PLUGIN_RULE_EXTENSIONS) {
@@ -84,6 +86,7 @@ class CursorInstructionProvider(
         const val AGENT_ID = "cursor"
         const val AGENTS_FILE = "AGENTS.md"
         const val CLAUDE_FILE = "CLAUDE.md"
+        const val LEGACY_RULE_FILE = ".cursorrules"
         const val CURSOR_DIRECTORY = ".cursor"
         const val RULES_DIRECTORY = "rules"
         const val RULES_FIELD = "rules"

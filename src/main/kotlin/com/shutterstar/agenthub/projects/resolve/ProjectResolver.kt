@@ -3,6 +3,7 @@ package com.shutterstar.agenthub.projects.resolve
 import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.io.File
+import java.io.IOException
 import java.net.URI
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
@@ -97,7 +98,7 @@ class ProjectResolver(
                 normalizePortablePath(value)
             } catch (_: SecurityException) {
                 normalizePortablePath(value)
-            } catch (_: java.io.IOException) {
+            } catch (_: IOException) {
                 normalizePortablePath(value)
             }
             return normalizeDriveLetter(trimTrailingSeparators(canonical))

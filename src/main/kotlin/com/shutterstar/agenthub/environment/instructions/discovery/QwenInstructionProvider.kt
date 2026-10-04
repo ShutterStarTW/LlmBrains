@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
@@ -10,10 +11,11 @@ class QwenInstructionProvider(
     private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
 ) : InstructionProvider {
     override val agentId: String = "qwen"
+    private val qwenDirectory = EnvHomeDirectorySupport.resolveGuarded("QWEN_HOME", homeDirectory, ".qwen")
 
     override fun discoverGlobal(): List<InstructionSource> = listOfNotNull(
         InstructionFileSupport.source(
-            homeDirectory.resolve(".qwen/QWEN.md"),
+            qwenDirectory.resolve("QWEN.md"),
             InstructionScope.GLOBAL,
             agentId,
             InstructionType.AGENT_SPECIFIC,

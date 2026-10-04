@@ -1,7 +1,6 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
-import com.shutterstar.agenthub.environment.discovery.ProviderDiscoverySupport
-import com.shutterstar.agenthub.environment.model.EnvironmentWarning
+import com.shutterstar.agenthub.environment.discovery.ProviderBackedDiscovery
 import com.shutterstar.agenthub.environment.mcp.model.McpConsistency
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.environment.mcp.model.McpServer
@@ -10,10 +9,9 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Locale
-import java.util.logging.Logger
 
 class McpDiscoveryService(
-    private val providers: List<McpProvider> = listOf(
+    providers: List<McpProvider> = listOf(
         AntigravityMcpProvider(),
         ClaudeMcpProvider(),
         ClineMcpProvider(),
@@ -25,6 +23,10 @@ class McpDiscoveryService(
         OpenCodeMcpProvider(),
         QwenMcpProvider(),
     ),
+    /** Only installed agents are discovered. */
+    isAgentVisible: (String) -> Boolean = { true },
+) : ProviderBackedDiscovery<McpProvider, RawMcpServer>(
+    providers, isAgentVisible, "mcp", "McpDiscovery", McpProvider::agentId,
 ) {
     fun discoverGlobal(): List<McpServer> = normalize(discoverGlobalRecords())
 
@@ -33,33 +35,10 @@ class McpDiscoveryService(
     fun discover(project: DiscoveredProject): List<McpServer> =
         normalize(discoverGlobalRecords() + discoverProjectRecords(project))
 
-    fun discoverGlobalRecords(): List<RawMcpServer> = discoverGlobalRecordsWithWarnings().first
+    override fun discoverGlobalFrom(provider: McpProvider) = provider.discoverGlobal()
 
-    fun discoverProjectRecords(project: DiscoveredProject): List<RawMcpServer> =
-        discoverProjectRecordsWithWarnings(project).first
-
-    fun discoverGlobalRecordsWithWarnings(): Pair<List<RawMcpServer>, List<EnvironmentWarning>> =
-        collect("global") { it.discoverGlobal() }
-
-    fun discoverProjectRecordsWithWarnings(
-        project: DiscoveredProject,
-    ): Pair<List<RawMcpServer>, List<EnvironmentWarning>> = collect("project") { it.discoverProject(project) }
-
-    private fun collect(
-        scope: String,
-        discover: (McpProvider) -> List<RawMcpServer>,
-    ): Pair<List<RawMcpServer>, List<EnvironmentWarning>> = ProviderDiscoverySupport.collect(
-        providers = providers,
-        capability = "mcp",
-        scope = scope,
-        agentId = McpProvider::agentId,
-        logFailure = ::logFailure,
-        discover = discover,
-    )
-
-    private fun logFailure(agentId: String?, scope: String, errorType: String) {
-        LOG.warning("[McpDiscovery] ${agentId ?: "unknown"} $scope discovery failed: $errorType")
-    }
+    override fun discoverProjectFrom(provider: McpProvider, project: DiscoveredProject) =
+        provider.discoverProject(project)
 
     fun normalize(records: List<RawMcpServer>): List<McpServer> =
         records
@@ -140,8 +119,4 @@ class McpDiscoveryService(
         val normalizedName: String,
         val scope: McpScope,
     )
-
-    companion object {
-        private val LOG = Logger.getLogger(McpDiscoveryService::class.java.name)
-    }
 }

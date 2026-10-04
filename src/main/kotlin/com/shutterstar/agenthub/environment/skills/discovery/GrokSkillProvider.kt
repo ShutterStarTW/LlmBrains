@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -53,7 +54,7 @@ class GrokSkillProvider(
         roots: List<Path>,
         scope: SkillScope,
         projectName: String? = null,
-        budget: SkillDirectoryScanner.ScanBudget,
+        budget: ScanBudget,
     ): List<SkillSourceRecord> = roots
         .flatMap { root: Path ->
             scanner.discover(

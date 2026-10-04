@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.CursorPluginDiscoverySupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -19,13 +20,21 @@ class CursorSkillProvider(
             discoverRoots(
                 roots = listOf(
                     userHome.resolve(CURSOR_SKILLS),
-                    userHome.resolve(CURSOR_MANAGED_SKILLS),
                     userHome.resolve(CLAUDE_SKILLS),
                     userHome.resolve(CODEX_SKILLS),
                 ),
                 scope = SkillScope.GLOBAL,
                 budget = budget,
             ) +
+                // Cursor's own vendor-managed skill pack (has a .sync-manifest.json Cursor itself
+                // writes), not something the user created - flagged system, distinct from the
+                // native root above.
+                discoverRoots(
+                    roots = listOf(userHome.resolve(CURSOR_MANAGED_SKILLS)),
+                    scope = SkillScope.GLOBAL,
+                    system = true,
+                    budget = budget,
+                ) +
                 discoverPluginSkills(budget)
             ).distinctBy { it.path }
     }
@@ -58,7 +67,8 @@ class CursorSkillProvider(
         roots: List<Path>,
         scope: SkillScope,
         projectName: String? = null,
-        budget: SkillDirectoryScanner.ScanBudget = scanner.newBudget(),
+        system: Boolean = false,
+        budget: ScanBudget = scanner.newBudget(),
     ): List<SkillSourceRecord> = roots
         .flatMap { root ->
             scanner.discover(
@@ -68,13 +78,14 @@ class CursorSkillProvider(
                 shared = false,
                 projectName = projectName,
                 requireValidMetadata = true,
+                system = system,
                 budget = budget,
             )
         }
         .distinctBy { it.path }
 
     private fun discoverPluginSkills(
-        budget: SkillDirectoryScanner.ScanBudget,
+        budget: ScanBudget,
     ): List<SkillSourceRecord> {
         val roots = CursorPluginDiscoverySupport.discover(userHome)
             .asSequence()

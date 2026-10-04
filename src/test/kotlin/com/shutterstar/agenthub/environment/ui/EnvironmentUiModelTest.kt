@@ -23,6 +23,49 @@ import org.junit.jupiter.api.Test
 
 class EnvironmentUiModelTest {
     @Test
+    fun `project environment agent filter combines with type and status`() {
+        val comparison = EnvironmentComparison(
+            agents = listOf(ComparisonAgent("claude", "Claude Code"), ComparisonAgent("codex", "Codex")),
+            rows = listOf(
+                ComparisonRow("Skill", "shared", setOf("claude", "codex"), shared = true),
+                ComparisonRow("Skill", "claude-only", setOf("claude")),
+                ComparisonRow("MCP", "codex-only", setOf("codex")),
+            ),
+        )
+
+        assertEquals(
+            listOf("shared", "codex-only"),
+            EnvironmentUiModel.filterRows(comparison, "All", SkillFilter.ALL, ScopeFilter.ALL, "codex").map { it.name },
+        )
+        assertEquals(
+            listOf("shared"),
+            EnvironmentUiModel.filterRows(comparison, "Skill", SkillFilter.SHARED, ScopeFilter.ALL, "codex").map { it.name },
+        )
+    }
+
+    @Test
+    fun `project environment scope filter separates global and project items`() {
+        val base = environment()
+        val globalSkill = base.skills.single().copy(
+            identity = SkillIdentity("global-skill"),
+            name = "global-review",
+            scope = SkillScope.GLOBAL,
+            sources = listOf(SkillSource("claude", "/home/.claude/skills/global-review", SkillScope.GLOBAL, false, "fp")),
+        )
+        val comparison = EnvironmentUiModel.comparison(base.copy(skills = base.skills + globalSkill)) { it }
+
+        val global = EnvironmentUiModel.filterRows(comparison, "All", SkillFilter.ALL, ScopeFilter.GLOBAL, null)
+        val project = EnvironmentUiModel.filterRows(comparison, "All", SkillFilter.ALL, ScopeFilter.PROJECT, null)
+
+        assertTrue(global.any { it.category == "Skill" && it.name == "global-review (Global)" })
+        assertTrue(global.any { it.category == "MCP" })
+        assertTrue(global.all { it.scope == "Global" })
+        assertTrue(project.any { it.category == "Skill" && it.name == "review" })
+        assertTrue(project.any { it.category == "Instruction" })
+        assertTrue(project.all { it.scope == "Project" })
+    }
+
+    @Test
     fun `should summarize capabilities and conflicts`() {
         val summary = EnvironmentUiModel.summary(environment())
 
@@ -44,53 +87,22 @@ class EnvironmentUiModelTest {
             instructions = project.instructions,
         )
 
-        val skill = EnvironmentUiModel.skillRows(agentEnvironment, "codex").single()
-        val mcp = EnvironmentUiModel.mcpRows(agentEnvironment, "codex").single()
+        val comparison = EnvironmentUiModel.agentComparison(agentEnvironment, "codex")
+        val skill = comparison.rows.single { it.category == "Skill" }
+        val mcp = comparison.rows.single { it.category == "MCP" }
 
-        assertTrue(skill.detail.contains("Different contents"))
-        assertTrue(skill.detail.contains("/project/.codex/skills/review"))
-        assertFalse(skill.detail.contains("/project/.claude/skills/review"))
-        assertFalse(skill.detail.contains("Claude"))
-        assertTrue(mcp.detail.contains("Different configuration"))
-        assertFalse(mcp.detail.contains("secret-command"))
-        assertFalse(mcp.detail.contains("https://secret.test"))
-        assertFalse(mcp.detail.contains("Claude"))
-    }
-
-    @Test
-    fun `agent rows avoid duplicate Global and put the project name before the skill scope`() {
-        val base = environment()
-        val globalSkill = base.skills.single().copy(
-            scope = SkillScope.GLOBAL,
-            sources = base.skills.single().sources.map { it.copy(scope = SkillScope.GLOBAL, projectName = null) },
-        )
-        val projectSkill = base.skills.single().copy(
-            identity = SkillIdentity("project-skill"),
-            name = "project-skill",
-            sources = listOf(
-                SkillSource("codex", "/project/.codex/skills/project-skill", SkillScope.PROJECT, false, "fp", projectName = "LlmBrains"),
-            ),
-        )
-        val globalMcp = base.mcpServers.single().copy(
-            sources = listOf(base.mcpServers.single().sources.first().copy(agentId = "codex", projectName = null)),
-        )
-        val agentEnvironment = AgentEnvironment(
-            agentId = "codex",
-            skills = listOf(globalSkill, projectSkill),
-            mcpServers = listOf(globalMcp),
-            instructions = emptyList(),
-        )
-
-        val skillRows = EnvironmentUiModel.skillRows(agentEnvironment, "codex")
-        val mcpRows = EnvironmentUiModel.mcpRows(agentEnvironment, "codex")
-
-        val globalSkillRow = skillRows.single { it.title == "review" }
-        assertFalse(globalSkillRow.detail.contains("Global · Global"))
-        assertTrue(globalSkillRow.detail.startsWith("Global ·"))
-        val projectSkillRow = skillRows.single { it.title == "project-skill" }
-        assertTrue(projectSkillRow.detail.startsWith("LlmBrains · Project ·"))
-        val globalMcpRow = mcpRows.single()
-        assertFalse(globalMcpRow.detail.contains("Global · Global"))
+        assertTrue(comparison.agents.isEmpty(), "agent context has no agent column")
+        assertTrue(comparison.rows.all { it.agentIds.isEmpty() })
+        assertTrue(skill.detail!!.contains("Different contents"))
+        assertTrue(skill.conflict)
+        assertEquals("/project/.codex/skills/review", skill.sourcePath)
+        assertEquals(project.skills.single().identity.id, skill.skillId)
+        assertEquals(SkillScope.PROJECT, skill.skillScope)
+        assertFalse(listOf(skill.name, skill.detail, skill.location).any { it!!.contains("Claude") })
+        assertTrue(mcp.detail!!.contains("Different configuration"))
+        assertEquals("/home/.codex/config.toml", mcp.sourcePath)
+        assertFalse(comparison.rows.any { row -> listOfNotNull(row.name, row.detail).any { it.contains("secret-command") || it.contains("https://secret.test") } })
+        assertFalse(listOf(mcp.name, mcp.detail, mcp.location).any { it!!.contains("Claude") })
     }
 
     @Test
@@ -103,16 +115,16 @@ class EnvironmentUiModelTest {
             instructions = emptyList(),
         )
 
-        val skillRows = EnvironmentUiModel.skillRows(agentEnvironment, "claude")
-        val mcpRows = EnvironmentUiModel.mcpRows(agentEnvironment, "claude")
+        val rows = EnvironmentUiModel.agentComparison(agentEnvironment, "claude").rows
 
+        val skillRows = rows.filter { it.category == "Skill" }
         assertEquals(1, skillRows.size)
-        assertTrue(skillRows.single().detail.contains("/project/.claude/skills/review"))
-        assertEquals(1, mcpRows.size)
+        assertEquals("/project/.claude/skills/review", skillRows.single().sourcePath)
+        assertEquals(1, rows.count { it.category == "MCP" })
     }
 
     @Test
-    fun `skill filter narrows agent rows to shared or conflicting skills`() {
+    fun `agent rows carry shared and conflict flags for the Status filter`() {
         val base = environment()
         val conflicting = base.skills.single()
         val shared = conflicting.copy(
@@ -128,13 +140,60 @@ class EnvironmentUiModelTest {
             instructions = emptyList(),
         )
 
-        val all = EnvironmentUiModel.skillRows(agentEnvironment, "codex", SkillFilter.ALL)
-        val sharedOnly = EnvironmentUiModel.skillRows(agentEnvironment, "codex", SkillFilter.SHARED)
-        val conflictsOnly = EnvironmentUiModel.skillRows(agentEnvironment, "codex", SkillFilter.CONFLICTS)
+        val all = EnvironmentUiModel.agentComparison(agentEnvironment, "codex").rows.filter { it.category == "Skill" }
 
         assertEquals(2, all.size)
-        assertEquals(listOf("shared-skill"), sharedOnly.map { it.title })
-        assertEquals(listOf(conflicting.name), conflictsOnly.map { it.title })
+        assertEquals(listOf("shared-skill"), all.filter { it.shared }.map { it.name })
+        assertEquals(listOf(conflicting.name), all.filter { it.conflict }.map { it.name })
+        assertTrue(EnvironmentUiModel.detailLines(all.single { it.shared }).any { it.contains("Shared source") })
+        assertEquals("Different contents", all.single { it.conflict }.detail)
+    }
+
+    @Test
+    fun `agent rows show one skill when an agent directory aliases a shared skill`() {
+        val sharedPath = "C:/Users/example/.agents/skills/magyar-humanizer"
+        val skill = environment().skills.single().copy(
+            identity = SkillIdentity("magyar-humanizer"),
+            name = "magyar-humanizer",
+            scope = SkillScope.GLOBAL,
+            consistency = SkillConsistency.IDENTICAL,
+            sources = listOf(
+                SkillSource(null, sharedPath, SkillScope.GLOBAL, true, "fp", realPath = sharedPath),
+                SkillSource(
+                    "qwen",
+                    "C:/Users/example/.qwen/skills/magyar-humanizer",
+                    SkillScope.GLOBAL,
+                    false,
+                    "fp",
+                    realPath = sharedPath,
+                ),
+            ),
+        )
+        val agentEnvironment = AgentEnvironment("qwen", listOf(skill), emptyList(), emptyList())
+
+        assertEquals(1, EnvironmentUiModel.agentSummary(agentEnvironment).globalSkillCount)
+        val rows = EnvironmentUiModel.agentComparison(agentEnvironment, "qwen").rows
+        assertEquals(1, rows.size)
+        assertEquals("C:/Users/example/.qwen/skills/magyar-humanizer", rows.single().sourcePath)
+        assertFalse(rows.single().shared)
+    }
+
+    @Test
+    fun `agent rows collapse a shared skill and a native alias when shared skills are supported`() {
+        val sharedPath = "C:/Users/example/.agents/skills/review"
+        val skill = environment().skills.single().copy(
+            scope = SkillScope.GLOBAL,
+            sources = listOf(
+                SkillSource(null, sharedPath, SkillScope.GLOBAL, true, "fp", realPath = sharedPath),
+                SkillSource("codex", "C:/Users/example/.codex/skills/review", SkillScope.GLOBAL, false, "fp", realPath = sharedPath),
+            ),
+        )
+        val agentEnvironment = AgentEnvironment("codex", listOf(skill), emptyList(), emptyList())
+
+        val rows = EnvironmentUiModel.agentComparison(agentEnvironment, "codex").rows
+        assertEquals(1, rows.size)
+        assertEquals(sharedPath, rows.single().sourcePath)
+        assertTrue(rows.single().shared)
     }
 
     @Test
@@ -159,9 +218,9 @@ class EnvironmentUiModelTest {
             instructions = emptyList(),
         )
 
-        val row = EnvironmentUiModel.skillRows(agentEnvironment, "codex").single()
+        val row = EnvironmentUiModel.agentComparison(agentEnvironment, "codex").rows.single()
 
-        assertEquals("Review Skill", row.title)
+        assertEquals("Review Skill", row.name)
     }
 
     @Test
@@ -180,12 +239,17 @@ class EnvironmentUiModelTest {
             instructions = listOf(projectInstruction, globalInstruction),
         )
 
-        val rows = EnvironmentUiModel.instructionRows(agentEnvironment)
+        val rows = EnvironmentUiModel.agentComparison(agentEnvironment, "claude").rows
 
-        val projectRow = rows.single { it.detail == projectInstruction.path }
-        assertEquals("LlmBrains — AGENTS.md", projectRow.title)
-        val globalRow = rows.single { it.detail == globalInstruction.path }
-        assertEquals("Global — CLAUDE.md", globalRow.title)
+        val projectRow = rows.single { it.sourcePath == projectInstruction.path }
+        assertEquals("AGENTS.md", projectRow.name)
+        assertEquals("LlmBrains", projectRow.location)
+        assertEquals("Project", projectRow.scope)
+        val globalRow = rows.single { it.sourcePath == globalInstruction.path }
+        assertEquals("CLAUDE.md", globalRow.name)
+        assertEquals("Global", globalRow.location)
+        assertEquals("Global", globalRow.scope)
+        assertTrue(rows.all { it.agentIds.isEmpty() })
     }
 
     @Test
@@ -208,7 +272,7 @@ class EnvironmentUiModelTest {
     }
 
     @Test
-    fun `warning rows surface capability agent and message without raw exception text`() {
+    fun `agent warnings surface capability scope and message without naming the agent or raw exception text`() {
         val agentEnvironment = AgentEnvironment(
             agentId = "codex",
             skills = emptyList(),
@@ -224,15 +288,32 @@ class EnvironmentUiModelTest {
             ),
         )
 
-        val warning = EnvironmentUiModel.warningRows(agentEnvironment) { it.replaceFirstChar(Char::uppercase) }.single()
+        val comparison = EnvironmentUiModel.agentComparison(agentEnvironment, "codex")
 
-        assertTrue(warning.title.contains("MCP"))
-        assertTrue(warning.title.contains("Codex"))
-        assertTrue(warning.detail.contains("IllegalStateException"))
+        assertTrue(comparison.rows.isEmpty(), "a warning is not a table row")
+        val warning = comparison.warnings.single()
+        assertTrue(warning.contains("MCP · Project"))
+        assertFalse(warning.contains("Codex"), "agent context never repeats the agent name")
+        assertTrue(warning.contains("IllegalStateException"))
     }
 
     @Test
-    fun `project comparison includes discovery warnings`() {
+    fun `agent warning without an agent id is labelled as shared`() {
+        val agentEnvironment = AgentEnvironment(
+            agentId = "codex",
+            skills = emptyList(),
+            mcpServers = emptyList(),
+            instructions = emptyList(),
+            warnings = listOf(EnvironmentWarning(capability = "skills", agentId = null, scope = "global", message = "Unreadable")),
+        )
+
+        val warning = EnvironmentUiModel.agentComparison(agentEnvironment, "codex").warnings.single()
+
+        assertEquals("Skills · Global · Shared · Unreadable", warning)
+    }
+
+    @Test
+    fun `project warnings name the agent and stay out of the table rows`() {
         val environment = environment().copy(
             warnings = listOf(
                 EnvironmentWarning(
@@ -245,11 +326,33 @@ class EnvironmentUiModelTest {
         )
 
         val comparison = EnvironmentUiModel.comparison(environment) { it.replaceFirstChar(Char::uppercase) }
-        val warning = comparison.rows.single { it.category == "Warning" }
 
-        assertEquals(setOf("codex"), warning.agentIds)
-        assertTrue(warning.name.contains("MCP · Project"))
-        assertTrue(warning.name.contains("IOException"))
+        assertTrue(comparison.rows.none { it.category == "Warning" })
+        assertEquals(listOf("Codex · MCP · Project · Discovery failed: IOException"), comparison.warnings)
+    }
+
+    @Test
+    fun `detail lines list path then scope and consistency without agent ownership`() {
+        val row = ComparisonRow(
+            category = "MCP",
+            name = "docs (Project)",
+            agentIds = setOf("claude", "codex"),
+            scope = "Project",
+            sourcePath = "/project/.mcp.json",
+            detail = "STDIO · Consistent",
+        )
+
+        assertEquals(
+            listOf("/project/.mcp.json", "Scope: Project · STDIO · Consistent"),
+            EnvironmentUiModel.detailLines(row),
+        )
+    }
+
+    @Test
+    fun `detail lines are empty for a row without any metadata`() {
+        val row = ComparisonRow(category = "Skill", name = "x", agentIds = emptySet())
+
+        assertTrue(EnvironmentUiModel.detailLines(row).isEmpty())
     }
 
     @Test
@@ -259,9 +362,12 @@ class EnvironmentUiModelTest {
         assertEquals(listOf("Claude", "Codex"), comparison.agents.map { it.name })
         assertEquals(3, comparison.rows.size)
         assertEquals(setOf("claude", "codex"), comparison.rows.first { it.category == "Skill" }.agentIds)
+        assertEquals(environment().skills.single().identity.id, comparison.rows.first { it.category == "Skill" }.skillId)
         assertEquals(setOf("claude", "codex"), comparison.rows.first { it.category == "MCP" }.agentIds)
-        assertFalse(comparison.rows.any { it.name.contains("secret-command") })
-        assertFalse(comparison.rows.any { it.name.contains("https://secret.test") })
+        assertFalse(comparison.rows.any { it.name.contains("secret-command") || it.detail.orEmpty().contains("secret-command") })
+        assertFalse(comparison.rows.any { it.name.contains("https://secret.test") || it.detail.orEmpty().contains("https://secret.test") })
+        assertEquals("Project", comparison.rows.first { it.category == "Skill" }.scope)
+        assertEquals("/project/AGENTS.md", comparison.rows.first { it.category == "Instruction" }.sourcePath)
     }
 
     @Test
@@ -305,6 +411,68 @@ class EnvironmentUiModelTest {
 
         assertEquals(listOf("Antigravity", "Copilot"), comparison.agents.map { it.name })
         assertTrue(comparison.rows.all { it.agentIds == setOf("antigravity", "copilot") })
+    }
+
+    @Test
+    fun `comparison instruction rows show the full filename and mark only global ones`() {
+        val base = environment()
+        val nested = base.copy(
+            instructions = listOf(
+                InstructionSource(
+                    path = "/project/packages/api/AGENTS.md",
+                    scope = InstructionScope.PROJECT,
+                    agentIds = setOf("codex"),
+                    type = InstructionType.AGENTS_MD,
+                ),
+                InstructionSource(
+                    path = "/project/packages/web/AGENTS.md",
+                    scope = InstructionScope.PROJECT,
+                    agentIds = setOf("codex"),
+                    type = InstructionType.AGENTS_MD,
+                ),
+            ),
+        )
+
+        val comparison = EnvironmentUiModel.comparison(nested) { it.replaceFirstChar(Char::uppercase) }
+        val names = comparison.rows.filter { it.category == "Instruction" }.map { it.name }
+
+        assertEquals(listOf("AGENTS.md", "AGENTS.md"), names)
+    }
+
+    @Test
+    fun `comparison instruction row falls back to the filename without a project root`() {
+        val comparison = EnvironmentUiModel.comparison(environment()) { it.replaceFirstChar(Char::uppercase) }
+        val name = comparison.rows.single { it.category == "Instruction" }.name
+
+        assertEquals("AGENTS.md", name)
+    }
+
+    @Test
+    fun `config rows are named by file name and only global ones are marked in project context`() {
+        fun config(path: String, scope: com.shutterstar.agenthub.environment.config.model.ConfigScope) =
+            com.shutterstar.agenthub.environment.config.model.AgentConfigSource(
+                agentId = "claude",
+                path = path,
+                scope = scope,
+                kind = com.shutterstar.agenthub.environment.config.model.ConfigKind.SETTINGS,
+                format = com.shutterstar.agenthub.environment.config.model.ConfigFormat.JSON,
+            )
+        val withConfigs = environment().copy(
+            configs = listOf(
+                config("/home/.claude/settings.json", com.shutterstar.agenthub.environment.config.model.ConfigScope.GLOBAL),
+                config("/project/.claude/settings.local.json", com.shutterstar.agenthub.environment.config.model.ConfigScope.PROJECT),
+            ),
+        )
+
+        val projectNames = EnvironmentUiModel.comparison(withConfigs) { it }.rows
+            .filter { it.category == "Config" }.map { it.name }
+        assertEquals(listOf("settings.json (Global)", "settings.local.json"), projectNames)
+
+        val agentNames = EnvironmentUiModel.agentComparison(
+            AgentEnvironment("claude", emptyList(), emptyList(), emptyList(), configs = withConfigs.configs),
+            "claude",
+        ).rows.filter { it.category == "Config" }.map { it.name }
+        assertEquals(listOf("settings.json", "settings.local.json"), agentNames)
     }
 
     private fun environment(): ProjectEnvironment = ProjectEnvironment(

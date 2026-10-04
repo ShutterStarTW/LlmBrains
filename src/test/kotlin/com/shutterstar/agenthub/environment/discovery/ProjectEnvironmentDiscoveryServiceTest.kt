@@ -1,5 +1,7 @@
 package com.shutterstar.agenthub.environment.discovery
 
+import com.shutterstar.agenthub.writeSkill
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.instructions.discovery.ClaudeInstructionProvider
 import com.shutterstar.agenthub.environment.instructions.discovery.CodexInstructionProvider
 import com.shutterstar.agenthub.environment.instructions.discovery.CursorInstructionProvider
@@ -22,9 +24,7 @@ import com.shutterstar.agenthub.environment.skills.discovery.SkillDiscoveryServi
 import com.shutterstar.agenthub.environment.skills.discovery.SkillProvider
 import com.shutterstar.agenthub.environment.skills.discovery.SkillSourceRecord
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
-import com.shutterstar.agenthub.projects.model.AgentProject
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -62,6 +62,7 @@ class ProjectEnvironmentDiscoveryServiceTest {
         )
 
         val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
             skillDiscovery = SkillDiscoveryService(
                 listOf(
                     SharedSkillProvider(temporaryDirectory),
@@ -83,7 +84,7 @@ class ProjectEnvironmentDiscoveryServiceTest {
                 ),
             ),
         )
-        val environment = service.discover(project(projectRoot))
+        val environment = service.discover(project(projectRoot, "claude", "codex"))
 
         assertEquals(setOf("php-review", "docker-debug"), environment.skills.mapTo(mutableSetOf()) { it.name })
         assertEquals(setOf("playwright", "github"), environment.mcpServers.mapTo(mutableSetOf()) { it.name })
@@ -102,13 +103,14 @@ class ProjectEnvironmentDiscoveryServiceTest {
     fun `should reuse cached discovery until manually invalidated`() {
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("cached-project"))
         val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
             skillDiscovery = SkillDiscoveryService(emptyList()),
             mcpDiscovery = McpDiscoveryService(emptyList()),
             instructionDiscovery = InstructionDiscoveryService(
                 listOf(CodexInstructionProvider(temporaryDirectory.resolve(".codex"))),
             ),
         )
-        val discoveredProject = project(projectRoot)
+        val discoveredProject = project(projectRoot, "claude", "codex")
 
         assertTrue(service.discover(discoveredProject).instructions.isEmpty())
         Files.writeString(projectRoot.resolve("AGENTS.md"), "New instructions")
@@ -119,6 +121,27 @@ class ProjectEnvironmentDiscoveryServiceTest {
         assertEquals(1, service.discover(discoveredProject).instructions.size)
     }
 
+    @Test
+    fun `should rescan project environment after cache expiry`() {
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("expiring-project"))
+        var nowNanos = 0L
+        val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
+            skillDiscovery = SkillDiscoveryService(emptyList()),
+            mcpDiscovery = McpDiscoveryService(emptyList()),
+            instructionDiscovery = InstructionDiscoveryService(
+                listOf(CodexInstructionProvider(temporaryDirectory.resolve(".codex"))),
+            ),
+            nowNanos = { nowNanos },
+        )
+        val discoveredProject = project(projectRoot, "claude", "codex")
+
+        assertTrue(service.discover(discoveredProject).instructions.isEmpty())
+        Files.writeString(projectRoot.resolve("AGENTS.md"), "New instructions")
+        nowNanos = java.util.concurrent.TimeUnit.MINUTES.toNanos(6)
+
+        assertEquals(1, service.discover(discoveredProject).instructions.size)
+    }
     @Test
     fun `should not restore a stale cache entry after invalidation`() {
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("concurrent-project"))
@@ -142,6 +165,7 @@ class ProjectEnvironmentDiscoveryServiceTest {
             override fun discoverProject(project: DiscoveredProject): List<SkillSourceRecord> = emptyList()
         }
         val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
             skillDiscovery = SkillDiscoveryService(listOf(blockingProvider)),
             mcpDiscovery = McpDiscoveryService(emptyList()),
             instructionDiscovery = InstructionDiscoveryService(emptyList()),
@@ -149,7 +173,7 @@ class ProjectEnvironmentDiscoveryServiceTest {
         )
         val executor = Executors.newSingleThreadExecutor()
         try {
-            val firstDiscovery = executor.submit { service.discover(project(projectRoot)) }
+            val firstDiscovery = executor.submit { service.discover(project(projectRoot, "claude", "codex")) }
             assertTrue(firstDiscoveryStarted.await(5, TimeUnit.SECONDS))
 
             service.invalidateAll()
@@ -157,7 +181,7 @@ class ProjectEnvironmentDiscoveryServiceTest {
             firstDiscovery.get(5, TimeUnit.SECONDS)
             assertEquals(0, persisted.get())
 
-            service.discover(project(projectRoot))
+            service.discover(project(projectRoot, "claude", "codex"))
             assertEquals(2, invocations.get())
             assertEquals(1, persisted.get())
         } finally {
@@ -184,13 +208,14 @@ class ProjectEnvironmentDiscoveryServiceTest {
             }
         }
         val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
             skillDiscovery = SkillDiscoveryService(listOf(countingProvider)),
             mcpDiscovery = McpDiscoveryService(emptyList()),
             instructionDiscovery = InstructionDiscoveryService(emptyList()),
         )
-        val projectA = project(Files.createDirectories(temporaryDirectory.resolve("multi-a")))
-        val projectB = project(Files.createDirectories(temporaryDirectory.resolve("multi-b")))
-        val projectC = project(Files.createDirectories(temporaryDirectory.resolve("multi-c")))
+        val projectA = project(Files.createDirectories(temporaryDirectory.resolve("multi-a")), "claude", "codex")
+        val projectB = project(Files.createDirectories(temporaryDirectory.resolve("multi-b")), "claude", "codex")
+        val projectC = project(Files.createDirectories(temporaryDirectory.resolve("multi-c")), "claude", "codex")
 
         service.discover(projectA)
         service.discover(projectB)
@@ -208,26 +233,33 @@ class ProjectEnvironmentDiscoveryServiceTest {
     @Test
     fun `a failing provider produces a structured warning without losing healthy results`() {
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("warning-project"))
+        val attempts = AtomicInteger()
+        val persisted = AtomicInteger()
         val failingSkillProvider = object : SkillProvider {
             override val agentId: String = "claude"
 
-            override fun discoverGlobal(): List<SkillSourceRecord> = error("fixture failure")
+            override fun discoverGlobal(): List<SkillSourceRecord> { attempts.incrementAndGet(); error("fixture failure") }
 
             override fun discoverProject(project: DiscoveredProject) = emptyList<SkillSourceRecord>()
         }
         val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
             skillDiscovery = SkillDiscoveryService(listOf(failingSkillProvider)),
             mcpDiscovery = McpDiscoveryService(listOf(ClaudeMcpProvider(temporaryDirectory))),
             instructionDiscovery = InstructionDiscoveryService(emptyList()),
+            persist = { _, _ -> persisted.incrementAndGet() },
         )
 
-        val environment = service.discover(project(projectRoot))
+        val environment = service.discover(project(projectRoot, "claude", "codex"))
 
         assertTrue(environment.skills.isEmpty())
         val warning = environment.warnings.single()
         assertEquals("skill", warning.capability)
         assertEquals("claude", warning.agentId)
         assertTrue(warning.message.contains("IllegalStateException"))
+        service.discover(project(projectRoot, "claude", "codex"))
+        assertEquals(2, attempts.get())
+        assertEquals(0, persisted.get())
     }
 
     @Test
@@ -277,37 +309,17 @@ class ProjectEnvironmentDiscoveryServiceTest {
             override fun discoverProject(project: DiscoveredProject): List<InstructionSource> = emptyList()
         }
         val service = ProjectEnvironmentDiscoveryService(
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
             skillDiscovery = SkillDiscoveryService(listOf(unrelatedSkillProvider)),
             mcpDiscovery = McpDiscoveryService(listOf(unrelatedMcpProvider)),
             instructionDiscovery = InstructionDiscoveryService(listOf(unrelatedInstructionProvider)),
         )
 
-        val environment = service.discover(project(projectRoot))
+        val environment = service.discover(project(projectRoot, "claude", "codex"))
 
         assertEquals(listOf("shared-skill"), environment.skills.map { it.name })
         assertTrue(environment.mcpServers.isEmpty())
         assertTrue(environment.instructions.isEmpty())
     }
 
-    private fun writeSkill(directory: Path, name: String) {
-        Files.createDirectories(directory)
-        Files.writeString(
-            directory.resolve("SKILL.md"),
-            "---\nname: $name\ndescription: Test skill\n---\nInstructions",
-        )
-    }
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = listOf(
-            AgentProject("claude", "project", 1, null, emptyList()),
-            AgentProject("codex", "project", 1, null, emptyList()),
-        ),
-        lastActivity = null,
-    )
 }

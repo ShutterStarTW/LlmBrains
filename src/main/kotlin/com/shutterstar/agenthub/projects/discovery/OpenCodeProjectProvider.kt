@@ -1,8 +1,8 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedText
-import com.shutterstar.agenthub.projects.model.ProjectComparators
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import com.shutterstar.agenthub.projects.resolve.ProcessCommandRunner
 import java.io.IOException
@@ -20,6 +20,9 @@ data class OpenCodeSessionRecord(
     val title: String?,
     val createdAt: Instant?,
     val updatedAt: Instant?,
+    val userMessageCount: Int? = null,
+    val firstMessage: String? = null,
+    val statistics: Map<String, String> = emptyMap(),
 )
 
 class OpenCodeProjectProvider(
@@ -54,7 +57,7 @@ class OpenCodeProjectProvider(
         if (databaseFailure != null) {
             LOG.fine("[ProjectDiscovery] OpenCode: a database was skipped; legacy or alternate storage was used")
         }
-        return deduplicate(sessions)
+        return LocalSessionSupport.deduplicate(sessions)
     }
 
     private fun databaseFiles(): List<Path> {
@@ -106,6 +109,8 @@ class OpenCodeProjectProvider(
         val fileModifiedAt = runCatching { Files.getLastModifiedTime(sessionFile, LinkOption.NOFOLLOW_LINKS) }
             .getOrNull()
             ?.toInstant()
+        val statistics = SessionStatisticsAccumulator(agentId)
+        val messageMetadata = legacyMessageMetadata(sessionId, statistics)
         return RawAgentProject(
             agentId = agentId,
             rawProjectPath = directory,
@@ -113,8 +118,64 @@ class OpenCodeProjectProvider(
             startedAt = createdAt,
             updatedAt = latest(createdAt, updatedAt, fileModifiedAt),
             sourcePath = sessionFile.toAbsolutePath().normalize().toString(),
-            metadata = fields[TITLE_FIELD]?.let { mapOf("title" to it) }.orEmpty(),
+            metadata = buildMap {
+                fields[TITLE_FIELD]?.let { put("title", it) }
+                putAll(messageMetadata)
+            },
+            statistics = statistics.snapshot(),
         )
+    }
+
+    /** Legacy OpenCode keeps message metadata and text parts in separate, session-scoped folders. */
+    private fun legacyMessageMetadata(sessionId: String, statistics: SessionStatisticsAccumulator): Map<String, String> {
+        if (!sessionId.startsWith("ses_") || '/' in sessionId || '\\' in sessionId) return emptyMap()
+        val messageDirectory = dataDirectory.resolve(STORAGE_DIRECTORY).resolve(MESSAGE_DIRECTORY).resolve(sessionId)
+        if (!Files.isDirectory(messageDirectory, LinkOption.NOFOLLOW_LINKS)) return emptyMap()
+        val tally = UserMessageTally()
+        val messages = runCatching {
+            Files.list(messageDirectory).use { files ->
+                files.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) && it.extension == JSON_EXTENSION }
+                    .sorted()
+                    .limit(MAX_LEGACY_MESSAGES_PER_SESSION.toLong())
+                    .toList()
+            }
+        }.getOrNull() ?: return emptyMap()
+        messages.forEach { messageFile ->
+            val json = readBoundedText(messageFile, MAX_LEGACY_MESSAGE_CHARACTERS) ?: return@forEach
+            val fields = MetadataJsonParser.topLevelStringFields(json, LEGACY_MESSAGE_FIELDS)
+            if (fields[SESSION_ID_FIELD] == sessionId) {
+                statistics.record(json)
+                if (fields[ROLE_FIELD] == USER_ROLE) statistics.userPrompt()
+            }
+            if (fields[ROLE_FIELD] != USER_ROLE || fields[SESSION_ID_FIELD] != sessionId) return@forEach
+            val messageId = fields[ID_FIELD]?.takeIf { it.startsWith("msg_") && '/' !in it && '\\' !in it }
+            tally.add(if (tally.firstMessage == null) messageId?.let(::legacyFirstTextPart) else null)
+        }
+        return tally.metadata()
+    }
+
+    private fun legacyFirstTextPart(messageId: String): String? {
+        val partDirectory = dataDirectory.resolve(STORAGE_DIRECTORY).resolve(PART_DIRECTORY).resolve(messageId)
+        if (!Files.isDirectory(partDirectory, LinkOption.NOFOLLOW_LINKS)) return null
+        return runCatching {
+            Files.list(partDirectory).use { files ->
+                files.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) && it.extension == JSON_EXTENSION }
+                    .sorted()
+                    .limit(MAX_LEGACY_PARTS_PER_MESSAGE.toLong())
+                    .map { partFile -> readBoundedText(partFile, MAX_LEGACY_MESSAGE_CHARACTERS) }
+                    .filter { it != null }
+                    .map { it!! }
+                    .filter { part ->
+                        val fields = MetadataJsonParser.topLevelStringFields(part, LEGACY_PART_FIELDS)
+                        fields[TYPE_FIELD] == TEXT_TYPE && fields[MESSAGE_ID_FIELD] == messageId &&
+                            MetadataJsonParser.topLevelBooleanFields(part, setOf(SYNTHETIC_FIELD))[SYNTHETIC_FIELD] != true
+                    }
+                    .map { part -> MetadataJsonParser.topLevelStringFields(part, setOf(TEXT_FIELD))[TEXT_FIELD] }
+                    .filter { !it.isNullOrBlank() && !MessageContentExtractor.isInjectedContext(it) }
+                    .findFirst()
+                    .orElse(null)
+            }
+        }.getOrNull()
     }
 
     private fun OpenCodeSessionRecord.toRawProject(database: Path) = RawAgentProject(
@@ -124,21 +185,15 @@ class OpenCodeProjectProvider(
         startedAt = createdAt,
         updatedAt = latest(createdAt, updatedAt),
         sourcePath = database.toAbsolutePath().normalize().toString(),
-        metadata = title?.let { mapOf("title" to it) }.orEmpty(),
-    )
-
-    private fun deduplicate(sessions: List<RawAgentProject>): List<RawAgentProject> {
-        val bySessionId = linkedMapOf<String, RawAgentProject>()
-        sessions.forEach { candidate ->
-            val existing = bySessionId[candidate.sessionId]
-            val candidateActivity = candidate.updatedAt ?: candidate.startedAt ?: Instant.MIN
-            val existingActivity = existing?.updatedAt ?: existing?.startedAt ?: Instant.MIN
-            if (existing == null || candidateActivity > existingActivity) {
-                bySessionId[candidate.sessionId] = candidate
+        metadata = buildMap {
+            title?.let { put("title", it) }
+            userMessageCount?.let { count ->
+                put(UserMessageTally.MESSAGE_COUNT_KEY, count.toString())
+                MessageContentExtractor.titleText(firstMessage)?.let { put(UserMessageTally.FIRST_MESSAGE_KEY, it) }
             }
-        }
-        return bySessionId.values.sortedWith(ProjectComparators.rawAgentProjectByRecency)
-    }
+        },
+        statistics = statistics,
+    )
 
     private fun epochMillis(value: Long?): Instant? = value?.let {
         runCatching { Instant.ofEpochMilli(it) }.getOrNull()
@@ -148,6 +203,8 @@ class OpenCodeProjectProvider(
         private const val AGENT_ID = "opencode"
         private const val STORAGE_DIRECTORY = "storage"
         private const val SESSION_DIRECTORY = "session"
+        private const val MESSAGE_DIRECTORY = "message"
+        private const val PART_DIRECTORY = "part"
         private const val PROJECT_DIRECTORY = "project"
         private const val DATABASE_NAME = "opencode.db"
         private const val DATABASE_PREFIX = "opencode-"
@@ -157,21 +214,32 @@ class OpenCodeProjectProvider(
         private const val MAX_LEGACY_SCAN_DEPTH = 8
         private const val MAX_LEGACY_SCAN_ENTRIES = 50_000
         private const val MAX_LEGACY_FILE_CHARACTERS = 256 * 1024
+        private const val MAX_LEGACY_MESSAGE_CHARACTERS = 32 * 1024
+        private const val MAX_LEGACY_MESSAGES_PER_SESSION = 2_000
+        private const val MAX_LEGACY_PARTS_PER_MESSAGE = 100
         private const val ID_FIELD = "id"
         private const val DIRECTORY_FIELD = "directory"
         private const val TITLE_FIELD = "title"
+        private const val ROLE_FIELD = "role"
+        private const val USER_ROLE = "user"
+        private const val SESSION_ID_FIELD = "sessionID"
+        private const val MESSAGE_ID_FIELD = "messageID"
+        private const val TYPE_FIELD = "type"
+        private const val TEXT_TYPE = "text"
+        private const val TEXT_FIELD = "text"
+        private const val SYNTHETIC_FIELD = "synthetic"
         private const val TIME_FIELD = "time"
         private const val CREATED_FIELD = "created"
         private const val UPDATED_FIELD = "updated"
         private val LEGACY_STRING_FIELDS = setOf(ID_FIELD, DIRECTORY_FIELD, TITLE_FIELD)
+        private val LEGACY_MESSAGE_FIELDS = setOf(ID_FIELD, SESSION_ID_FIELD, ROLE_FIELD)
+        private val LEGACY_PART_FIELDS = setOf(TYPE_FIELD, MESSAGE_ID_FIELD)
         private val LEGACY_TIME_FIELDS = setOf(CREATED_FIELD, UPDATED_FIELD)
         private val LOG = Logger.getLogger(OpenCodeProjectProvider::class.java.name)
 
-        private fun defaultDataDirectory(): Path {
-            val xdgDataHome = System.getenv("XDG_DATA_HOME")?.trim()?.takeIf { it.isNotEmpty() }
-            return xdgDataHome?.let { runCatching { Path.of(it).resolve("opencode") }.getOrNull() }
-                ?: Path.of(System.getProperty("user.home"), ".local", "share", "opencode")
-        }
+        private fun defaultDataDirectory(): Path = EnvHomeDirectorySupport.resolveXdgGuarded(
+            "XDG_DATA_HOME", Path.of(System.getProperty("user.home")), ".local/share", "opencode",
+        )
     }
 }
 
@@ -180,20 +248,48 @@ class OpenCodeSqliteReader(
     private val commandRunner: (List<String>, Long) -> String? = ProcessCommandRunner::run,
 ) {
     fun readSessions(database: Path): List<OpenCodeSessionRecord> {
-        val output = commandRunner(
-            listOf(
-                "sqlite3",
-                "-readonly",
-                "-batch",
-                "-noheader",
-                "-separator",
-                "\t",
-                database.toAbsolutePath().normalize().toString(),
-                SESSION_QUERY,
-            ),
-            timeoutMillis,
-        ) ?: throw IOException("sqlite3 is unavailable or could not read the database")
-        return output.lineSequence().mapNotNull(::parseRow).toList()
+        val output = query(database, SESSION_QUERY)
+            ?: throw IOException("sqlite3 is unavailable or could not read the database")
+        val sessions = output.lineSequence().mapNotNull(::parseRow).toList()
+        val stats = query(database, USER_MESSAGE_QUERY)?.lineSequence()?.mapNotNull(::parseStatsRow)?.toMap().orEmpty()
+        val usage = linkedMapOf<String, SessionStatisticsAccumulator>()
+        (query(database, USAGE_QUERY) ?: query(database, MESSAGE_USAGE_QUERY))?.lineSequence()?.forEach { line ->
+            val columns = line.split('\t')
+            if (columns.size != 2) return@forEach
+            val sessionId = decodeHex(columns[0]) ?: return@forEach
+            val record = decodeHex(columns[1]) ?: return@forEach
+            val accumulator = usage.getOrPut(sessionId) { SessionStatisticsAccumulator("opencode") }
+            accumulator.record(record)
+            if (MetadataJsonParser.topLevelStringFields(record, setOf("role"))["role"] == "user") accumulator.userPrompt()
+        }
+        return sessions.map { session ->
+            val user = stats[session.id]
+            usage[session.id]?.recordedBounds(session.createdAt, session.updatedAt)
+            session.copy(userMessageCount = user?.first ?: if (stats.isEmpty()) null else 0, firstMessage = user?.second,
+                statistics = usage[session.id]?.snapshot().orEmpty())
+        }
+    }
+
+    private fun query(database: Path, sql: String): String? = commandRunner(
+        listOf(
+            "sqlite3",
+            "-readonly",
+            "-batch",
+            "-noheader",
+            "-separator",
+            "\t",
+            database.toAbsolutePath().normalize().toString(),
+            sql,
+        ),
+        timeoutMillis,
+    )
+
+    private fun parseStatsRow(line: String): Pair<String, Pair<Int, String?>>? {
+        val columns = line.split('\t')
+        if (columns.size != STATS_COLUMN_COUNT) return null
+        val id = decodeHex(columns[0])?.takeIf { it.isNotBlank() } ?: return null
+        val count = columns[1].trim().toIntOrNull() ?: return null
+        return id to (count to decodeHex(columns[2])?.takeIf { it.isNotBlank() })
     }
 
     private fun parseRow(line: String): OpenCodeSessionRecord? {
@@ -232,5 +328,37 @@ class OpenCodeSqliteReader(
         private const val SESSION_QUERY =
             "SELECT hex(id), hex(directory), hex(title), time_created, time_updated " +
                 "FROM session ORDER BY time_updated DESC LIMIT 20000;"
+        private const val STATS_COLUMN_COUNT = 3
+        private const val MESSAGE_USAGE_QUERY =
+            "SELECT hex(session_id), hex(json_object('id',id,'role',json_extract(data,'$.role')," +
+                "'modelID',json_extract(data,'$.modelID'),'time',json_extract(data,'$.time')," +
+                "'tokens',json_extract(data,'$.tokens'),'cost',json_extract(data,'$.cost'))) " +
+                "FROM message WHERE json_valid(data) ORDER BY time_created,id LIMIT 200000;"
+        // Select only usage metadata; message content, credentials and tool arguments never leave SQLite.
+        private const val USAGE_QUERY =
+            "SELECT hex(session_id), hex(record) FROM (" +
+                "SELECT session_id,time_created,id,json_object('id',id,'role',json_extract(data,'$.role')," +
+                "'modelID',json_extract(data,'$.modelID'),'time',json_extract(data,'$.time')," +
+                "'tokens',json_extract(data,'$.tokens'),'cost',json_extract(data,'$.cost')) AS record " +
+                "FROM message WHERE json_valid(data) UNION ALL " +
+                "SELECT m.session_id,p.time_created,p.id,json_object('id',p.id,'type','tool'," +
+                "'tool',json_extract(p.data,'$.tool'),'callID',json_extract(p.data,'$.callID')," +
+                "'state',json_object('status',json_extract(p.data,'$.state.status'))) " +
+                "FROM part p JOIN message m ON m.id=p.message_id WHERE json_valid(p.data) " +
+                "AND json_extract(p.data,'$.type')='tool') ORDER BY time_created,id LIMIT 200000;"
+
+        /**
+         * Per session: the number of user-role messages and the first non-synthetic text part the
+         * user wrote. Needs SQLite's JSON functions; when they are missing only this query fails.
+         */
+        private const val USER_MESSAGE_QUERY =
+            "SELECT hex(m.session_id), COUNT(*), hex(COALESCE((" +
+                "SELECT substr(json_extract(p.data, '$.text'), 1, 2000) FROM part p " +
+                "JOIN message m2 ON p.message_id = m2.id " +
+                "WHERE m2.session_id = m.session_id AND json_extract(m2.data, '$.role') = 'user' " +
+                "AND json_extract(p.data, '$.type') = 'text' " +
+                "AND COALESCE(json_extract(p.data, '$.synthetic'), 0) = 0 " +
+                "ORDER BY m2.time_created, p.time_created LIMIT 1), '')) " +
+                "FROM message m WHERE json_extract(m.data, '$.role') = 'user' GROUP BY m.session_id;"
     }
 }

@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.PROJECT_WALK_EXCLUDED_DIRECTORY_NAMES
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import java.nio.charset.StandardCharsets
@@ -21,6 +22,8 @@ internal class SkillDirectoryScanner(
         shared: Boolean,
         projectName: String?,
         requireValidMetadata: Boolean = false,
+        system: Boolean = false,
+        excludeDirectoryNames: Set<String> = emptySet(),
     ): List<SkillSourceRecord> = discover(
         root,
         agentId,
@@ -29,6 +32,8 @@ internal class SkillDirectoryScanner(
         projectName,
         requireValidMetadata,
         newBudget(),
+        system,
+        excludeDirectoryNames,
     )
 
     fun discover(
@@ -39,6 +44,8 @@ internal class SkillDirectoryScanner(
         projectName: String?,
         requireValidMetadata: Boolean,
         budget: ScanBudget,
+        system: Boolean = false,
+        excludeDirectoryNames: Set<String> = emptySet(),
     ): List<SkillSourceRecord> {
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             return emptyList()
@@ -56,6 +63,9 @@ internal class SkillDirectoryScanner(
                         attributes: BasicFileAttributes,
                     ): FileVisitResult {
                         if (!budget.consume()) return FileVisitResult.TERMINATE
+                        if (directory != root && directory.fileName.toString() in excludeDirectoryNames) {
+                            return FileVisitResult.SKIP_SUBTREE
+                        }
                         if (directory != root && directory.fileName.toString().startsWith('.')) {
                             return FileVisitResult.SKIP_SUBTREE
                         }
@@ -87,7 +97,7 @@ internal class SkillDirectoryScanner(
         return skillDirectories
             .sortedBy { it.toString().lowercase() }
             .mapNotNull { skillDirectory ->
-                readSkill(skillDirectory, agentId, scope, shared, projectName, requireValidMetadata)
+                readSkill(skillDirectory, agentId, scope, shared, projectName, requireValidMetadata, system)
             }
     }
 
@@ -171,13 +181,14 @@ internal class SkillDirectoryScanner(
         shared: Boolean,
         projectName: String?,
         requireValidMetadata: Boolean,
+        system: Boolean = false,
     ): SkillSourceRecord? {
         val skillFile = skillDirectory.resolve(SKILL_FILE_NAME)
         if (!Files.isRegularFile(skillFile, LinkOption.NOFOLLOW_LINKS)) {
             return null
         }
 
-        val contentFingerprint = fingerprint.calculate(skillFile) ?: return null
+        val contentFingerprint = fingerprint.calculate(skillDirectory) ?: return null
         val metadata = readMetadata(skillFile)
         val directoryName = skillDirectory.fileName?.toString()?.trim().orEmpty()
         if (requireValidMetadata && !isValidMetadata(metadata, directoryName)) return null
@@ -196,6 +207,7 @@ internal class SkillDirectoryScanner(
             fingerprint = contentFingerprint,
             displayTitle = metadata.displayTitle,
             projectName = projectName,
+            system = system,
         )
     }
 
@@ -219,15 +231,5 @@ internal class SkillDirectoryScanner(
         const val MAXIMUM_SCAN_ENTRIES = 20_000
         val SKILL_NAME_PATTERN = Regex("[a-z0-9]+(?:-[a-z0-9]+)*")
         val EXCLUDED_PROJECT_DIRECTORIES = PROJECT_WALK_EXCLUDED_DIRECTORY_NAMES
-    }
-
-    class ScanBudget(
-        private var remaining: Int = MAXIMUM_SCAN_ENTRIES,
-    ) {
-        fun consume(): Boolean {
-            if (remaining <= 0) return false
-            remaining--
-            return true
-        }
     }
 }

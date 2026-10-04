@@ -32,7 +32,6 @@ class ProjectDiscoveryService(
     private val isAgentRelevant: (String) -> Boolean = { true },
     private val providerTimeoutMillis: Long = DEFAULT_PROVIDER_TIMEOUT_MILLIS,
 ) {
-    fun discoverProjects(): List<DiscoveredProject> = discover().projects
 
     fun discover(): ProjectDiscoveryResult {
         val warnings = mutableListOf<ProjectDiscoveryWarning>()
@@ -150,6 +149,9 @@ class ProjectDiscoveryService(
             sourcePath = raw.sourcePath,
             title = raw.metadata["title"],
             nativeResumeId = raw.sessionId.takeIf { raw.agentId in NATIVE_RESUME_AGENT_IDS },
+            messageCount = raw.metadata[UserMessageTally.MESSAGE_COUNT_KEY]?.toIntOrNull(),
+            firstMessage = raw.metadata[UserMessageTally.FIRST_MESSAGE_KEY],
+            statistics = raw.statistics,
         )
     }
 

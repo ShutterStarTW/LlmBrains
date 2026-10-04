@@ -1,9 +1,8 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.project
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.environment.mcp.model.McpTransport
-import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
@@ -62,15 +61,4 @@ class OpenCodeMcpProviderTest {
         assertFalse(server.url.orEmpty().contains("secret"))
         assertEquals("project", server.projectName)
     }
-
-    private fun project(root: Path): DiscoveredProject = DiscoveredProject(
-        identity = ProjectIdentity("project", root.toString(), root.toString(), null),
-        name = "project",
-        path = root.toString(),
-        gitRoot = root.toString(),
-        gitRemote = null,
-        currentBranch = null,
-        agents = emptyList(),
-        lastActivity = null,
-    )
 }

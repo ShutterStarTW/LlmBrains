@@ -1,28 +1,28 @@
 package com.shutterstar.agenthub
 
-import com.intellij.ide.BrowserUtil
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.options.Configurable
-import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBColor
+import com.intellij.ui.SearchTextField
 import com.intellij.ui.TitledSeparator
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
-import com.intellij.ui.table.JBTable
+import com.intellij.util.ui.JBUI
+import com.shutterstar.agenthub.projects.ui.AgentHubUiComponents
 import java.awt.BorderLayout
-import java.awt.Color
 import java.awt.Component
-import java.awt.Cursor
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import java.net.URI
+import java.awt.Dimension
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -30,16 +30,11 @@ import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.JTable
-import javax.swing.border.Border
-import javax.swing.table.AbstractTableModel
-import javax.swing.table.DefaultTableCellRenderer
+import javax.swing.Timer
+import javax.swing.event.DocumentEvent
 
-class AgentSettingsConfigurable : Configurable {
-
-    private data class AgentRow(val agent: CodingAgent, var enabled: Boolean)
+class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = AgentSettingsState.getInstance()) : Configurable {
 
     // Mutable: `available()` depends on the WSL mode, so switching Windows ↔ WSL in this very
     // panel must rebuild the row lists (see rebuildRows) — the tables keep referencing these
@@ -48,282 +43,59 @@ class AgentSettingsConfigurable : Configurable {
     private val companionRows: MutableList<AgentRow> = CompanionTools.available().map { AgentRow(it, false) }.toMutableList()
 
     // Detection results: null = not yet checked, true/false = result
-    private var detectedInstalled: Map<String, Boolean> = AgentSettingsState.getInstance().getDetectionResults() ?: emptyMap()
-    private var outdatedAgents: Set<String> = AgentSettingsState.getInstance().getOutdatedAgentIds()
+    private var detectedInstalled: Map<String, Boolean> = settingsState.getDetectionResults() ?: emptyMap()
+    private var outdatedAgents: Set<String> = settingsState.getOutdatedAgentIds()
+    private var unverifiedAgents: Set<String> = settingsState.getUnverifiedAgentIds()
 
     // Agents with an install/update/remove in flight; their Action cell shows an animated spinner.
-    private val inProgressAgentIds = mutableSetOf<String>()
+    private val inProgressAgentIds get() = activeOperationAgentIds
+    private var uiDisposed = false
     private val spinnerFrames = arrayOf("◐", "◓", "◑", "◒")
     private var spinnerFrame = 0
-    private val spinnerTimer = javax.swing.Timer(130) {
+    private val spinnerTimer = Timer(130) {
         spinnerFrame = (spinnerFrame + 1) % spinnerFrames.size
         tables.forEach { it.repaintInProgress() }
     }
 
-    // Action button colors derived from the theme's default-button look (not a fixed blue).
-    private val actionNormalBg = javax.swing.UIManager.getColor("Button.background") ?: JBColor.background()
-    private val actionHoverBg = javax.swing.UIManager.getColor("Button.default.startBackground")
-        ?: javax.swing.UIManager.getColor("Component.focusColor")
-        ?: JBColor(Color(197, 213, 239), Color(82, 99, 125))
-    private val actionHoverFg: Color? = javax.swing.UIManager.getColor("Button.default.foreground")
-    private val actionNormalBorderColor: Color = JBColor.border()
-    private val actionHoverBorderColor: Color = javax.swing.UIManager.getColor("Button.default.focusedBorderColor")
-        ?: javax.swing.UIManager.getColor("Button.default.startBorderColor")
-        ?: actionNormalBorderColor
-
-    // Button-styled JLabel borders, shared across both tables.
-    private val actionNormalBorder: Border = javax.swing.BorderFactory.createCompoundBorder(
-        javax.swing.BorderFactory.createLineBorder(actionNormalBorderColor),
-        javax.swing.BorderFactory.createEmptyBorder(1, 6, 1, 6),
+    // Shared with AgentTable via AgentTableContext lambdas (below) so both the agent and companion
+    // tables always render the current detection/spinner state, not a snapshot from construction time.
+    private val agentTableContext = AgentTableContext(
+        detectedInstalled = { detectedInstalled },
+        outdatedAgents = { outdatedAgents },
+        unverifiedAgents = { unverifiedAgents },
+        inProgressAgentIds = { inProgressAgentIds },
+        spinnerFrame = { spinnerFrame },
+        spinnerFrames = spinnerFrames,
+        onActionClick = ::handleActionClick,
     )
-    private val actionHoverBorder: Border = javax.swing.BorderFactory.createCompoundBorder(
-        javax.swing.BorderFactory.createLineBorder(actionHoverBorderColor),
-        javax.swing.BorderFactory.createEmptyBorder(1, 6, 1, 6),
-    )
-
-    private val agentTable = AgentTable(agentRows)
-    private val companionTable = AgentTable(companionRows)
+    private val agentTable = AgentTable(agentRows, agentTableContext)
+    private val companionTable = AgentTable(companionRows, agentTableContext)
     private val tables = listOf(agentTable, companionTable)
 
-    /**
-     * One agent/companion table: model + JBTable + its own hover state. Shares detection results,
-     * spinner state and action handling with the enclosing configurable.
-     */
-    private inner class AgentTable(val rows: List<AgentRow>) {
-        private var linkHoverRow = -1
-        private var linkHoverCol = -1
-        private var buttonHoverRow = -1
+    private val detectButton = JButton("Detect installed agents")
+    private val customValidationLabel = JBLabel("").apply { isVisible = false }
+    private val detectStatusLabel = JBLabel("")
 
-        private fun isOverLinkText(e: MouseEvent, row: Int, col: Int): Boolean {
-            val text = tableModel.getValueAt(row, col).toString()
-            if (text.isBlank() || text == "—") return false
-            val cellRect = table.getCellRect(row, col, false)
-            val textWidth = table.getFontMetrics(table.font).stringWidth(text)
-            return e.x in cellRect.x..(cellRect.x + 2 + textWidth)
-        }
-
-        val tableModel = object : AbstractTableModel() {
-            val columns = arrayOf("", "Agent", "Provider", "Status", "Action", "Website", "Source")
-            override fun getRowCount() = rows.size
-            override fun getColumnCount() = 7
-            override fun getColumnName(col: Int) = columns[col]
-            override fun getColumnClass(col: Int) = if (col == 0) java.lang.Boolean::class.java else String::class.java
-            override fun isCellEditable(row: Int, col: Int) = col == 0
-            override fun getValueAt(row: Int, col: Int): Any {
-                val agent = rows[row].agent
-                val isInstalled = detectedInstalled[agent.id]
-                return when (col) {
-                    0 -> rows[row].enabled
-                    1 -> agent.name
-                    2 -> agent.provider
-                    3 -> when {
-                        isInstalled == null -> ""
-                        isInstalled && agent.id in outdatedAgents -> "↑"
-                        isInstalled -> "✓"
-                        else -> "✗"
-                    }
-                    4 -> when {
-                        isInstalled == null -> ""
-                        isInstalled && agent.id in outdatedAgents && agent.updateHint.isNotBlank() -> "Update"
-                        isInstalled && agent.platformUninstallHint.isNotBlank() -> "Remove"
-                        !isInstalled && agent.platformInstallHint.isNotBlank() -> "Install"
-                        else -> ""
-                    }
-                    5 -> extractDomain(agent.url)
-                    6 -> extractDomain(agent.devUrl)
-                    else -> ""
-                }
-            }
-            override fun setValueAt(value: Any?, row: Int, col: Int) {
-                if (col == 0 && value is Boolean) {
-                    rows[row].enabled = value
-                    fireTableCellUpdated(row, col)
-                }
-            }
-        }
-
-        val table = object : JBTable(tableModel) {
-            override fun prepareRenderer(renderer: javax.swing.table.TableCellRenderer, row: Int, column: Int): Component {
-                val c = super.prepareRenderer(renderer, row, column)
-                if (convertColumnIndexToModel(column) == 4 && row == buttonHoverRow) {
-                    c.background = actionHoverBg
-                }
-                return c
-            }
-        }.apply {
-            setShowGrid(false)
-            intercellSpacing = java.awt.Dimension(0, 2)
-            rowHeight = 22
-            columnSelectionAllowed = false
-            rowSelectionAllowed = false
-
-            columnModel.getColumn(0).apply {
-                maxWidth = 30; minWidth = 30
-                cellRenderer = object : DefaultTableCellRenderer() {
-                    private val checkbox = javax.swing.JCheckBox().apply { isOpaque = true }
-                    override fun getTableCellRendererComponent(
-                        t: JTable, value: Any?, sel: Boolean, focus: Boolean, row: Int, col: Int,
-                    ): Component {
-                        checkbox.isSelected = value as? Boolean ?: false
-                        checkbox.background = t.background
-                        checkbox.border = null
-                        return checkbox
-                    }
-                }
-            }
-            columnModel.getColumn(1).apply { preferredWidth = 120 }
-            columnModel.getColumn(2).apply { preferredWidth = 100 }
-            columnModel.getColumn(3).apply { preferredWidth = 58; maxWidth = 68 }
-            columnModel.getColumn(4).apply { minWidth = 70; maxWidth = 70; preferredWidth = 70 }
-            columnModel.getColumn(5).apply { preferredWidth = 130 }
-            columnModel.getColumn(6).apply { preferredWidth = 130 }
-
-            columnModel.getColumn(1).cellRenderer = object : DefaultTableCellRenderer() {
-                override fun getTableCellRendererComponent(
-                    t: JTable, value: Any?, sel: Boolean, focus: Boolean, row: Int, col: Int,
-                ): Component {
-                    val c = super.getTableCellRendererComponent(t, value, sel, false, row, col) as JLabel
-                    c.border = javax.swing.BorderFactory.createEmptyBorder(0, 6, 0, 0)
-                    val agent = rows[row].agent
-                    c.icon = FaviconLoader.get(agent)
-                    c.iconTextGap = 8
-                    return c
-                }
-            }
-
-            columnModel.getColumn(3).cellRenderer = object : DefaultTableCellRenderer() {
-                private val installedColor = JBColor(Color(0, 128, 0), Color(98, 198, 98))
-                private val outdatedColor = JBColor(Color(180, 100, 0), Color(220, 160, 60))
-                private val notInstalledColor = JBColor.GRAY
-
-                override fun getTableCellRendererComponent(
-                    t: JTable, value: Any?, sel: Boolean, focus: Boolean, row: Int, col: Int,
-                ): Component {
-                    val c = super.getTableCellRendererComponent(t, value, sel, false, row, col) as JLabel
-                    c.border = null
-                    c.horizontalAlignment = CENTER
-                    c.foreground = when (value?.toString()) {
-                        "✓" -> installedColor
-                        "↑" -> outdatedColor
-                        "✗" -> notInstalledColor
-                        else -> t.foreground
-                    }
-                    return c
-                }
-            }
-
-            // Button-styled JLabel avoids JButton look-and-feel hover side-effects.
-            columnModel.getColumn(4).cellRenderer = object : DefaultTableCellRenderer() {
-                override fun getTableCellRendererComponent(
-                    t: JTable, value: Any?, sel: Boolean, focus: Boolean, row: Int, col: Int,
-                ): Component {
-                    if (rows[row].agent.id in inProgressAgentIds) {
-                        return JLabel(spinnerFrames[spinnerFrame]).apply {
-                            isOpaque = true
-                            horizontalAlignment = JLabel.CENTER
-                            border = actionNormalBorder
-                            background = actionNormalBg
-                        }
-                    }
-                    val text = value?.toString().orEmpty()
-                    if (text.isBlank()) return JPanel().apply { isOpaque = false }
-                    val hover = row == buttonHoverRow
-                    return JLabel(text).apply {
-                        isOpaque = true
-                        horizontalAlignment = JLabel.CENTER
-                        border = if (hover) actionHoverBorder else actionNormalBorder
-                        background = if (hover) actionHoverBg else actionNormalBg
-                        if (hover && actionHoverFg != null) foreground = actionHoverFg
-                    }
-                }
-            }
-
-            val linkRenderer = object : DefaultTableCellRenderer() {
-                override fun getTableCellRendererComponent(
-                    t: JTable, value: Any?, sel: Boolean, focus: Boolean, row: Int, col: Int,
-                ): Component {
-                    val c = super.getTableCellRendererComponent(t, value, sel, false, row, col) as JLabel
-                    // Extra left padding on the Website column so its text doesn't crowd the Action button beside it
-                    c.border = if (col == 5) javax.swing.BorderFactory.createEmptyBorder(0, 8, 0, 0) else null
-                    val text = value?.toString().orEmpty()
-                    if (text.isNotBlank()) {
-                        c.foreground = JBColor.BLUE
-                        val isHover = row == linkHoverRow && col == linkHoverCol
-                        c.text = if (isHover) "<html><u>$text</u></html>" else text
-                    } else {
-                        c.foreground = t.foreground
-                        c.text = "—"
-                    }
-                    return c
-                }
-            }
-            columnModel.getColumn(5).cellRenderer = linkRenderer
-            columnModel.getColumn(6).cellRenderer = linkRenderer
-
-            cursor = Cursor(Cursor.DEFAULT_CURSOR)
-            addMouseListener(object : MouseAdapter() {
-                override fun mouseClicked(e: MouseEvent) {
-                    val col = columnAtPoint(e.point)
-                    val row = rowAtPoint(e.point)
-                    if (row < 0) return
-                    val agent = rows[row].agent
-                    when (col) {
-                        1 -> { rows[row].enabled = !rows[row].enabled; tableModel.fireTableCellUpdated(row, 0) }
-                        4 -> handleActionClick(agent)
-                        5 -> if (isOverLinkText(e, row, col)) agent.url.takeIf { it.isNotBlank() }?.let { BrowserUtil.browse(it) }
-                        6 -> if (isOverLinkText(e, row, col)) agent.devUrl.takeIf { it.isNotBlank() }?.let { BrowserUtil.browse(it) }
-                    }
-                }
-                override fun mouseExited(e: MouseEvent) {
-                    val oldLinkRow = linkHoverRow; val oldLinkCol = linkHoverCol
-                    linkHoverRow = -1; linkHoverCol = -1
-                    if (oldLinkRow >= 0) repaint(getCellRect(oldLinkRow, oldLinkCol, false))
-                    buttonHoverRow = -1
-                    revalidate()
-                    repaint()
-                }
-            })
-            addMouseMotionListener(object : MouseAdapter() {
-                override fun mouseMoved(e: MouseEvent) {
-                    val col = columnAtPoint(e.point)
-                    val row = rowAtPoint(e.point)
-                    val actionActive = col == 4 && row >= 0 &&
-                        tableModel.getValueAt(row, 4).toString().isNotBlank() &&
-                        rows[row].agent.id !in inProgressAgentIds
-                    val overLink = row >= 0 && (col == 5 || col == 6) && isOverLinkText(e, row, col)
-                    cursor = if (actionActive || overLink)
-                        Cursor(Cursor.HAND_CURSOR)
-                    else
-                        Cursor(Cursor.DEFAULT_CURSOR)
-                    val newHoverRow = if (overLink) row else -1
-                    val newHoverCol = if (overLink) col else -1
-                    if (newHoverRow != linkHoverRow || newHoverCol != linkHoverCol) {
-                        val oldRow = linkHoverRow; val oldCol = linkHoverCol
-                        linkHoverRow = newHoverRow; linkHoverCol = newHoverCol
-                        if (oldRow >= 0) repaint(getCellRect(oldRow, oldCol, false))
-                        if (newHoverRow >= 0) repaint(getCellRect(newHoverRow, newHoverCol, false))
-                    }
-                    val newButtonHover = if (actionActive) row else -1
-                    if (newButtonHover != buttonHoverRow) {
-                        buttonHoverRow = newButtonHover
-                        revalidate()
-                        repaint()
-                    }
-                }
-            })
-        }
-
-        // Repaint the Action cell of any in-progress row so the spinner animates.
-        fun repaintInProgress() {
-            inProgressAgentIds.forEach { id ->
-                rows.indexOfFirst { it.agent.id == id }.takeIf { it >= 0 }
-                    ?.let { table.repaint(table.getCellRect(it, 4, false)) }
-            }
-        }
+    // Shown above the agent table until detection has run at least once, so the "blank status
+    // column" state has an explicit explanation instead of relying on detectStatusLabel below the
+    // table, which is easy to miss on first open.
+    private val detectionBannerLabel = JBLabel("Agent status unknown — click \"Detect installed agents\" below to check what's installed.").apply {
+        foreground = JBColor.GRAY
+        alignmentX = Component.LEFT_ALIGNMENT
     }
 
-    private val detectButton = JButton("Detect installed agents")
-    private val detectStatusLabel = JBLabel("")
+    private val agentSearchField = SearchTextField(false).apply {
+        textEditor.emptyText.text = "Search agents…"
+        textEditor.accessibleContext.accessibleName = "Search agents"
+        alignmentX = Component.LEFT_ALIGNMENT
+        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+    }
+    private val companionSearchField = SearchTextField(false).apply {
+        textEditor.emptyText.text = "Search companion tools…"
+        textEditor.accessibleContext.accessibleName = "Search companion tools"
+        alignmentX = Component.LEFT_ALIGNMENT
+        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+    }
 
     private val runInBackgroundCheckbox = JBCheckBox("Run operations in background (no terminal window)")
 
@@ -342,97 +114,111 @@ class AgentSettingsConfigurable : Configurable {
         detectButton.addActionListener { runAutoDetect() }
         refreshDetectStatusLabel()
 
+        agentSearchField.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(e: DocumentEvent) = agentTable.applyFilter(agentSearchField.text)
+        })
+        companionSearchField.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(e: DocumentEvent) = companionTable.applyFilter(companionSearchField.text)
+        })
+
         JPanel(BorderLayout()).apply {
             val content = JPanel()
             content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
 
             content.add(titledSeparator("AgentHub"))
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
             content.add(
                 JBLabel("Select which coding agents appear in the toolbar dropdown.").apply {
                     alignmentX = Component.LEFT_ALIGNMENT
                 },
             )
-            content.add(Box.createVerticalStrut(8))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
+            content.add(detectionBannerLabel)
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.PANEL_INSET)))
+            content.add(agentSearchField)
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
             content.add(JBScrollPane(agentTable.table).apply {
                 alignmentX = Component.LEFT_ALIGNMENT
-                preferredSize = java.awt.Dimension(730, agentTable.table.rowHeight * 15 + agentTable.table.tableHeader.preferredSize.height)
+                preferredSize = Dimension(JBUI.scale(AgentHubUiComponents.SETTINGS_TABLE_WIDTH), agentTable.table.rowHeight * 15 + agentTable.table.tableHeader.preferredSize.height)
             })
 
-            content.add(Box.createVerticalStrut(16))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SETTINGS_SECTION_GAP)))
             content.add(titledSeparator("Companion Tools"))
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
             content.add(
                 JBLabel("Optional CLI utilities that work alongside the agents.").apply {
                     alignmentX = Component.LEFT_ALIGNMENT
                 },
             )
-            content.add(Box.createVerticalStrut(8))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.PANEL_INSET)))
+            content.add(companionSearchField)
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
             content.add(JBScrollPane(companionTable.table).apply {
                 alignmentX = Component.LEFT_ALIGNMENT
                 val visibleRows = companionRows.size.coerceIn(1, 5)
-                preferredSize = java.awt.Dimension(730, companionTable.table.rowHeight * visibleRows + companionTable.table.tableHeader.preferredSize.height)
+                preferredSize = Dimension(JBUI.scale(AgentHubUiComponents.SETTINGS_TABLE_WIDTH), companionTable.table.rowHeight * visibleRows + companionTable.table.tableHeader.preferredSize.height)
             })
 
-            content.add(Box.createVerticalStrut(16))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SETTINGS_SECTION_GAP)))
             content.add(titledSeparator("Custom Agent"))
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
 
             customEnabledCheckbox.alignmentX = Component.LEFT_ALIGNMENT
             content.add(customEnabledCheckbox)
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
 
             // Fixed label width so all 3 input fields start at the same x position.
             val labelWidth = listOf("Name:", "Command:", "URL:").maxOf { JBLabel(it).preferredSize.width }
 
             val nameRow = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
-                add(fixedWidthLabel("Name:", labelWidth))
-                add(Box.createHorizontalStrut(4))
+                add(fixedWidthLabel("Name:", labelWidth).apply { labelFor = customNameField; customNameField.accessibleContext.accessibleName = "Name" })
+                add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
                 add(customNameField)
                 alignmentX = Component.LEFT_ALIGNMENT
             }
             content.add(nameRow)
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
 
             val commandRow = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
-                add(fixedWidthLabel("Command:", labelWidth))
-                add(Box.createHorizontalStrut(4))
+                add(fixedWidthLabel("Command:", labelWidth).apply { labelFor = customCommandField; customCommandField.accessibleContext.accessibleName = "Command" })
+                add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
                 add(customCommandField)
                 alignmentX = Component.LEFT_ALIGNMENT
             }
             content.add(commandRow)
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
 
             val urlRow = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
-                add(fixedWidthLabel("URL:", labelWidth))
-                add(Box.createHorizontalStrut(4))
+                add(fixedWidthLabel("URL:", labelWidth).apply { labelFor = customUrlField; customUrlField.accessibleContext.accessibleName = "URL" })
+                add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
                 add(customUrlField)
                 alignmentX = Component.LEFT_ALIGNMENT
             }
             content.add(urlRow)
+            content.add(customValidationLabel)
 
-            content.add(Box.createVerticalStrut(16))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SETTINGS_SECTION_GAP)))
             content.add(titledSeparator("Behavior"))
-            content.add(Box.createVerticalStrut(4))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
 
             val buttonRow = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
                 add(detectButton)
-                add(Box.createHorizontalStrut(12))
+                add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP * 2)))
                 add(detectStatusLabel)
                 alignmentX = Component.LEFT_ALIGNMENT
             }
             content.add(buttonRow)
-            content.add(Box.createVerticalStrut(6))
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
 
             runInBackgroundCheckbox.alignmentX = Component.LEFT_ALIGNMENT
             content.add(runInBackgroundCheckbox)
 
             if (OsDetector.isWindows()) {
-                content.add(Box.createVerticalStrut(6))
+                content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
                 execEnvCombo.maximumSize = execEnvCombo.preferredSize
                 wslDistroCombo.maximumSize = wslDistroCombo.preferredSize
                 execEnvCombo.addActionListener {
@@ -442,12 +228,14 @@ class AgentSettingsConfigurable : Configurable {
                 }
                 val wslRow = JPanel().apply {
                     layout = BoxLayout(this, BoxLayout.X_AXIS)
-                    add(JBLabel("Run agents in:"))
-                    add(Box.createHorizontalStrut(6))
+                    add(JBLabel("Run agents in:").apply { labelFor = execEnvCombo })
+                    add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
                     add(execEnvCombo)
-                    add(Box.createHorizontalStrut(8))
+                    add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.PANEL_INSET)))
+                    wslDistroCombo.accessibleContext.accessibleName = "WSL distribution"
+                    execEnvCombo.accessibleContext.accessibleName = "Agent execution environment"
                     add(wslDistroCombo)
-                    add(Box.createHorizontalStrut(8))
+                    add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.PANEL_INSET)))
                     add(wslStatusLabel)
                     alignmentX = Component.LEFT_ALIGNMENT
                 }
@@ -461,12 +249,12 @@ class AgentSettingsConfigurable : Configurable {
     private fun titledSeparator(title: String): TitledSeparator =
         TitledSeparator(title).apply {
             alignmentX = Component.LEFT_ALIGNMENT
-            maximumSize = java.awt.Dimension(Int.MAX_VALUE, preferredSize.height)
+            maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
         }
 
     private fun fixedWidthLabel(text: String, width: Int): JBLabel =
         JBLabel(text).apply {
-            val size = java.awt.Dimension(width, preferredSize.height)
+            val size = Dimension(width, preferredSize.height)
             preferredSize = size
             minimumSize = size
             maximumSize = size
@@ -478,39 +266,96 @@ class AgentSettingsConfigurable : Configurable {
         val isOutdated = agent.id in outdatedAgents
         val project = ProjectManager.getInstance().openProjects.lastOrNull() ?: return
 
+        val background = runInBackgroundCheckbox.isSelected
+        val savedExecution = WslSupport.settings
+        if (OsDetector.isWindows() && (uiUseWsl() != savedExecution.useWsl ||
+                (uiUseWsl() && uiWslDistro() != savedExecution.distro))) {
+            com.intellij.openapi.ui.Messages.showInfoMessage(
+                project,
+                "Apply the execution environment changes and detect agents before running Install, Update or Remove. Pending settings have not been saved.",
+                "Execution environment changed",
+            )
+            return
+        }
+        val dialog = if (background) null else DialogWrapper.findInstance(agentTable.table)
+        val savesSettings = dialog != null
+        val executionSettings = if (savesSettings) WslSupport.Settings(uiUseWsl(), uiWslDistro()) else WslSupport.settings
+        val useWsl = OsDetector.isWindows() && executionSettings.useWsl
+
         val isUpdate = isInstalled && isOutdated && agent.updateHint.isNotBlank()
         val (label, command, expectInstalled) = when {
             isUpdate ->
-                Triple("⬆ Update ${agent.name}", agent.updateHint, true)
-            isInstalled && agent.platformUninstallHint.isNotBlank() ->
-                Triple("🗑 Remove ${agent.name}", agent.platformUninstallHint, false)
-            !isInstalled && agent.platformInstallHint.isNotBlank() ->
-                Triple("📦 Install ${agent.name}", agent.platformInstallHint, true)
+                Triple("⬆ Update ${agent.name}", agent.updateCommand(useWsl), true)
+            isInstalled && agent.uninstallCommand(useWsl).isNotBlank() ->
+                Triple("🗑 Remove ${agent.name}", agent.uninstallCommand(useWsl), false)
+            !isInstalled && agent.installCommand(useWsl).isNotBlank() ->
+                Triple("📦 Install ${agent.name}", agent.installCommand(useWsl), true)
             else -> return
         }
 
-        val background = runInBackgroundCheckbox.isSelected
-        if (!TerminalCommandRunner.confirmRun(project, label, command, background = background)) return
+        if (savesSettings) {
+            try {
+                validateCustomCommand()
+            } catch (error: ConfigurationException) {
+                customValidationLabel.text = "Command: enter a command for the enabled custom agent."
+            customValidationLabel.isVisible = true
+            customCommandField.requestFocusInWindow()
+                com.intellij.openapi.ui.Messages.showErrorDialog(project, error.localizedMessage, "AgentHub settings")
+                return
+            }
+        }
+        val context = if (savesSettings) {
+            "All AgentHub settings will be saved, including agent selections, custom agent fields, background mode and WSL settings. Settings will close and reopen after the operation."
+        } else {
+            "This operation uses the saved execution environment. Pending settings changes will not be saved."
+        }
+        setInProgress(agent.id, true)
+        val confirmed = try {
+            TerminalCommandRunner.confirmRun(
+                project, label, command, context, background, executionSettings,
+                confirmText = if (savesSettings) "Save settings and run" else "Run",
+            )
+        } catch (error: Exception) {
+            setInProgress(agent.id, false)
+            throw error
+        }
+        if (!confirmed) {
+            setInProgress(agent.id, false)
+            return
+        }
 
         if (background) {
-            setInProgress(agent.id, true)
-            runAgentCommand(project, label, command, agent, isUpdate, expectInstalled, background) {
+            runAgentCommand(project, label, command, agent, isUpdate, expectInstalled, background, executionSettings) {
                 setInProgress(agent.id, false)
             }
         } else {
             // Terminal tool window cannot open while a modal dialog is showing — close first,
             // then re-open the Settings panel once the operation finishes.
-            val dialog = DialogWrapper.findInstance(agentTable.table)
             if (dialog != null) {
-                apply()
+                try {
+                    apply()
+                } catch (error: Exception) {
+                    setInProgress(agent.id, false)
+                    throw error
+                }
+                // The dialog vanishing without warning reads as a glitch — a quick notification
+                // explains why, before the terminal takes over and Settings reopens on completion.
+                DetectionResultsWatcher.showNotification(
+                    project,
+                    label,
+                    "AgentHub settings saved. Settings closed to run this in the terminal — it will reopen when done.",
+                    NotificationType.INFORMATION,
+                )
                 dialog.close(DialogWrapper.OK_EXIT_CODE)
                 ApplicationManager.getApplication().invokeLater {
-                    runAgentCommand(project, label, command, agent, isUpdate, expectInstalled, background) {
+                    runAgentCommand(project, label, command, agent, isUpdate, expectInstalled, background, executionSettings) {
+                        setInProgress(agent.id, false)
                         reopenSettings(project)
                     }
                 }
             } else {
-                runAgentCommand(project, label, command, agent, isUpdate, expectInstalled, background) {
+                runAgentCommand(project, label, command, agent, isUpdate, expectInstalled, background, executionSettings) {
+                    setInProgress(agent.id, false)
                     reopenSettings(project)
                 }
             }
@@ -518,13 +363,13 @@ class AgentSettingsConfigurable : Configurable {
     }
 
     private fun reopenSettings(project: Project) {
-        ShowSettingsUtil.getInstance().showSettingsDialog(project, "AgentHub")
+        if (!project.isDisposed) ShowSettingsUtil.getInstance().showSettingsDialog(project, "AgentHub")
     }
 
     // Recomputes the visible agent/companion rows for the current execution environment
     // (the WSL setting was just applied, so available() already reflects the new mode).
     private fun rebuildRows() {
-        val settings = AgentSettingsState.getInstance()
+        val settings = settingsState
         agentRows.clear()
         agentRows.addAll(CodingAgents.available().map { AgentRow(it, settings.isAgentActive(it.id)) })
         companionRows.clear()
@@ -540,30 +385,30 @@ class AgentSettingsConfigurable : Configurable {
         isUpdate: Boolean,
         expectInstalled: Boolean,
         background: Boolean,
+        executionSettings: WslSupport.Settings,
         onComplete: () -> Unit,
     ) {
-        if (background) {
-            TerminalCommandRunner.runInBackground(project, label, command)
-        } else {
-            TerminalCommandRunner.run(project, label, command)
-        }
-        if (isUpdate) {
-            AgentSettingsState.getInstance().removeOutdatedAgent(agent.id)
-            DetectionResultsWatcher.watchCommandAvailability(project, agent, expectInstalled, isUpdate = true, onComplete = onComplete)
-        } else {
-            DetectionResultsWatcher.watchCommandAvailability(project, agent, expectInstalled, onComplete = onComplete)
+        TerminalCommandRunner.runTracked(project, label, command, background, executionSettings) { exitCode ->
+            if (exitCode != 0 || project.isDisposed) {
+                if (!project.isDisposed) DetectionResultsWatcher.showNotification(project, label, "Operation failed (exit code $exitCode). Run Detect to refresh the agent status.", NotificationType.ERROR)
+                onComplete()
+            } else {
+                if (isUpdate) settingsState.removeOutdatedAgent(agent.id)
+                DetectionResultsWatcher.watchCommandAvailability(project, agent, expectInstalled, isUpdate = isUpdate, commandFinished = true, onComplete = onComplete)
+            }
         }
     }
 
     // EDT-only. Toggles the per-agent spinner and starts/stops the shared repaint timer.
     private fun setInProgress(id: String, active: Boolean) {
         if (active) inProgressAgentIds.add(id) else inProgressAgentIds.remove(id)
-        if (inProgressAgentIds.isEmpty()) {
+        if (inProgressAgentIds.isEmpty() || uiDisposed) {
             spinnerTimer.stop()
         } else if (!spinnerTimer.isRunning) {
             spinnerTimer.start()
         }
         tables.forEach { it.table.repaint() }
+        progressRefreshCallback?.invoke()
     }
 
     private fun uiUseWsl(): Boolean = OsDetector.isWindows() && execEnvCombo.selectedIndex == 1
@@ -622,11 +467,12 @@ class AgentSettingsConfigurable : Configurable {
     }
 
     private fun refreshDetectStatusLabel() {
+        detectionBannerLabel.isVisible = detectedInstalled.isEmpty()
         if (detectedInstalled.isEmpty()) {
             detectStatusLabel.text = ""
         } else {
             val count = detectedInstalled.values.count { it }
-            val timestamp = AgentSettingsState.getInstance().getDetectionTimestamp()
+            val timestamp = settingsState.getDetectionTimestamp()
             val timeStr = if (timestamp > 0L) {
                 val formatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .withZone(ZoneId.systemDefault())
@@ -637,30 +483,33 @@ class AgentSettingsConfigurable : Configurable {
         }
     }
 
-    private fun extractDomain(url: String): String = if (url.isBlank()) "" else try {
-        URI(url).host?.removePrefix("www.") ?: url
-    } catch (_: Exception) {
-        url
-    }
-
     override fun createComponent(): JComponent {
+        uiDisposed = false
+        progressRefreshCallback = {
+            if (inProgressAgentIds.isEmpty()) spinnerTimer.stop() else if (!spinnerTimer.isRunning) spinnerTimer.start()
+            tables.forEach { it.table.repaint() }
+        }
         refreshCallback = {
-            outdatedAgents = AgentSettingsState.getInstance().getOutdatedAgentIds()
-            detectedInstalled = AgentSettingsState.getInstance().getDetectionResults() ?: emptyMap()
+            outdatedAgents = settingsState.getOutdatedAgentIds()
+            unverifiedAgents = settingsState.getUnverifiedAgentIds()
+            detectedInstalled = settingsState.getDetectionResults() ?: emptyMap()
             tables.forEach { it.tableModel.fireTableDataChanged() }
             refreshDetectStatusLabel()
+            progressRefreshCallback?.invoke()
         }
         reset()
         return panel
     }
 
     override fun disposeUIResources() {
+        uiDisposed = true
         spinnerTimer.stop()
         refreshCallback = null
+        progressRefreshCallback = null
     }
 
     override fun isModified(): Boolean {
-        val settings = AgentSettingsState.getInstance()
+        val settings = settingsState
         val builtInModified = agentRows.any { it.enabled != settings.isAgentActive(it.agent.id) }
         val companionModified = companionRows.any { it.enabled != settings.isCompanionActive(it.agent.id) }
         val state = settings.getState()
@@ -675,7 +524,8 @@ class AgentSettingsConfigurable : Configurable {
     }
 
     override fun apply() {
-        val settings = AgentSettingsState.getInstance()
+        validateCustomCommand()
+        val settings = settingsState
         agentRows.forEach { settings.setAgentActive(it.agent.id, it.enabled) }
         companionRows.forEach { settings.setCompanionActive(it.agent.id, it.enabled) }
         val state = settings.getState()
@@ -695,6 +545,7 @@ class AgentSettingsConfigurable : Configurable {
                 settings.clearDetectionResults()
                 detectedInstalled = emptyMap()
                 outdatedAgents = emptySet()
+                unverifiedAgents = emptySet()
                 // The agent list itself also differs: WSL mode surfaces the unsupportedOnWindows
                 // agents (forge, plandex, …), native mode hides them.
                 rebuildRows()
@@ -704,13 +555,37 @@ class AgentSettingsConfigurable : Configurable {
         }
     }
 
+    private fun validateCustomCommand() {
+        customValidationLabel.isVisible = false
+        val url = customUrlField.text.trim()
+        if (url.isNotEmpty()) {
+            val uri = runCatching { java.net.URI(url) }.getOrNull()
+            if (uri == null || uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
+                customValidationLabel.text = "URL: enter a complete http:// or https:// address, or leave it empty."
+                customValidationLabel.isVisible = true
+                customUrlField.requestFocusInWindow()
+                customUrlField.toolTipText = "Enter a complete http:// or https:// URL, or leave it empty."
+                throw ConfigurationException("Enter a complete http:// or https:// URL, or leave it empty.")
+            }
+        }
+        if (customEnabledCheckbox.isSelected && customCommandField.text.isBlank()) {
+            customValidationLabel.text = "Command: enter a command for the enabled custom agent."
+            customValidationLabel.isVisible = true
+            customCommandField.requestFocusInWindow()
+            customCommandField.toolTipText = "Enter a command for the enabled custom agent."
+            throw ConfigurationException("Enter a command for the enabled custom agent.")
+        }
+    }
+
     override fun reset() {
-        val settings = AgentSettingsState.getInstance()
+        val settings = settingsState
         agentRows.forEach { it.enabled = settings.isAgentActive(it.agent.id) }
         companionRows.forEach { it.enabled = settings.isCompanionActive(it.agent.id) }
         detectedInstalled = settings.getDetectionResults() ?: emptyMap()
         outdatedAgents = settings.getOutdatedAgentIds()
+        unverifiedAgents = settings.getUnverifiedAgentIds()
         tables.forEach { it.tableModel.fireTableDataChanged() }
+        if (inProgressAgentIds.isNotEmpty() && !uiDisposed && !spinnerTimer.isRunning) spinnerTimer.start()
         val state = settings.getState()
         customEnabledCheckbox.isSelected = state.customAgentEnabled
         customNameField.text = state.customAgentName
@@ -728,10 +603,13 @@ class AgentSettingsConfigurable : Configurable {
     override fun getDisplayName(): String = "AgentHub"
 
     companion object {
+        // EDT-only and shared across Settings instances, including panels reopened during a command.
+        private val activeOperationAgentIds = mutableSetOf<String>()
         private const val DEFAULT_DISTRO_ITEM = "Default distribution"
 
         // EDT-only: set when panel is open, cleared when disposed
         private var refreshCallback: (() -> Unit)? = null
+        private var progressRefreshCallback: (() -> Unit)? = null
 
         /** Refresh the settings panel if it is currently open. Must be called on EDT. */
         fun scheduleRefresh() {

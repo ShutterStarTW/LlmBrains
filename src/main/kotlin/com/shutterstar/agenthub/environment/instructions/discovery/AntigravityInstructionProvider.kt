@@ -41,6 +41,7 @@ class AntigravityInstructionProvider(
         val globalRuleDirs = listOfNotNull(
             gemini.resolve(RULES_DIRECTORY),
             gemini.resolve(CONFIG_DIRECTORY).resolve(RULES_DIRECTORY),
+            gemini.resolve(CLI_DIRECTORY).resolve(RULES_DIRECTORY),
             AntigravityHomeSupport.configuredHome()?.resolve(RULES_DIRECTORY),
         )
         for (ruleDir in globalRuleDirs) {

@@ -27,15 +27,34 @@ object DetectionResultsWatcher {
 
     private const val UPDATE_INITIAL_DELAY_MS = 30_000L
 
+    internal fun watchCommandCompletion(project: Project, result: Path, onComplete: (Int) -> Unit) {
+        val taskRef = AtomicReference<ScheduledFuture<*>?>()
+        val task = executor.scheduleWithFixedDelay({
+            try {
+                val exitCode = if (project.isDisposed) -1 else if (Files.exists(result)) {
+                    Files.readString(result).trim().toIntOrNull()
+                } else null
+                if (exitCode != null) {
+                    taskRef.getAndSet(null)?.cancel(false)
+                    ApplicationManager.getApplication().invokeLater({ onComplete(exitCode) }, ModalityState.any())
+                }
+            } catch (_: java.io.IOException) {
+                // The script may still be writing its completion marker; retry on the next tick.
+            }
+        }, 500, 500, TimeUnit.MILLISECONDS)
+        taskRef.set(task)
+    }
+
     fun watchCommandAvailability(
         project: Project,
         agent: CodingAgent,
         expectInstalled: Boolean,
         isUpdate: Boolean = false,
+        commandFinished: Boolean = false,
         onComplete: (() -> Unit)? = null,
     ) {
         val startTime = System.currentTimeMillis()
-        val initialDelay = if (isUpdate) UPDATE_INITIAL_DELAY_MS else INSTALL_POLL_INTERVAL_MS
+        val initialDelay = if (isUpdate && !commandFinished) UPDATE_INITIAL_DELAY_MS else INSTALL_POLL_INTERVAL_MS
         val task = executor.scheduleAtFixedRate({
             try {
                 val isInstalled = AgentDetector.isCommandAvailable(agent.command)
@@ -157,21 +176,12 @@ object DetectionResultsWatcher {
         project: Project,
         resultsFilePath: Path,
     ) {
-        pollFile(resultsFilePath, versionWatchTask) { content ->
-            val uptodate = parseIntValue(content, "uptodate")
-            val updates = parseIntValue(content, "updates")
-            val outdatedIds = findList(content, "outdated_ids", ",")
-            AgentSettingsState.getInstance().saveOutdatedAgents(outdatedIds)
-            AgentSettingsConfigurable.scheduleRefresh()
-            val msg = if (updates > 0) {
-                val names = (CodingAgents.all + CompanionTools.all).filter { it.id in outdatedIds }.map { it.name }
-                val nameList = if (names.isNotEmpty()) ": ${names.joinToString(", ")}" else ""
-                "$uptodate up to date · $updates ${if (updates == 1) "update" else "updates"} available$nameList"
-            } else {
-                allUpToDateMsg(uptodate)
+        // The terminal script only sees npm/pip-managed agents; once it is done, the in-process
+        // check (registry lookups for everything else) produces the authoritative outdated set.
+        pollFile(resultsFilePath, versionWatchTask) { _ ->
+            ApplicationManager.getApplication().executeOnPooledThread {
+                AgentDetector.checkForUpdates(project, notifyIfUpToDate = true)
             }
-            val type = if (updates > 0) NotificationType.WARNING else NotificationType.INFORMATION
-            showNotification(project, "Update", msg, type)
         }
     }
 
@@ -191,6 +201,16 @@ object DetectionResultsWatcher {
 
     fun allUpToDateMsg(count: Int): String =
         "All $count ${if (count == 1) "agent" else "agents"} up to date"
+
+    /** The notification text for a finished update run: what changed, what was already current, what failed. */
+    fun updateSummaryMessage(ok: Int, uptodate: Int, failed: Int, updatedNames: List<String>): String {
+        val failedSuffix = if (failed > 0) " · $failed failed" else ""
+        return when {
+            updatedNames.isNotEmpty() -> "Updated: ${updatedNames.joinToString(", ")} · $uptodate up to date$failedSuffix"
+            ok == 0 && failed == 0 -> allUpToDateMsg(uptodate)
+            else -> "$ok updated · $uptodate up to date$failedSuffix"
+        }
+    }
 
     fun showNotification(project: Project?, action: String, message: String, type: NotificationType) {
         NotificationGroupManager.getInstance()

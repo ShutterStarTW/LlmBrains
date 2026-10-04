@@ -9,10 +9,28 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 
 class SkillDiscoveryServiceTest {
     private val service = SkillDiscoveryService(providers = emptyList())
+
+    @Test
+    fun `should record resolved paths for multiple sources of one skill`(@TempDir directory: Path) {
+        val skillDirectory = Files.createDirectories(directory.resolve("magyar-humanizer"))
+        val path = skillDirectory.toString()
+        val skill = service.normalize(
+            listOf(
+                record(agentId = null, path = path, fingerprint = "same", shared = true),
+                record(agentId = "qwen", path = path, fingerprint = "same"),
+            ),
+        ).single()
+
+        assertEquals(2, skill.sources.size)
+        assertEquals(setOf(skillDirectory.toRealPath().toString()), skill.sources.map { it.realPath }.toSet())
+    }
 
     @Test
     fun `should merge identical copies from two agents`() {
@@ -182,6 +200,22 @@ class SkillDiscoveryServiceTest {
         } finally {
             Thread.interrupted()
         }
+    }
+
+    @Test
+    fun `a folder that its owner marks vendor-synced is a system source for every agent that scans it`() {
+        val syncedPath = "/home/u/.claude/skills/synced/abc/review"
+        val skills = SkillDiscoveryService().normalize(
+            listOf(
+                record("claude", syncedPath, "same").copy(system = true),
+                record("cursor", syncedPath, "same"),
+                record("antigravity", "/home/u/.gemini/skills/review", "other"),
+            ),
+        )
+
+        val sources = skills.single().sources
+        assertTrue(sources.filter { it.path == syncedPath }.all { it.system })
+        assertFalse(sources.first { it.agentId == "antigravity" }.system)
     }
 
     private fun record(

@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -8,7 +9,8 @@ import java.util.logging.Logger
 import kotlin.io.path.name
 
 /**
- * Discovers Cursor CLI sessions from metadata files without reading conversation transcripts or databases.
+ * Discovers Cursor CLI sessions from `meta.json`, plus the user's own prompts from
+ * `prompt_history.json`; the conversation database (`store.db`) is never opened.
  */
 class CursorProjectProvider(
     private val cursorDirectory: Path = defaultCursorDirectory(),
@@ -25,8 +27,8 @@ class CursorProjectProvider(
         var skippedRecords = 0
         val budget = ScanBudget(maxScanEntries)
         val sessions = runCatching {
-            listDirectories(chatsDirectory, MAX_WORKSPACE_ENTRIES).flatMap { workspaceDirectory ->
-                listDirectories(workspaceDirectory, budget).mapNotNull { sessionDirectory ->
+            LocalSessionSupport.listDirectories(chatsDirectory, MAX_WORKSPACE_ENTRIES).flatMap { workspaceDirectory ->
+                LocalSessionSupport.listDirectories(workspaceDirectory, budget).mapNotNull { sessionDirectory ->
                     val metadataFile = sessionDirectory.resolve(METADATA_FILE)
                     if (!Files.isRegularFile(metadataFile, LinkOption.NOFOLLOW_LINKS)) {
                         return@mapNotNull null
@@ -43,26 +45,6 @@ class CursorProjectProvider(
         return LocalSessionSupport.deduplicate(sessions)
     }
 
-    private fun listDirectories(
-        root: Path,
-        budget: ScanBudget,
-    ): List<Path> {
-        if (!budget.hasRemaining()) return emptyList()
-        return listDirectories(root, budget.remaining()).also { budget.consume(it.size) }
-    }
-
-    private fun listDirectories(
-        root: Path,
-        maximumEntries: Int,
-    ): List<Path> =
-        Files.list(root).use { paths ->
-            paths
-                .limit(maximumEntries.coerceAtLeast(0).toLong())
-                .toList()
-                .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
-                .sorted()
-        }
-
     private fun parseSession(metadataFile: Path): RawAgentProject? {
         val json = LocalSessionSupport.readBoundedText(metadataFile, MAX_JSON_CHARACTERS) ?: return null
         val fields = MetadataJsonParser.topLevelStringFields(json, STRING_FIELDS)
@@ -76,6 +58,9 @@ class CursorProjectProvider(
         val recordedUpdate = LocalSessionSupport.epochTimestamp(timestamps[UPDATED_AT_FIELD])
         val updatedAt = recordedUpdate ?: LocalSessionSupport.modifiedAt(metadataFile)
         val title = fields[TITLE_FIELD]?.takeIf { it.isNotBlank() }
+        val statistics = SessionStatisticsAccumulator(agentId)
+        statistics.recordedBounds(startedAt, recordedUpdate)
+        val prompts = userMessages(metadataFile.resolveSibling(PROMPT_HISTORY_FILE), statistics)
         return RawAgentProject(
             agentId = agentId,
             rawProjectPath = projectPath,
@@ -83,14 +68,33 @@ class CursorProjectProvider(
             startedAt = startedAt,
             updatedAt = LocalSessionSupport.latest(startedAt, updatedAt),
             sourcePath = metadataFile.toAbsolutePath().normalize().toString(),
-            metadata = title?.let { mapOf(TITLE_FIELD to it) }.orEmpty(),
+            metadata = title?.let { mapOf(TITLE_FIELD to it) }.orEmpty() +
+                prompts?.metadata().orEmpty(),
+            statistics = statistics.snapshot().filterKeys { it != "editTurns" },
         )
+    }
+
+    /** `prompt_history.json` is a JSON array of the prompts typed in this chat, newest first. */
+    private fun userMessages(promptHistory: Path, statistics: SessionStatisticsAccumulator): UserMessageTally? {
+        if (!Files.isRegularFile(promptHistory, LinkOption.NOFOLLOW_LINKS)) return null
+        val json = runCatching { LocalSessionSupport.readBoundedText(promptHistory, MAX_PROMPT_HISTORY_CHARACTERS) }
+            .getOrNull() ?: return null
+        val prompts = MetadataJsonParser.arrayElements(json) ?: return null
+        return UserMessageTally().apply {
+            prompts.asReversed().forEach {
+                val text = MessageContentExtractor.decodeString(it)
+                add(text)
+                statistics.userPrompt(text)
+            }
+        }
     }
 
     companion object {
         private const val AGENT_ID = "cursor"
         private const val CHATS_DIRECTORY = "chats"
         private const val METADATA_FILE = "meta.json"
+        private const val PROMPT_HISTORY_FILE = "prompt_history.json"
+        private const val MAX_PROMPT_HISTORY_CHARACTERS = 8 * 1024 * 1024
         private const val MAX_SCAN_ENTRIES = 20_000
         private const val MAX_WORKSPACE_ENTRIES = 4_096
         private const val MAX_JSON_CHARACTERS = 256 * 1024

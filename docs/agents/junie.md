@@ -5,20 +5,19 @@
 ### macOS / Linux
 
 ```shell
-# Install with npm
-npm install -g @jetbrains/junie-cli
+# Install (official installer, adds the `junie` shim to ~/.local/bin)
+curl -fsSL https://junie.jetbrains.com/install.sh | bash
 
-# Update to latest version
-npm update --quiet --no-fund -g @jetbrains/junie-cli
+# Update (stages the latest build, applied on the next launch)
+junie update
 
 # Uninstall
-npm uninstall -g @jetbrains/junie-cli
+rm -f ~/.local/bin/junie && rm -rf ~/.local/share/junie
 ```
 
 ### Windows
 
-The npm package does not install the binary on Windows — use the official PowerShell
-installer, which adds the `junie` shim to `~/.local/bin` and your user PATH:
+Use the official PowerShell installer, which adds the `junie` shim to `~/.local/bin` and your user PATH:
 
 ```powershell
 # Install
@@ -29,7 +28,7 @@ Remove-Item -Force "$env:USERPROFILE\.local\bin\junie.bat" -ErrorAction Silently
 Remove-Item -Recurse -Force "$env:USERPROFILE\.local\share\junie" -ErrorAction SilentlyContinue
 ```
 
-> Junie updates itself automatically on launch, so no manual update command is needed on Windows.
+> Junie updates itself automatically on launch; `junie update` stages the latest build manually.
 > After installing, restart the IDE so the updated PATH is picked up.
 
 > via [junie.jetbrains.com](https://junie.jetbrains.com)
@@ -44,8 +43,8 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.local\share\junie" -ErrorAction S
 ## Usage
 
 Junie is JetBrains' LLM-agnostic AI coding agent that ships code from your terminal,
-IDE, or CI/CD pipeline. Give it a task in natural language — fix a bug, implement a
-feature, review a PR — and Junie handles the rest.
+IDE, or CI/CD pipeline. Describe a task in natural language (fix a bug, implement a
+feature, review a PR) and Junie works on it.
 
 ```
 % cd your-project
@@ -55,7 +54,7 @@ feature, review a PR — and Junie handles the rest.
 
 ## Features
 
-- LLM-agnostic: works with top-performing models from OpenAI, Anthropic, Google, and Grok
+- LLM-agnostic: works with models from OpenAI, Anthropic, Google and Grok
 - Runs from the terminal, in any IDE, and in CI/CD pipelines (GitHub, GitLab)
 - Authenticates with a JetBrains account or a third-party API key
 - Works on macOS, Windows, and Linux (requires Node.js)

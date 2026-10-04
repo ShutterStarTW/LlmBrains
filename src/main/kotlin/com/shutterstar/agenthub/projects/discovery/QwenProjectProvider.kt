@@ -1,11 +1,11 @@
 package com.shutterstar.agenthub.projects.discovery
 
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readTailLines
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
 
@@ -61,13 +61,19 @@ class QwenProjectProvider(
             ?: sessionFile.fileName.toString().removeSuffix(RUNTIME_SUFFIX)
         val startedAt = timestamp(fields, longs, STARTED_AT_FIELD, CREATED_AT_FIELD, TIMESTAMP_FIELD)
         val updatedAt = timestamp(fields, longs, UPDATED_AT_FIELD, UPDATED_AT_CAMEL_FIELD)
-        return rawProject(sessionFile, sessionId, projectPath, startedAt, updatedAt, fields[TITLE_FIELD])
+        val raw = rawProject(sessionFile, sessionId, projectPath, startedAt, updatedAt, fields[TITLE_FIELD])
+        // A runtime file with no recorded chat next to it: in the stores observed, these sessions
+        // also had no entry in Qwen's own prompt log, i.e. they were closed without a prompt.
+        // (When the chat exists, its own record carries the count and deduplication merges them.)
+        val chat = sessionFile.resolveSibling("$sessionId.$JSONL_EXTENSION")
+        if (Files.exists(chat, LinkOption.NOFOLLOW_LINKS)) return raw
+        return raw.copy(metadata = raw.metadata + UserMessageTally().metadata())
     }
 
     private fun parseSavedSession(sessionFile: Path): RawAgentProject? {
         var sessionId: String? = null
         var projectPath: String? = null
-        var startedAt: java.time.Instant? = null
+        var startedAt: Instant? = null
         var title: String? = null
         var linesRead = 0
         var remainingCharacters = MAX_HEADER_CHARACTERS
@@ -97,15 +103,31 @@ class QwenProjectProvider(
             startedAt,
             findLastEventTimestamp(sessionFile),
             title,
-        )
+        ).let { raw ->
+            val statistics = SessionStatisticsAccumulator(agentId)
+            val prompts = userMessages(sessionFile, statistics)
+            raw.copy(metadata = raw.metadata + prompts?.metadata().orEmpty() + listOfNotNull(statistics.sessionTitle?.let { TITLE_FIELD to it }), statistics = statistics.snapshot())
+        }
     }
+
+    /** `{"type":"user","message":{"role":"user","parts":[{"text":"..."}]}}`; tool results are `type:"tool_result"`. */
+    private fun userMessages(sessionFile: Path, statistics: SessionStatisticsAccumulator): UserMessageTally? =
+        UserMessageTally.scanJsonl(sessionFile, USER_MARKERS) { line ->
+            statistics.record(line)
+            if (MetadataJsonParser.topLevelStringFields(line, setOf(TYPE_FIELD))[TYPE_FIELD] == USER_TYPE) {
+                if (MetadataJsonParser.topLevelBooleanFields(line, setOf("isSidechain", "isMeta")).values.any { it }) return@scanJsonl
+                val text = MessageContentExtractor.text(MetadataJsonParser.rawPath(line, MESSAGE_FIELD, PARTS_FIELD))
+                add(text)
+                statistics.userPrompt(text)
+            }
+        }
 
     private fun rawProject(
         sessionFile: Path,
         sessionId: String,
         projectPath: String,
-        startedAt: java.time.Instant?,
-        recordedUpdate: java.time.Instant?,
+        startedAt: Instant?,
+        recordedUpdate: Instant?,
         title: String?,
     ) = RawAgentProject(
         agentId = agentId,
@@ -117,21 +139,18 @@ class QwenProjectProvider(
         metadata = title?.takeIf { it.isNotBlank() }?.let { mapOf(TITLE_FIELD to it) }.orEmpty(),
     )
 
-    private fun findLastEventTimestamp(sessionFile: Path): java.time.Instant? =
-        readTailLines(sessionFile, MAX_TAIL_BYTES, MAX_TAIL_LINES)
-            .asSequence()
-            .mapNotNull { line ->
-                val fields = MetadataJsonParser.topLevelStringFields(line, TIME_FIELDS)
-                val longs = MetadataJsonParser.topLevelLongFields(line, TIME_FIELDS)
-                timestamp(fields, longs, TIMESTAMP_FIELD, UPDATED_AT_FIELD, UPDATED_AT_CAMEL_FIELD)
-            }
-            .firstOrNull()
+    private fun findLastEventTimestamp(sessionFile: Path): Instant? =
+        LocalSessionSupport.lastTimestamp(sessionFile, MAX_TAIL_BYTES, MAX_TAIL_LINES) { line ->
+            val fields = MetadataJsonParser.topLevelStringFields(line, TIME_FIELDS)
+            val longs = MetadataJsonParser.topLevelLongFields(line, TIME_FIELDS)
+            timestamp(fields, longs, TIMESTAMP_FIELD, UPDATED_AT_FIELD, UPDATED_AT_CAMEL_FIELD)
+        }
 
     private fun timestamp(
         fields: Map<String, String>,
         longs: Map<String, Long>,
         vararg names: String,
-    ): java.time.Instant? = names.firstNotNullOfOrNull { name ->
+    ): Instant? = names.firstNotNullOfOrNull { name ->
         LocalSessionSupport.parseTimestamp(fields[name]) ?: LocalSessionSupport.epochTimestamp(longs[name])
     }
 
@@ -158,6 +177,11 @@ class QwenProjectProvider(
         private const val UPDATED_AT_CAMEL_FIELD = "updatedAt"
         private const val TIMESTAMP_FIELD = "timestamp"
         private const val TITLE_FIELD = "title"
+        private const val TYPE_FIELD = "type"
+        private const val USER_TYPE = "user"
+        private const val MESSAGE_FIELD = "message"
+        private const val PARTS_FIELD = "parts"
+        private val USER_MARKERS = listOf("\"type\"")
         private val TIME_FIELDS = setOf(
             STARTED_AT_FIELD,
             CREATED_AT_FIELD,

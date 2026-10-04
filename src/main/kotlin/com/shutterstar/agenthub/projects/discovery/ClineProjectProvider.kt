@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import com.shutterstar.agenthub.projects.resolve.ProcessCommandRunner
 import java.io.IOException
@@ -16,6 +17,8 @@ data class ClineSessionRecord(
     val directory: String,
     val startedAt: Instant?,
     val updatedAt: Instant?,
+    val messagesPath: String? = null,
+    val title: String? = null,
 )
 
 class ClineProjectProvider(
@@ -87,6 +90,10 @@ class ClineProjectProvider(
             ?: LocalSessionSupport.parseTimestamp(fields[ENDED_AT_FIELD])
             ?: LocalSessionSupport.epochTimestamp(longs[UPDATED_AT_FIELD] ?: longs[ENDED_AT_FIELD])
         val title = MetadataJsonParser.objectStringFields(json, METADATA_FIELD, setOf(TITLE_FIELD))[TITLE_FIELD]
+        val messagesFile = fields[MESSAGES_PATH_FIELD]?.takeIf { it.isNotBlank() }?.let { runCatching { sessionFile.resolveSibling(it) }.getOrNull() }
+            ?: sessionFile.resolveSibling("${sessionFile.nameWithoutExtension}$MESSAGES_FILE_SUFFIX")
+        val statistics = SessionStatisticsAccumulator(agentId)
+        val prompts = userMessages(messagesFile, statistics)
         return RawAgentProject(
             agentId = agentId,
             rawProjectPath = directory,
@@ -94,18 +101,50 @@ class ClineProjectProvider(
             startedAt = startedAt,
             updatedAt = LocalSessionSupport.latest(startedAt, updatedAt, LocalSessionSupport.modifiedAt(sessionFile)),
             sourcePath = sessionFile.toAbsolutePath().normalize().toString(),
-            metadata = title?.takeIf { it.isNotBlank() }?.let { mapOf(TITLE_FIELD to it) }.orEmpty(),
+            metadata = title?.takeIf { it.isNotBlank() }?.let { mapOf(TITLE_FIELD to it) }.orEmpty() +
+                prompts?.metadata().orEmpty(),
+            statistics = statistics.snapshot(),
         )
     }
 
-    private fun ClineSessionRecord.toRawProject(database: Path) = RawAgentProject(
-        agentId = agentId,
-        rawProjectPath = directory,
-        sessionId = id,
-        startedAt = startedAt,
-        updatedAt = LocalSessionSupport.latest(startedAt, updatedAt),
-        sourcePath = database.toAbsolutePath().normalize().toString(),
-    )
+    private fun ClineSessionRecord.toRawProject(database: Path): RawAgentProject {
+        val statistics = SessionStatisticsAccumulator(agentId)
+        val prompts = messagesPath?.let { runCatching { Path.of(it) }.getOrNull() }?.let { userMessages(it, statistics) }
+        return RawAgentProject(
+            agentId = agentId,
+            rawProjectPath = directory,
+            sessionId = id,
+            startedAt = startedAt,
+            updatedAt = LocalSessionSupport.latest(startedAt, updatedAt),
+            sourcePath = database.toAbsolutePath().normalize().toString(),
+            metadata = title?.takeIf { it.isNotBlank() }?.let { mapOf(TITLE_FIELD to it) }.orEmpty() +
+                prompts?.metadata().orEmpty(),
+            statistics = statistics.snapshot(),
+        )
+    }
+
+    /**
+     * `<session>.messages.json` holds `{"messages":[{"role":"user","content":[{"type":"text",...}]}]}`;
+     * user-role messages that only carry tool results were not typed by the user.
+     */
+    private fun userMessages(messagesFile: Path, statistics: SessionStatisticsAccumulator): UserMessageTally? {
+        if (!Files.isRegularFile(messagesFile, LinkOption.NOFOLLOW_LINKS)) return null
+        val json = runCatching { LocalSessionSupport.readBoundedText(messagesFile, MAX_MESSAGES_CHARACTERS) }
+            .getOrNull() ?: return null
+        val messages = MetadataJsonParser.rawTopLevelField(json, MESSAGES_FIELD)
+            ?.let(MetadataJsonParser::arrayElements) ?: return null
+        return UserMessageTally().apply {
+            messages.forEach { message ->
+                statistics.record(message)
+                if (MetadataJsonParser.topLevelStringFields(message, setOf(ROLE_FIELD))[ROLE_FIELD] != USER_ROLE) return@forEach
+                val content = MetadataJsonParser.rawTopLevelField(message, CONTENT_FIELD)
+                if (MessageContentExtractor.hasBlockOfType(content, TOOL_RESULT_TYPES)) return@forEach
+                val text = MessageContentExtractor.text(content)
+                add(text)
+                statistics.userPrompt(text)
+            }
+        }
+    }
 
     companion object {
         private const val AGENT_ID = "cline"
@@ -123,6 +162,14 @@ class ClineProjectProvider(
         private const val ENDED_AT_FIELD = "ended_at"
         private const val METADATA_FIELD = "metadata"
         private const val TITLE_FIELD = "title"
+        private const val MESSAGES_PATH_FIELD = "messages_path"
+        private const val MESSAGES_FILE_SUFFIX = ".messages.json"
+        private const val MESSAGES_FIELD = "messages"
+        private const val ROLE_FIELD = "role"
+        private const val USER_ROLE = "user"
+        private const val CONTENT_FIELD = "content"
+        private const val MAX_MESSAGES_CHARACTERS = 16 * 1024 * 1024
+        private val TOOL_RESULT_TYPES = setOf("tool_result")
         private val DATABASE_PATHS = listOf(Path.of("db", "sessions.db"), Path.of("sessions", "sessions.db"))
         private val STRING_FIELDS = setOf(
             SESSION_ID_FIELD,
@@ -132,15 +179,12 @@ class ClineProjectProvider(
             STARTED_AT_FIELD,
             UPDATED_AT_FIELD,
             ENDED_AT_FIELD,
+            MESSAGES_PATH_FIELD,
         )
         private val TIME_FIELDS = setOf(STARTED_AT_FIELD, UPDATED_AT_FIELD, ENDED_AT_FIELD)
         private val LOG = Logger.getLogger(ClineProjectProvider::class.java.name)
 
-        private fun defaultDataDirectory(): Path {
-            val configured = System.getenv("CLINE_DATA_DIR")?.trim()?.takeIf { it.isNotEmpty() }
-            return configured?.let { runCatching { Path.of(it) }.getOrNull() }
-                ?: Path.of(System.getProperty("user.home"), ".cline", "data")
-        }
+        private fun defaultDataDirectory(): Path = EnvHomeDirectorySupport.resolve("CLINE_DATA_DIR", ".cline/data")
     }
 }
 
@@ -171,7 +215,7 @@ class ClineSqliteReader(
     private fun parseRow(line: String): ClineSessionRecord? {
         if (line.isBlank()) return null
         val columns = line.split('\t')
-        if (columns.size != EXPECTED_COLUMN_COUNT) return null
+        if (columns.size !in EXPECTED_COLUMN_COUNTS) return null
         val id = decodeHex(columns[0])?.takeIf { it.isNotBlank() } ?: return null
         val directory = decodeHex(columns[1])?.takeIf { it.isNotBlank() } ?: return null
         return ClineSessionRecord(
@@ -179,6 +223,8 @@ class ClineSqliteReader(
             directory = directory,
             startedAt = LocalSessionSupport.parseTimestamp(decodeHex(columns[2])),
             updatedAt = LocalSessionSupport.parseTimestamp(decodeHex(columns[3])),
+            messagesPath = columns.getOrNull(4)?.let(::decodeHex)?.takeIf { it.isNotBlank() },
+            title = columns.getOrNull(5)?.let(::decodeHex)?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -193,8 +239,20 @@ class ClineSqliteReader(
 
     companion object {
         private const val DEFAULT_TIMEOUT_MILLIS = 10_000L
-        private const val EXPECTED_COLUMN_COUNT = 4
+        private val EXPECTED_COLUMN_COUNTS = setOf(4, 5, 6)
         private val SESSION_QUERIES = listOf(
+            "SELECT hex(session_id), hex(COALESCE(NULLIF(workspace_root, ''), cwd)), " +
+                "hex(started_at), hex(COALESCE(NULLIF(updated_at, ''), ended_at, started_at)), " +
+                "hex(COALESCE(messages_path, '')), " +
+                "hex(CASE WHEN json_valid(metadata_json) THEN COALESCE(json_extract(metadata_json, '$.title'), '') ELSE '' END) " +
+                "FROM sessions WHERE COALESCE(is_subagent, 0) = 0 " +
+                "ORDER BY COALESCE(NULLIF(updated_at, ''), ended_at, started_at) DESC LIMIT 20000;",
+            "SELECT hex(session_id), hex(COALESCE(NULLIF(workspace_root, ''), cwd)), " +
+                "hex(started_at), hex(COALESCE(NULLIF(updated_at, ''), ended_at, started_at)), " +
+                "hex(COALESCE(messages_path, '')) " +
+                "FROM sessions WHERE COALESCE(is_subagent, 0) = 0 " +
+                "ORDER BY COALESCE(NULLIF(updated_at, ''), ended_at, started_at) DESC LIMIT 20000;",
+            // Same without messages_path, for databases that predate that column.
             "SELECT hex(session_id), hex(COALESCE(NULLIF(workspace_root, ''), cwd)), " +
                 "hex(started_at), hex(COALESCE(NULLIF(updated_at, ''), ended_at, started_at)) " +
                 "FROM sessions WHERE COALESCE(is_subagent, 0) = 0 " +

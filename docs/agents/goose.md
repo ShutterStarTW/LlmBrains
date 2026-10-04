@@ -8,6 +8,9 @@ curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download
 
 # update to latest version
 goose update
+
+# Uninstall (Homebrew or local binary)
+brew uninstall block-goose-cli 2>/dev/null || rm -f ~/.local/bin/goose
 ```
 
 > via [goose-docs.ai](https://goose-docs.ai) &middot; [github.com/aaif-goose/goose](https://github.com/aaif-goose/goose)

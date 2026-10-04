@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.CursorLocalPlugin
 import com.shutterstar.agenthub.environment.discovery.CursorPluginDiscoverySupport
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
@@ -45,7 +46,7 @@ class CursorMcpProvider(
 
     private fun discoverPluginServers(): List<RawMcpServer> {
         val servers = mutableListOf<RawMcpServer>()
-        val componentBudget = ComponentBudget(MAXIMUM_PLUGIN_COMPONENTS)
+        val componentBudget = ScanBudget(MAXIMUM_PLUGIN_COMPONENTS)
         for (plugin in CursorPluginDiscoverySupport.discover(homeDirectory)) {
             for (server in pluginServers(plugin, componentBudget)) {
                 if (servers.size >= MAXIMUM_PLUGIN_MCP_SERVERS) return servers
@@ -58,7 +59,7 @@ class CursorMcpProvider(
 
     private fun pluginServers(
         plugin: CursorLocalPlugin,
-        componentBudget: ComponentBudget,
+        componentBudget: ScanBudget,
     ): Sequence<RawMcpServer> {
         if (!plugin.cursorPlugin) {
             if (!componentBudget.consume()) return emptySequence()
@@ -124,17 +125,5 @@ class CursorMcpProvider(
         const val MAXIMUM_PLUGIN_COMPONENTS = 512
         const val MAXIMUM_PLUGIN_MCP_SERVERS = 1_024
         val LOG: Logger = Logger.getLogger(CursorMcpProvider::class.java.name)
-    }
-
-    private class ComponentBudget(
-        private var remaining: Int,
-    ) {
-        fun hasRemaining(): Boolean = remaining > 0
-
-        fun consume(): Boolean {
-            if (remaining <= 0) return false
-            remaining--
-            return true
-        }
     }
 }

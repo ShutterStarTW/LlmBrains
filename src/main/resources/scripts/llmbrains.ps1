@@ -93,6 +93,12 @@ function Invoke-Update {
                 Write-Host ""
                 return 2
             } else {
+                # npm update leaves opencode-ai's placeholder opencode.exe behind; re-run its postinstall
+                # (mirrors CodingAgent.postUpdateHintWindows for the opencode agent).
+                if ($UpdateCommand -match "opencode-ai") {
+                    $postinstall = Join-Path (cmd /c "npm root -g 2>nul").Trim() "opencode-ai\postinstall.mjs"
+                    if (Test-Path $postinstall) { node $postinstall 2>&1 | Out-Null }
+                }
                 Write-Host ("  [+] {0,-20} " -f $Name) -NoNewline
                 Write-Host "updated" -ForegroundColor Green
                 Write-Host ""

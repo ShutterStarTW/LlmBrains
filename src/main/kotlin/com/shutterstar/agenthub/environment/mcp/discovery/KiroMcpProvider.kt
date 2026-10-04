@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
@@ -9,10 +10,11 @@ class KiroMcpProvider(
     private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
 ) : McpProvider {
     override val agentId: String = "kiro"
+    private val kiroDirectory = EnvHomeDirectorySupport.resolveGuarded("KIRO_HOME", homeDirectory, ".kiro")
 
     override fun discoverGlobal(): List<RawMcpServer> = JsonSettingsMcpSupport.discover(
         agentId,
-        homeDirectory.resolve(".kiro/settings/mcp.json"),
+        kiroDirectory.resolve("settings/mcp.json"),
         McpScope.GLOBAL,
     )
 

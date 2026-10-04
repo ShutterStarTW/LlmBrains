@@ -8,4 +8,8 @@ data class SkillSource(
     val fingerprint: String,
     val displayTitle: String? = null,
     val projectName: String? = null,
+    /** Vendor-shipped or account-synced rather than something the user created or shared themselves. */
+    val system: Boolean = false,
+    /** Resolved during discovery so the UI can collapse aliases without filesystem access on the EDT. */
+    val realPath: String? = null,
 )

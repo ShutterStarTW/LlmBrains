@@ -4,15 +4,35 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 
 fun main(arguments: Array<String>) {
     if (arguments.any { it == "--help" || it == "-h" }) {
-        println("Usage: project-discovery-smoke [--show-paths]")
+        println("Usage: project-discovery-smoke [--show-paths] [--statistics] [--session-id=<Claude ID>]")
         return
     }
 
     val showPaths = arguments.any { it == "--show-paths" }
+    val sessionId = arguments.firstOrNull { it.startsWith("--session-id=") }?.substringAfter('=')
+    if (sessionId != null) {
+        // Explicit diagnostic mode: native transcript only, without any tracker dependency.
+        val session = ClaudeProjectProvider().discover().firstOrNull { it.sessionId == sessionId }
+        println("Native Claude session: ${session?.sessionId ?: "not found"}")
+        session?.let {
+            println("Title: ${safe(it.metadata["title"].orEmpty())}")
+            println("Prompts: ${it.metadata["messageCount"] ?: "unknown"}")
+            it.statistics.forEach { (key, value) -> println("$key=${safe(value)}") }
+        }
+        return
+    }
     val availableProviders = AgentProjectProviders.all
         .filter { provider -> runCatching { provider.isAvailable() }.getOrDefault(false) }
         .map { it.agentId }
     val result = ProjectDiscoveryService().discover()
+    if ("--statistics" in arguments) {
+        result.projects.flatMap { it.agents }.flatMap { it.sessions }.groupBy { it.agentId }.toSortedMap().forEach { (agent, sessions) ->
+            val fields = sessions.flatMap { it.statistics.keys }.toSortedSet()
+            println("$agent: sessions=${sessions.size}, measured=${sessions.count { it.statistics.isNotEmpty() }}, fields=${fields.joinToString()}")
+        }
+        result.warnings.forEach { println("${it.agentId}: ${safe(it.message)}") }
+        return
+    }
     val sessionCount = result.projects.sumOf { project -> project.agents.sumOf { it.sessionCount } }
     val sessionsByAgent = result.projects
         .flatMap { it.agents }

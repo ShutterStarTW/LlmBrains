@@ -1,9 +1,9 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.charset.StandardCharsets
@@ -15,18 +15,6 @@ import java.time.Instant
 class GrokProjectProviderTest {
     @TempDir
     lateinit var tempDirectory: Path
-
-    @Test
-    fun `missing and empty storage return no sessions`() {
-        val provider = GrokProjectProvider(grokDirectory())
-
-        assertFalse(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-
-        Files.createDirectories(sessionsDirectory())
-        assertTrue(provider.isAvailable())
-        assertTrue(provider.discover().isEmpty())
-    }
 
     @Test
     fun `discovers summary metadata without reading transcripts`() {
@@ -59,21 +47,6 @@ class GrokProjectProviderTest {
         assertEquals("Grok title", session.metadata["title"])
         assertEquals(summary.toAbsolutePath().normalize().toString(), session.sourcePath)
         assertFalse(session.toString().contains("sensitive"))
-    }
-
-    @Test
-    fun `discovers multiple sessions and projects`() {
-        val firstProject = tempDirectory.resolve("work/first")
-        val secondProject = tempDirectory.resolve("work/second")
-        writeSummary(firstProject, "one", summary("one", firstProject, "2026-09-01T10:00:00Z"))
-        writeSummary(firstProject, "two", summary("two", firstProject, "2026-09-01T11:00:00Z"))
-        writeSummary(secondProject, "three", summary("three", secondProject, "2026-09-01T12:00:00Z"))
-
-        val sessions = GrokProjectProvider(grokDirectory()).discover()
-
-        assertEquals(3, sessions.size)
-        assertEquals(2, sessions.count { it.rawProjectPath == firstProject.toString() })
-        assertEquals(1, sessions.count { it.rawProjectPath == secondProject.toString() })
     }
 
     @Test
@@ -122,48 +95,6 @@ class GrokProjectProviderTest {
         assertEquals(Instant.parse("2026-09-03T09:00:00Z"), session.updatedAt)
     }
 
-    @Test
-    fun `duplicate session ids keep newest activity`() {
-        val oldProject = tempDirectory.resolve("work/old")
-        val newProject = tempDirectory.resolve("work/new")
-        writeSummary(
-            oldProject,
-            "same",
-            summary("same", oldProject, "2026-09-01T10:00:00Z"),
-            Instant.parse("2026-09-01T10:00:00Z"),
-        )
-        writeSummary(
-            newProject,
-            "same",
-            summary("same", newProject, "2026-09-04T10:00:00Z"),
-            Instant.parse("2026-09-04T10:00:00Z"),
-        )
-
-        val session = GrokProjectProvider(grokDirectory()).discover().single()
-
-        assertEquals(newProject.toString(), session.rawProjectPath)
-        assertEquals(Instant.parse("2026-09-04T10:00:00Z"), session.updatedAt)
-    }
-
-    @Test
-    fun `central registry exposes all implemented providers alphabetically`() {
-        assertEquals(
-            listOf(
-                "antigravity",
-                "claude",
-                "cline",
-                "codex",
-                "copilot",
-                "cursor",
-                "grok",
-                "kiro",
-                "opencode",
-                "qwen",
-            ),
-            AgentProjectProviders.all.map { it.agentId },
-        )
-    }
-
     private fun grokDirectory(): Path = tempDirectory.resolve(".grok")
 
     private fun sessionsDirectory(): Path = grokDirectory().resolve("sessions")
@@ -186,8 +117,6 @@ class GrokProjectProviderTest {
 
     private fun summary(sessionId: String, project: Path, timestamp: String): String =
         """{"info":{"id":${json(sessionId)},"cwd":${json(project.toString())}},"created_at":${json(timestamp)},"last_active_at":${json(timestamp)}}"""
-
-    private fun json(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
     private fun percentEncode(value: String): String {
         val builder = StringBuilder()

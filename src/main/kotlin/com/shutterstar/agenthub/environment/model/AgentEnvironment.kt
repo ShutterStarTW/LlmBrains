@@ -1,5 +1,7 @@
 package com.shutterstar.agenthub.environment.model
 
+import com.shutterstar.agenthub.environment.config.model.AgentConfigSource
+
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.mcp.model.McpServer
 import com.shutterstar.agenthub.environment.skills.model.AgentSkill
@@ -10,4 +12,5 @@ data class AgentEnvironment(
     val mcpServers: List<McpServer>,
     val instructions: List<InstructionSource>,
     val warnings: List<EnvironmentWarning> = emptyList(),
+    val configs: List<AgentConfigSource> = emptyList(),
 )

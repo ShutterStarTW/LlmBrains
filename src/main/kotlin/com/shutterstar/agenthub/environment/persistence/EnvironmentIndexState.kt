@@ -16,6 +16,7 @@ data class EnvironmentIndexProjectState(
     var skills: MutableList<EnvironmentIndexSkillState> = mutableListOf(),
     var mcpServers: MutableList<EnvironmentIndexMcpServerState> = mutableListOf(),
     var instructions: MutableList<EnvironmentIndexInstructionState> = mutableListOf(),
+    var configs: MutableList<EnvironmentIndexConfigState> = mutableListOf(),
     var warnings: MutableList<EnvironmentIndexWarningState> = mutableListOf(),
 )
 
@@ -69,4 +70,23 @@ data class EnvironmentIndexWarningState(
     var agentId: String? = null,
     var scope: String = "",
     var message: String = "",
+)
+
+/** No raw settings, hook commands or connection values are persisted. */
+data class EnvironmentIndexConfigState(
+    var agentId: String = "",
+    var path: String = "",
+    var scope: String = "",
+    var kind: String = "",
+    var format: String = "",
+    var exists: Boolean = true,
+    var sizeBytes: Long = 0,
+    var modifiedAtEpochMillis: Long = 0,
+    var projectName: String? = null,
+    var highlights: MutableList<EnvironmentIndexConfigHighlightState> = mutableListOf(),
+)
+
+data class EnvironmentIndexConfigHighlightState(
+    var key: String = "",
+    var value: String = "",
 )

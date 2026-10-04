@@ -1,5 +1,6 @@
 param(
-    [string]$IdeaPath = "$env:LOCALAPPDATA\Programs\IntelliJ IDEA Ultimate"
+    [string]$IdeaPath = "$env:LOCALAPPDATA\Programs\IntelliJ IDEA Ultimate",
+    [string]$ScreenshotDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,14 +35,29 @@ try {
         "util.jar"
         "util-8.jar"
         "util_rt.jar"
+        # Needed once any tested code loads a bundled SVG icon via IconLoader.getIcon (e.g. a
+        # skill row icon) - without both, IconLoader's SVG path throws either
+        # NoClassDefFoundError: com/intellij/util/lang/UrlClassLoader (missing platform-loader.jar)
+        # or NoClassDefFoundError on com.github.weisj.jsvg... (missing intellij.libraries.jsvg.jar,
+        # the actual SVG rasterizer) - the latter has shown up intermittently, most likely
+        # depending on AWT layout timing for whether an icon's size is queried during the test.
+        "platform-loader.jar"
+        "intellij.libraries.jsvg.jar"
         "intellij.platform.core.jar"
         "intellij.platform.projectModel.jar"
         "intellij.platform.ide.jar"
         "intellij.platform.util.ui.jar"
+        "intellij.platform.editor.ui.jar"
+        "intellij.platform.core.ui.jar"
+        "intellij.libraries.caffeine.jar"
         "intellij.libraries.fastutil.jar"
         "intellij.libraries.kotlinx.coroutines.core.jar"
         "intellij.libraries.aalto.xml.jar"
     ) | ForEach-Object { Join-Path $ideaLib $_ }
+
+    # Full Swing panels expose types from several SDK modules through inherited methods.
+    # Use the installed platform module set so reflective AWT inspection can resolve them.
+    $platformJars = @($platformJars + @(Get-ChildItem -LiteralPath $ideaLib -Filter 'intellij.platform*.jar' | ForEach-Object FullName) | Select-Object -Unique)
 
     $classpathEntries = @(
         $testOut
@@ -57,7 +73,14 @@ try {
     }
 
     $classpath = $classpathEntries -join ";"
-    & $ideaJava '-Djava.awt.headless=false' -jar $standalone execute `
+    $javaOptions = @('-Djava.awt.headless=false', '-Dagenthub.test.mode=true')
+    if ($ScreenshotDir) {
+        New-Item -ItemType Directory -Force -Path $ScreenshotDir | Out-Null
+        $resolvedScreenshotDir = (Resolve-Path -LiteralPath $ScreenshotDir).Path
+        $javaOptions += "-Dagenthub.ui.screenshot.dir=$resolvedScreenshotDir"
+    }
+    & $ideaJava @javaOptions '--add-opens=java.desktop/javax.swing=ALL-UNNAMED' `
+        '--add-opens=java.desktop/javax.swing.plaf.basic=ALL-UNNAMED' -jar $standalone execute `
         --class-path $classpath `
         --scan-class-path=$testOut `
         --details=summary `

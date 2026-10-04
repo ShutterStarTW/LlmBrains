@@ -24,7 +24,7 @@ pip uninstall -y sweagent
 
 ## Usage
 
-SWE-agent is a research-grade autonomous software engineering agent that can resolve GitHub issues, write tests, and fix bugs across entire codebases.
+SWE-agent is a research project: an autonomous software engineering agent that resolves GitHub issues, writes tests and fixes bugs.
 
 ```
 Usage: sweagent [options] [command]
@@ -45,6 +45,6 @@ Options:
 - Resolves real GitHub issues autonomously
 - Integrates with SWE-bench benchmark
 - Supports multiple LLM backends
-- Agent-Computer Interface (ACI) for robust tool use
+- Agent-Computer Interface (ACI) for tool use
 - Configurable agent strategies and scaffolding
 - Batch processing for multiple issues

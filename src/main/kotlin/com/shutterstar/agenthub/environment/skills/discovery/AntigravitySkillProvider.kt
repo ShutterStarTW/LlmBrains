@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.AntigravityHomeSupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -27,8 +28,21 @@ class AntigravitySkillProvider(
                 budget = budget,
             )
         }
+        // Antigravity's own vendor-shipped skill pack, distinct from the compatibility roots above.
+        val builtinSkills = globalBuiltinRoots().flatMap { root ->
+            scanner.discover(
+                root = root,
+                agentId = agentId,
+                scope = SkillScope.GLOBAL,
+                shared = false,
+                projectName = null,
+                requireValidMetadata = false,
+                system = true,
+                budget = budget,
+            )
+        }
         val pluginSkills = discoverPluginSkills(globalPluginRoots(), SkillScope.GLOBAL, projectName = null, budget = budget)
-        return (directSkills + pluginSkills).distinctBy { it.path }
+        return (directSkills + builtinSkills + pluginSkills).distinctBy { it.path }
     }
 
     override fun discoverProject(project: DiscoveredProject): List<SkillSourceRecord> {
@@ -69,7 +83,7 @@ class AntigravitySkillProvider(
         pluginDirs: List<Path>,
         scope: SkillScope,
         projectName: String?,
-        budget: SkillDirectoryScanner.ScanBudget,
+        budget: ScanBudget,
     ): List<SkillSourceRecord> =
         AntigravityHomeSupport.forEachPluginDirectory(pluginDirs, MAX_PLUGIN_ENTRIES) { pluginDir ->
             val skillDir = pluginDir.resolve(SKILLS_DIRECTORY)
@@ -95,9 +109,15 @@ class AntigravitySkillProvider(
             gemini.resolve(CLI_DIRECTORY).resolve(SKILLS_DIRECTORY),
             gemini.resolve(SKILLS_DIRECTORY),
             gemini.resolve(ANTIGRAVITY_DIRECTORY).resolve(SKILLS_DIRECTORY),
+            AntigravityHomeSupport.configuredHome()?.resolve(SKILLS_DIRECTORY),
+        ).distinct()
+    }
+
+    private fun globalBuiltinRoots(): List<Path> {
+        val gemini = homeDirectory.resolve(GEMINI_DIRECTORY)
+        return listOfNotNull(
             gemini.resolve(CLI_DIRECTORY).resolve(BUILTIN_DIRECTORY).resolve(SKILLS_DIRECTORY),
             gemini.resolve(ANTIGRAVITY_DIRECTORY).resolve(BUILTIN_DIRECTORY).resolve(SKILLS_DIRECTORY),
-            AntigravityHomeSupport.configuredHome()?.resolve(SKILLS_DIRECTORY),
             AntigravityHomeSupport.configuredHome()?.resolve(BUILTIN_DIRECTORY)?.resolve(SKILLS_DIRECTORY),
         ).distinct()
     }

@@ -24,7 +24,7 @@ pip uninstall -y mistral-vibe
 
 ## Usage
 
-Mistral Vibe is Mistral AI's CLI coding agent powered by their latest code models, designed for autonomous software development tasks.
+Mistral Vibe is Mistral AI's CLI coding agent for autonomous software development tasks.
 
 ```
 Usage: vibe [options] [prompt]
@@ -38,7 +38,6 @@ Options:
 
 ## Features
 
-- Powered by Mistral's state-of-the-art code models
+- Runs on Mistral's code models
 - Autonomous coding, debugging, and refactoring
-- Strong performance on European and multilingual codebases
 - Privacy-focused: EU-hosted inference available

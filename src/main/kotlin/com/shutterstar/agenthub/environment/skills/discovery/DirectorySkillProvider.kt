@@ -10,12 +10,13 @@ abstract class DirectorySkillProvider internal constructor(
     private val userHome: Path,
     private val relativeSkillDirectory: Path,
     private val shared: Boolean,
+    private val globalSkillDirectory: Path? = null,
 ) : SkillProvider {
     private val scanner = SkillDirectoryScanner()
 
     override fun discoverGlobal(): List<SkillSourceRecord> =
         scanner.discover(
-            root = userHome.resolve(relativeSkillDirectory),
+            root = resolveGlobalDirectory(),
             agentId = agentId,
             scope = SkillScope.GLOBAL,
             shared = shared,
@@ -23,14 +24,20 @@ abstract class DirectorySkillProvider internal constructor(
         )
 
     override fun discoverProject(project: DiscoveredProject): List<SkillSourceRecord> {
-        val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()
-
+        val projectRoot = resolveProjectDirectory(project) ?: return emptyList()
         return scanner.discover(
-            root = projectRoot.resolve(relativeSkillDirectory),
+            root = projectRoot,
             agentId = agentId,
             scope = SkillScope.PROJECT,
             shared = shared,
             projectName = project.name,
         )
+    }
+
+    internal fun resolveGlobalDirectory(): Path = globalSkillDirectory ?: userHome.resolve(relativeSkillDirectory)
+
+    internal fun resolveProjectDirectory(project: DiscoveredProject): Path? {
+        val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return null
+        return projectRoot.resolve(relativeSkillDirectory)
     }
 }

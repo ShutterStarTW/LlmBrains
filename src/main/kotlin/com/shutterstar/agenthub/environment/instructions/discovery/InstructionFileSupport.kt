@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.environment.discovery.PROJECT_WALK_EXCLUDED_DIRECTORY_NAMES
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
@@ -37,7 +38,7 @@ internal object InstructionFileSupport {
 
     fun scan(
         root: Path,
-        budget: ScanBudget = ScanBudget(),
+        budget: ScanBudget = newBudget(),
         matcher: (root: Path, file: Path) -> Boolean,
     ): List<Path> {
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return emptyList()
@@ -98,13 +99,5 @@ internal object InstructionFileSupport {
     private const val MAXIMUM_DEPTH = 12
     private const val MAXIMUM_ENTRIES = 20_000
 
-    class ScanBudget(
-        private var remaining: Int = MAXIMUM_ENTRIES,
-    ) {
-        fun consume(): Boolean {
-            if (remaining <= 0) return false
-            remaining--
-            return true
-        }
-    }
+    fun newBudget(): ScanBudget = ScanBudget(MAXIMUM_ENTRIES)
 }

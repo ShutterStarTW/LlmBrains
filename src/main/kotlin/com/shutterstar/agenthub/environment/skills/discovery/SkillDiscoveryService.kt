@@ -1,8 +1,7 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
 import com.shutterstar.agenthub.environment.capabilities.AgentCapabilityRegistry
-import com.shutterstar.agenthub.environment.discovery.ProviderDiscoverySupport
-import com.shutterstar.agenthub.environment.model.EnvironmentWarning
+import com.shutterstar.agenthub.environment.discovery.ProviderBackedDiscovery
 import com.shutterstar.agenthub.environment.skills.model.AgentSkill
 import com.shutterstar.agenthub.environment.skills.model.SkillConsistency
 import com.shutterstar.agenthub.environment.skills.model.SkillIdentity
@@ -10,12 +9,12 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.environment.skills.model.SkillSource
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.charset.StandardCharsets
+import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.Locale
-import java.util.logging.Logger
 
 class SkillDiscoveryService(
-    private val providers: List<SkillProvider> = listOf(
+    providers: List<SkillProvider> = listOf(
         SharedSkillProvider(),
         AntigravitySkillProvider(),
         ClaudeSkillProvider(),
@@ -28,6 +27,10 @@ class SkillDiscoveryService(
         OpenCodeSkillProvider(),
         QwenSkillProvider(),
     ),
+    /** Only installed agents are discovered; the shared `.agents/skills` root needs one compatible installed agent. */
+    private val isAgentVisible: (String) -> Boolean = { true },
+) : ProviderBackedDiscovery<SkillProvider, SkillSourceRecord>(
+    providers, isAgentVisible, "skill", "SkillDiscovery", SkillProvider::agentId, "shared",
 ) {
     fun discoverGlobal(): List<AgentSkill> = normalize(discoverGlobalRecords())
 
@@ -36,33 +39,14 @@ class SkillDiscoveryService(
     fun discover(project: DiscoveredProject): List<AgentSkill> =
         normalize(discoverGlobalRecords() + discoverProjectRecords(project))
 
-    fun discoverGlobalRecords(): List<SkillSourceRecord> = discoverGlobalRecordsWithWarnings().first
+    override fun discoverGlobalFrom(provider: SkillProvider) = provider.discoverGlobal()
 
-    fun discoverProjectRecords(project: DiscoveredProject): List<SkillSourceRecord> =
-        discoverProjectRecordsWithWarnings(project).first
+    override fun discoverProjectFrom(provider: SkillProvider, project: DiscoveredProject) =
+        provider.discoverProject(project)
 
-    fun discoverGlobalRecordsWithWarnings(): Pair<List<SkillSourceRecord>, List<EnvironmentWarning>> =
-        collect("global") { it.discoverGlobal() }
-
-    fun discoverProjectRecordsWithWarnings(
-        project: DiscoveredProject,
-    ): Pair<List<SkillSourceRecord>, List<EnvironmentWarning>> = collect("project") { it.discoverProject(project) }
-
-    private fun collect(
-        scope: String,
-        discover: (SkillProvider) -> List<SkillSourceRecord>,
-    ): Pair<List<SkillSourceRecord>, List<EnvironmentWarning>> = ProviderDiscoverySupport.collect(
-        providers = providers,
-        capability = "skill",
-        scope = scope,
-        agentId = SkillProvider::agentId,
-        logFailure = ::logFailure,
-        discover = discover,
-    )
-
-    private fun logFailure(agentId: String?, scope: String, errorType: String) {
-        LOG.warning("[SkillDiscovery] ${agentId ?: "shared"} $scope discovery failed: $errorType")
-    }
+    override fun isVisible(provider: SkillProvider): Boolean =
+        provider.agentId?.let(isAgentVisible)
+            ?: AgentCapabilityRegistry.agentIdsSupportingSharedSkills().any(isAgentVisible)
 
     fun normalize(records: List<SkillSourceRecord>): List<AgentSkill> =
         records
@@ -85,9 +69,12 @@ class SkillDiscoveryService(
                     .thenBy { it.agentId.orEmpty() }
                     .thenBy { it.path.lowercase(Locale.ROOT) },
             )
+        // Several agents scan the same compatibility folder, but only its owner knows it is vendor-synced
+        // (e.g. ~/.claude/skills/synced): the folder is a system one for every agent that lists it.
+        val systemPaths = sortedRecords.filter(SkillSourceRecord::system).mapTo(hashSetOf()) { it.path }
         val compatibleAgents = sortedRecords.flatMapTo(linkedSetOf()) { record ->
             if (record.shared) {
-                AgentCapabilityRegistry.agentIdsSupportingSharedSkills()
+                AgentCapabilityRegistry.agentIdsSupportingSharedSkills().filter(isAgentVisible)
             } else {
                 setOfNotNull(record.agentId)
             }
@@ -112,6 +99,12 @@ class SkillDiscoveryService(
                     fingerprint = record.fingerprint,
                     displayTitle = record.displayTitle,
                     projectName = record.projectName,
+                    system = record.system || record.path in systemPaths,
+                    realPath = if (sortedRecords.size > 1) {
+                        runCatching { Path.of(record.path).toRealPath().toString() }.getOrNull()
+                    } else {
+                        null
+                    },
                 )
             },
             compatibleAgents = compatibleAgents,
@@ -134,8 +127,4 @@ class SkillDiscoveryService(
         val normalizedName: String,
         val scope: SkillScope,
     )
-
-    companion object {
-        private val LOG = Logger.getLogger(SkillDiscoveryService::class.java.name)
-    }
 }

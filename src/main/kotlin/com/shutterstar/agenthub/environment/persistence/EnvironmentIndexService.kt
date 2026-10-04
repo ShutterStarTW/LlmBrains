@@ -1,29 +1,31 @@
 package com.shutterstar.agenthub.environment.persistence
 
-import com.intellij.openapi.components.PersistentStateComponent
+import com.shutterstar.agenthub.storage.AgentHubStorage
+import com.shutterstar.agenthub.storage.StateStore
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.State
-import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.shutterstar.agenthub.environment.model.ProjectEnvironment
 import java.time.Instant
 
 @Service(Service.Level.APP)
-@State(name = "AgentHubEnvironmentIndex", storages = [Storage("AgentHubEnvironmentIndex.xml")])
 class EnvironmentIndexService(
     private val now: () -> Instant = Instant::now,
-) : PersistentStateComponent<EnvironmentIndexState> {
-    @Volatile
-    private var state = EnvironmentIndexState()
+    private val store: StateStore<EnvironmentIndexState> = AgentHubStorage.cache("environment", EnvironmentIndexState::class.java, ::EnvironmentIndexState),
+) {
+    private var storedState: EnvironmentIndexState
+        get() = store.snapshot()
+        set(value) { store.update { value } }
 
-    override fun getState(): EnvironmentIndexState = state
+    val state: EnvironmentIndexState get() = storedState
 
-    override fun loadState(state: EnvironmentIndexState) {
-        this.state = state
+    fun loadState(state: EnvironmentIndexState) {
+        this.storedState = state
     }
 
     fun cachedEnvironment(projectId: String): ProjectEnvironment? =
-        EnvironmentIndexStateMapper.decode(state)[projectId]
+        EnvironmentIndexStateMapper.decode(storedState)[projectId]
+
+    fun cachedEnvironments(): Map<String, ProjectEnvironment> = EnvironmentIndexStateMapper.decode(storedState)
 
     @Synchronized
     fun record(
@@ -31,19 +33,23 @@ class EnvironmentIndexService(
         environment: ProjectEnvironment,
     ) {
         val updated = EnvironmentIndexStateMapper.encodeProject(projectId, environment, now())
-        val projects = state.projects
-            .filterNot { it.projectId == projectId }
-            .plus(updated)
-            .sortedByDescending { it.refreshedAtEpochMillis }
-            .take(MAX_PERSISTED_PROJECTS)
-            .toMutableList()
-        state = EnvironmentIndexState(projects = projects)
+        store.update { previous ->
+            val projects = previous.projects
+                .filterNot { it.projectId == projectId }
+                .plus(updated)
+                .sortedByDescending { it.refreshedAtEpochMillis }
+                .take(MAX_PERSISTED_PROJECTS)
+                .toMutableList()
+            EnvironmentIndexState(projects = projects)
+        }
     }
 
     @Synchronized
     fun clear() {
-        state = EnvironmentIndexState()
+        storedState = EnvironmentIndexState()
     }
+
+    fun storageStamp(): String = store.stamp()
 
     companion object {
         private const val MAX_PERSISTED_PROJECTS = 256

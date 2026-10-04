@@ -1,5 +1,12 @@
 package com.shutterstar.agenthub.environment.persistence
 
+import com.shutterstar.agenthub.environment.config.discovery.ConfigHighlightReader
+import com.shutterstar.agenthub.environment.config.model.AgentConfigSource
+import com.shutterstar.agenthub.environment.config.model.ConfigScope
+import com.shutterstar.agenthub.environment.config.model.ConfigKind
+import com.shutterstar.agenthub.environment.config.model.ConfigFormat
+import com.shutterstar.agenthub.environment.config.model.ConfigHighlight
+
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
@@ -45,8 +52,34 @@ object EnvironmentIndexStateMapper {
         skills = environment.skills.map(::encodeSkill).toMutableList(),
         mcpServers = environment.mcpServers.map(::encodeMcpServer).toMutableList(),
         instructions = environment.instructions.map(::encodeInstruction).toMutableList(),
+        configs = environment.configs.map(::encodeConfig).toMutableList(),
         warnings = environment.warnings.map(::encodeWarning).toMutableList(),
     )
+
+    private fun encodeConfig(source: AgentConfigSource) = EnvironmentIndexConfigState(
+        agentId = source.agentId, path = source.path, scope = source.scope.name,
+        kind = source.kind.name, format = source.format.name, exists = source.exists,
+        sizeBytes = source.sizeBytes, modifiedAtEpochMillis = source.modifiedAtEpochMillis,
+        projectName = source.projectName,
+        highlights = ConfigHighlightReader.sanitize(source.agentId, source.highlights).map {
+            EnvironmentIndexConfigHighlightState(it.key, it.value)
+        }.toMutableList(),
+    )
+
+    private fun decodeConfig(source: EnvironmentIndexConfigState): AgentConfigSource? {
+        if (source.agentId.isBlank() || source.path.isBlank()) return null
+        return AgentConfigSource(
+            agentId = source.agentId, path = source.path,
+            scope = enumOrNull<ConfigScope>(source.scope) ?: return null,
+            kind = enumOrNull<ConfigKind>(source.kind) ?: return null,
+            format = enumOrNull<ConfigFormat>(source.format) ?: return null,
+            exists = source.exists, sizeBytes = source.sizeBytes.coerceAtLeast(0),
+            modifiedAtEpochMillis = source.modifiedAtEpochMillis, projectName = source.projectName,
+            highlights = ConfigHighlightReader.sanitize(source.agentId, source.highlights.map {
+                ConfigHighlight(it.key, "", it.value)
+            }),
+        )
+    }
 
     private fun encodeSkill(skill: AgentSkill) = EnvironmentIndexSkillState(
         identityId = skill.identity.id,
@@ -109,6 +142,7 @@ object EnvironmentIndexStateMapper {
             skills = project.skills.mapNotNull(::decodeSkill),
             mcpServers = project.mcpServers.mapNotNull(::decodeMcpServer),
             instructions = project.instructions.mapNotNull(::decodeInstruction),
+            configs = project.configs.mapNotNull(::decodeConfig),
             warnings = project.warnings.mapNotNull(::decodeWarning),
         )
     }

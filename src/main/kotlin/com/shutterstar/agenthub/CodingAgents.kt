@@ -12,6 +12,19 @@ data class CodingAgent(
     val installHintWindows: String = "",
     /** Windows-specific uninstall command; falls back to [uninstallHint] if blank. */
     val uninstallHintWindows: String = "",
+    /**
+     * PowerShell step appended after [updateHint] on Windows (native mode) when an update is run
+     * from Settings. [updateHint] itself stays a plain `npm update ... <pkg>` command because its
+     * last token is parsed as the package name by the outdated-checks.
+     */
+    val postUpdateHintWindows: String = "",
+    /**
+     * Where the newest published version is looked up (`npm:pkg`, `pypi:pkg`, `github:owner/repo`).
+     * Blank → derived from an npm/pip [updateHint]; agents with neither can't be update-checked.
+     * Needed whenever the [updateHint] isn't a package-manager command, or the agent is commonly
+     * installed some other way (e.g. Claude Code's native installer).
+     */
+    val versionSource: String = "",
     val provider: String = "",
     val url: String,
     val devUrl: String = "",
@@ -24,14 +37,38 @@ data class CodingAgent(
     val faviconKey: String = "",
     /** No native Windows install path (WSL-only or unsupported) → hidden from the UI on Windows. */
     val unsupportedOnWindows: Boolean = false,
+    /**
+     * Optional flags added when the agent is launched interactively (never for detection/version
+     * checks), but only if the installed CLI lists them in `--help` — see [LaunchFlags].
+     */
+    val launchFlags: List<String> = emptyList(),
 ) {
     // In WSL mode the effective platform is Linux: the plain (Unix) hints apply, which also
     // avoids double-wrapping the `wsl bash -c ...` style installHintWindows entries.
     val platformInstallHint: String get() =
-        if (OsDetector.isWindows() && !WslSupport.isActive() && installHintWindows.isNotBlank()) installHintWindows else installHint
+        installCommand(WslSupport.isActive())
+
+    internal fun installCommand(useWsl: Boolean): String =
+        if (OsDetector.isWindows() && !useWsl && installHintWindows.isNotBlank()) installHintWindows else installHint
+
+    val resolvedVersionSource: VersionSource? get() =
+        VersionSource.parse(versionSource) ?: VersionSource.derive(updateHint)
+
+    val platformUpdateHint: String get() =
+        updateCommand(WslSupport.isActive())
+
+    internal fun updateCommand(useWsl: Boolean): String =
+        if (OsDetector.isWindows() && !useWsl && postUpdateHintWindows.isNotBlank() && updateHint.isNotBlank()) {
+            "$updateHint; $postUpdateHintWindows"
+        } else {
+            updateHint
+        }
 
     val platformUninstallHint: String get() =
-        if (OsDetector.isWindows() && !WslSupport.isActive() && uninstallHintWindows.isNotBlank()) uninstallHintWindows else uninstallHint
+        uninstallCommand(WslSupport.isActive())
+
+    internal fun uninstallCommand(useWsl: Boolean): String =
+        if (OsDetector.isWindows() && !useWsl && uninstallHintWindows.isNotBlank()) uninstallHintWindows else uninstallHint
 }
 
 object CodingAgents {
@@ -53,6 +90,9 @@ object CodingAgents {
     /** Agents + companion tools — the full set covered by detection / check / update-all. */
     fun detectable(): List<CodingAgent> = available() + CompanionTools.available()
 
+    /** The built-in agent with [id], or null (companion tools are not agents). */
+    fun byId(id: String): CodingAgent? = all.firstOrNull { it.id == id }
+
     val all: List<CodingAgent> = listOf(
         CodingAgent(
             id = "aider",
@@ -60,6 +100,7 @@ object CodingAgents {
             command = "aider",
             installHint = "pip install aider-install && aider-install",
             updateHint = "uv tool upgrade aider-chat || pipx upgrade aider-chat",
+            versionSource = "pypi:aider-chat",
             uninstallHint = "uv tool uninstall aider-chat || pipx uninstall aider-chat || pip uninstall -y aider-chat; pip uninstall -y aider-install",
             provider = "Aider AI",
             url = "https://aider.chat",
@@ -81,6 +122,7 @@ object CodingAgents {
             command = "agy",
             installHint = "curl -fsSL https://antigravity.google/cli/install.sh | bash",
             updateHint = "agy update",
+            versionSource = "github:google-antigravity/antigravity-cli",
             uninstallHint = "rm -f ~/.local/bin/agy",
             installHintWindows = "irm https://antigravity.google/cli/install.ps1 | iex",
             uninstallHintWindows = "Remove-Item -Recurse -Force \"\$env:LOCALAPPDATA\\agy\" -ErrorAction SilentlyContinue",
@@ -104,7 +146,10 @@ object CodingAgents {
             name = "Claude Code",
             command = "claude",
             installHint = "npm install -g @anthropic-ai/claude-code",
-            updateHint = "npm update --quiet --no-fund -g @anthropic-ai/claude-code",
+            // `claude update` handles both the native installer (the default) and npm-global installs;
+            // the version source is explicit because the hint is no longer an npm command.
+            updateHint = "claude update",
+            versionSource = "npm:@anthropic-ai/claude-code",
             uninstallHint = "npm uninstall -g @anthropic-ai/claude-code",
             provider = "Anthropic",
             url = "https://claude.com/product/claude-code",
@@ -142,6 +187,13 @@ object CodingAgents {
             provider = "OpenAI",
             url = "https://openai.com/codex",
             devUrl = "https://github.com/openai/codex",
+            // The IDE terminal runs inside a host Job Object, so codex >= 0.157 fails to detach its
+            // background app-server ("host Job Object prevents daemon detachment"). --no-alt-screen:
+            // in alt-screen mode the TUI enables mouse tracking and the IDE terminal's mouse reports
+            // leak into the input box as "[MC..." garbage.
+            // Verified 2026-10-02 on 0.160.0: without --no-daemon the IDE terminal flickers (many
+            // console windows open/close), so it is still needed.
+            launchFlags = listOf("--no-daemon", "--no-alt-screen"),
         ),
         CodingAgent(
             id = "cody",
@@ -240,6 +292,7 @@ object CodingAgents {
             command = "forge",
             installHint = "curl -fsSL https://forgecode.dev/cli | sh",
             updateHint = "forge update",
+            versionSource = "github:tailcallhq/forgecode",
             uninstallHint = "rm -f $(which forge) && rm -rf ~/.forge",
             installHintWindows = "wsl bash -c \"curl -fsSL https://forgecode.dev/cli | sh\"",
             uninstallHintWindows = "wsl bash -c \"rm -f `\$(which forge) && rm -rf ~/.forge\"",
@@ -265,6 +318,7 @@ object CodingAgents {
             command = "goose",
             installHint = "curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash",
             updateHint = "goose update",
+            versionSource = "github:aaif-goose/goose",
             uninstallHint = "brew uninstall block-goose-cli 2>/dev/null || rm -f ~/.local/bin/goose",
             // No download_cli.ps1 exists (404); fetch the native Windows CLI zip, extract, and add it to PATH.
             installHintWindows = "Invoke-WebRequest 'https://github.com/aaif-goose/goose/releases/download/stable/goose-x86_64-pc-windows-msvc.zip' -OutFile \"\$env:TEMP\\goose.zip\"; Expand-Archive -Force \"\$env:TEMP\\goose.zip\" \"\$env:LOCALAPPDATA\\goose\"; \$p=[Environment]::GetEnvironmentVariable('Path','User'); if(\$p -notlike '*goose\\goose-package*'){[Environment]::SetEnvironmentVariable('Path',\"\$env:LOCALAPPDATA\\goose\\goose-package;\$p\",'User')}",
@@ -299,9 +353,11 @@ object CodingAgents {
             id = "junie",
             name = "Junie CLI",
             command = "junie",
-            installHint = "npm install -g @jetbrains/junie-cli",
-            updateHint = "npm update --quiet --no-fund -g @jetbrains/junie-cli",
-            uninstallHint = "npm uninstall -g @jetbrains/junie-cli",
+            installHint = "curl -fsSL https://junie.jetbrains.com/install.sh | bash",
+            // Self-updater (stages the build, applied on next launch). The npm package is not what the
+            // native installer/shim installs, and its version scheme (1468.x) differs from `junie --version` (26.x).
+            updateHint = "junie update",
+            uninstallHint = "rm -f ~/.local/bin/junie && rm -rf ~/.local/share/junie",
             installHintWindows = "irm https://junie.jetbrains.com/install.ps1 | iex",
             uninstallHintWindows = "Remove-Item -Force \"\$env:USERPROFILE\\.local\\bin\\junie.bat\" -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force \"\$env:USERPROFILE\\.local\\share\\junie\" -ErrorAction SilentlyContinue",
             provider = "JetBrains",
@@ -323,12 +379,12 @@ object CodingAgents {
             id = "kimi",
             name = "Kimi Code",
             command = "kimi",
-            installHint = "pip install kimi-cli",
-            updateHint = "pip install --upgrade --upgrade-strategy eager kimi-cli",
-            uninstallHint = "pip uninstall -y kimi-cli",
+            installHint = "npm install -g @moonshot-ai/kimi-code",
+            updateHint = "npm update --quiet --no-fund -g @moonshot-ai/kimi-code",
+            uninstallHint = "npm uninstall -g @moonshot-ai/kimi-code",
             provider = "Moonshot AI",
             url = "https://www.kimi.com/code",
-            devUrl = "https://github.com/MoonshotAI/kimi-cli",
+            devUrl = "https://github.com/MoonshotAI/kimi-code",
         ),
         CodingAgent(
             id = "kiro",
@@ -435,6 +491,9 @@ object CodingAgents {
             // silently fail/skip on Windows global npm installs, leaving a placeholder opencode.exe
             // (upstream: sst/opencode#1192, anomalyco/opencode#36737, #29270) - re-run it defensively.
             installHintWindows = "npm install -g opencode-ai; \$p = \"\$(npm root -g)\\opencode-ai\\postinstall.mjs\"; if (Test-Path \$p) { node \$p }",
+            // npm update re-extracts the package and leaves the placeholder opencode.exe again.
+            // The same step is mirrored in llmbrains.ps1 (Invoke-Update) for "Update all".
+            postUpdateHintWindows = "\$p = \"\$(npm root -g)\\opencode-ai\\postinstall.mjs\"; if (Test-Path \$p) { node \$p }",
             provider = "SST",
             url = "https://opencode.ai",
             devUrl = "https://github.com/anomalyco/opencode",
@@ -467,6 +526,7 @@ object CodingAgents {
             command = "plandex",
             installHint = "curl -sL https://plandex.ai/install.sh | bash",
             updateHint = "plandex upgrade",
+            versionSource = "github:plandex-ai/plandex",
             uninstallHint = "rm -f $(which plandex) $(which pdx)",
             installHintWindows = "wsl bash -c \"curl -sL https://plandex.ai/install.sh | bash\"",
             uninstallHintWindows = "wsl bash -c \"rm -f `$(which plandex) `$(which pdx)\"",

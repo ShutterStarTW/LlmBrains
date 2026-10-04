@@ -1,6 +1,7 @@
 package com.shutterstar.agenthub.environment.skills.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
+import com.shutterstar.agenthub.environment.discovery.CopilotPluginDiscoverySupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
@@ -12,13 +13,21 @@ class CopilotSkillProvider(
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()
 
-    override fun discoverGlobal(): List<SkillSourceRecord> = scanner.discover(
-        root = copilotDirectory.resolve(SKILLS_DIRECTORY),
-        agentId = agentId,
-        scope = SkillScope.GLOBAL,
-        shared = false,
-        projectName = null,
-    )
+    override fun discoverGlobal(): List<SkillSourceRecord> {
+        val own = scanner.discover(
+            root = copilotDirectory.resolve(SKILLS_DIRECTORY),
+            agentId = agentId,
+            scope = SkillScope.GLOBAL,
+            shared = false,
+            projectName = null,
+        )
+        val plugins = CopilotPluginDiscoverySupport.discover(copilotDirectory).flatMap { plugin ->
+            plugin.skillDirectories.flatMap { root ->
+                scanner.discover(root, agentId, SkillScope.GLOBAL, shared = false, projectName = null)
+            }
+        }
+        return (own + plugins).distinctBy { it.path }
+    }
 
     override fun discoverProject(project: DiscoveredProject): List<SkillSourceRecord> {
         val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()

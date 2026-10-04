@@ -30,9 +30,9 @@ object WslSupport {
     private const val BASH_FLAGS = "-lic"
 
     /** Argv for ProcessBuilder-based (background/in-process) execution inside the distro. */
-    fun wrapArgv(command: String): List<String> = buildList {
+    fun wrapArgv(command: String, executionSettings: Settings = settings): List<String> = buildList {
         add("wsl.exe")
-        settings.distro.trim().takeIf { it.isNotEmpty() }?.let { add("-d"); add(it) }
+        executionSettings.distro.trim().takeIf { it.isNotEmpty() }?.let { add("-d"); add(it) }
         add("--exec")
         add(BASH)
         add(BASH_FLAGS)
@@ -44,8 +44,8 @@ object WslSupport {
      * single-quoted for PowerShell (`'` → `''`); wsl.exe --exec hands it to `bash -lic` as a
      * single argument, so bash is the only layer that interprets `$`, `|` and quotes in it.
      */
-    fun wrapForTerminal(command: String): String {
-        val distro = settings.distro.trim()
+    fun wrapForTerminal(command: String, executionSettings: Settings = settings): String {
+        val distro = executionSettings.distro.trim()
         val distroPart = if (distro.isEmpty()) "" else "-d '${distro.replace("'", "''")}' "
         return "wsl.exe $distroPart--exec $BASH $BASH_FLAGS '${withToolchainGuard(command).replace("'", "''")}'"
     }

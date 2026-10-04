@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.instructions.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.instructions.model.InstructionScope
 import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
@@ -11,9 +12,10 @@ class KiroInstructionProvider(
     private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
 ) : InstructionProvider {
     override val agentId: String = "kiro"
+    private val kiroDirectory = EnvHomeDirectorySupport.resolveGuarded("KIRO_HOME", homeDirectory, ".kiro")
 
     override fun discoverGlobal(): List<InstructionSource> =
-        discoverSteering(homeDirectory.resolve(".kiro/steering"), InstructionScope.GLOBAL)
+        discoverSteering(kiroDirectory.resolve("steering"), InstructionScope.GLOBAL)
 
     override fun discoverProject(project: DiscoveredProject): List<InstructionSource> {
         val root = InstructionFileSupport.projectRoot(project) ?: return emptyList()

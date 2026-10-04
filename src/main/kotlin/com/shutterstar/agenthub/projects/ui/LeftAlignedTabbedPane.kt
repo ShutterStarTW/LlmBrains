@@ -6,6 +6,7 @@ import java.awt.CardLayout
 import java.awt.Component
 import java.awt.Dimension
 import javax.swing.JPanel
+import javax.swing.event.ChangeListener
 
 /**
  * Keeps nested tab labels and their content on the same leading edge as the surrounding panel.
@@ -21,14 +22,34 @@ internal class LeftAlignedTabbedPane : JPanel(BorderLayout()) {
     private val contentPanel = JPanel(cards)
     private val cardNames = mutableListOf<String>()
     private val tabStrip = TabStripPanel()
+    // Tab strip on top, then an optional caller-supplied header (e.g. the shared search bar),
+    // then the pages — so a control that applies to every tab can sit *below* the tab titles
+    // and *above* the page content, on the same leading edge as both.
+    private val north = JPanel(BorderLayout()).apply { isOpaque = false }
+    private var header: Component? = null
 
     init {
         tabs.addChangeListener {
             cardNames.getOrNull(tabs.selectedIndex)?.let { cards.show(contentPanel, it) }
         }
         tabStrip.add(tabs)
-        add(tabStrip, BorderLayout.NORTH)
+        north.add(tabStrip, BorderLayout.NORTH)
+        add(north, BorderLayout.NORTH)
         add(contentPanel, BorderLayout.CENTER)
+    }
+
+    /** Places [component] between the tab strip and the pages; `null` removes the current header. */
+    fun setHeader(component: Component?) {
+        header?.let(north::remove)
+        header = component
+        component?.let { north.add(it, BorderLayout.CENTER) }
+        revalidate()
+        repaint()
+    }
+
+    /** Selects the first tab, if any — used to reset nested detail tabs when the selected entity changes. */
+    fun selectFirst() {
+        if (tabs.tabCount > 0) tabs.selectedIndex = 0
     }
 
     fun addTab(
@@ -38,6 +59,17 @@ internal class LeftAlignedTabbedPane : JPanel(BorderLayout()) {
         addTabInternal(title, component)
         revalidate()
         repaint()
+    }
+
+    fun selectedTitle(): String? = tabs.selectedIndex.takeIf { it >= 0 }?.let(tabs::getTitleAt)
+
+
+    fun select(title: String) {
+        (0 until tabs.tabCount).firstOrNull { tabs.getTitleAt(it) == title }?.let { tabs.selectedIndex = it }
+    }
+
+    fun addSelectionListener(listener: () -> Unit) {
+        tabs.addChangeListener(ChangeListener { listener() })
     }
 
     fun setTabs(items: List<Pair<String, Component>>) {
@@ -74,7 +106,12 @@ internal class LeftAlignedTabbedPane : JPanel(BorderLayout()) {
     private fun tabStripHeight(): Int {
         if (tabs.tabCount == 0) return 0
         val preferred = tabs.preferredSize
-        val probeWidth = maxOf(tabStrip.width, preferred.width, 1)
+        // BorderLayout sizes its NORTH child to the full width *before* asking for its preferred
+        // height — but that child is now the [north] wrapper, not [tabStrip] itself, whose width
+        // is still stale (0 on first layout) at that point. Probing at a too-narrow width wraps
+        // the tab titles onto a second row and reports a strip twice as tall as it will really be,
+        // leaving a blank band under the tabs; the pane's own width is the real budget.
+        val probeWidth = maxOf(tabStrip.width, width, preferred.width, 1)
         val probeHeight = maxOf(preferred.height, tabs.getFontMetrics(tabs.font).height, 1)
         tabs.setBounds(0, 0, probeWidth, probeHeight)
         tabs.doLayout()

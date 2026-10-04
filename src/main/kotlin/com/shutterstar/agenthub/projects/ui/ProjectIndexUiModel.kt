@@ -23,6 +23,17 @@ data class AgentProjectUsage(
 )
 
 object ProjectIndexUiModel {
+    /** The empty-list text: still discovering, nothing matches the search, or genuinely nothing found. */
+    fun emptyText(noun: String, refreshing: Boolean, filtered: Boolean): String = when {
+        refreshing -> "Discovering $noun…"
+        filtered -> "No $noun match this search"
+        else -> "No $noun discovered"
+    }
+
+    /** "3 of 24 projects" while a search narrows the list, "24 projects" otherwise. */
+    fun countLabel(shown: Int, total: Int, noun: String, filtered: Boolean): String =
+        if (filtered) "$shown of $total $noun" else "$total $noun"
+
     fun filterProjects(
         projects: List<DiscoveredProject>,
         query: String,
