@@ -25,6 +25,28 @@ internal object LocalSessionSupport {
         text.toString().takeIf { it.isNotBlank() }
     }
 
+    /** Character budget shared by every header scan (the first lines of a session file). */
+    const val HEADER_CHARACTER_BUDGET = 512 * 1024
+
+    /**
+     * Feeds the first lines of [file] to [onLine] while staying inside a line-count and a character
+     * budget. A line longer than [maxLineCharacters] is skipped (it still counts); [onLine] returns
+     * true to stop early.
+     */
+    inline fun scanHeaderLines(file: Path, maxLines: Int, maxLineCharacters: Int, onLine: (String) -> Boolean) {
+        Files.newBufferedReader(file).use { reader ->
+            var remainingCharacters = HEADER_CHARACTER_BUDGET
+            var linesRead = 0
+            while (linesRead < maxLines && remainingCharacters > 0) {
+                val line = readBoundedLine(reader, remainingCharacters, maxLineCharacters) ?: break
+                remainingCharacters -= line.charactersConsumed
+                linesRead++
+                val text = line.text ?: continue
+                if (onLine(text)) break
+            }
+        }
+    }
+
     data class BoundedLine(
         val text: String?,
         val charactersConsumed: Int,

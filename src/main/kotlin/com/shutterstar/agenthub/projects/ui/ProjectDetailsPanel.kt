@@ -257,10 +257,9 @@ internal class ProjectDetailsPanel(
         header.set(
             project?.let { DetailsTitle(it.name) },
             project?.let {
-                val activity = it.lastActivity?.let(AgentHubUiFormat.dateTime::format) ?: "Unknown"
                 listOfNotNull(
                     it.path?.let { path -> "Path: $path" } ?: it.gitRemote?.let { remote -> "Git: $remote" },
-                    "${it.agents.size} agents · ${it.agents.sumOf { agent -> agent.sessionCount }} sessions · Last activity: $activity",
+                    AgentHubUiFormat.activitySummary("${it.agents.size} agents", it.agents.sumOf { agent -> agent.sessionCount }, it.lastActivity),
                     environmentLabel,
                 )
             }.orEmpty(),

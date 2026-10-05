@@ -38,6 +38,25 @@ class SkillSyncApplicationServiceTest {
     lateinit var root: Path
 
     @Test
+    fun `an agent that reads the shared directory without a sync target is reported as native`() {
+        val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
+        val facade = SkillSyncApplicationService(
+            targets = mapOf("claude" to Target(root.resolve("claude"))),
+            backupRoot = root.resolve("backups"),
+            ownershipStore = SkillOwnershipStateService(),
+            auditTrail = SkillSyncAuditStateService(),
+            settings = SkillSyncSettingsStateService(),
+            sharedSkillDirectory = SharedSkillProvider(root),
+            operationId = { "ui-operation" },
+        )
+
+        val statuses = facade.targetStatuses(skill(canonical), SkillScope.GLOBAL, null).associate { it.agentId to it.status }
+
+        assertEquals(SkillTargetStatus.NATIVE, statuses["freebuff"])
+        assertEquals(SkillTargetStatus.NOT_AVAILABLE, statuses["claude"])
+    }
+
+    @Test
     fun `preparing is read only and execution uses persistent collaborators`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val targetRoot = root.resolve("claude")
@@ -61,13 +80,13 @@ class SkillSyncApplicationServiceTest {
 
         assertFalse(Files.exists(targetPath), "Dry-run preparation must not mutate the target")
         assertTrue(prepared.planResult.plan.steps.isNotEmpty())
-        assertEquals(SkillTargetStatus.NOT_AVAILABLE, facade.targetStatuses(skill(canonical), SkillScope.GLOBAL, null).single().status)
+        assertEquals(SkillTargetStatus.NOT_AVAILABLE, facade.targetStatuses(skill(canonical), SkillScope.GLOBAL, null).single { it.agentId == "claude" }.status)
 
         val result = facade.execute(prepared)
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status, "errors=${result.errors}; targets=${result.targetResults}")
         assertTrue(Files.exists(targetPath.resolve("SKILL.md")))
-        assertEquals(SkillTargetStatus.COPIED, facade.targetStatuses(skill(canonical), SkillScope.GLOBAL, null).single().status)
+        assertEquals(SkillTargetStatus.COPIED, facade.targetStatuses(skill(canonical), SkillScope.GLOBAL, null).single { it.agentId == "claude" }.status)
         assertEquals("ui-operation", ownership.managedTarget(requireNotNull(result.instanceKey), "claude")?.operationId)
         assertEquals("ui-operation", audit.recentEntries().single().operationId)
     }
@@ -712,7 +731,7 @@ class SkillSyncApplicationServiceTest {
         )
         val facade = manageExistingFacade(claudeRoot, manageExisting = true)
         val theSkill = skill(canonical)
-        assertEquals(SkillTargetStatus.LINKED, facade.targetStatuses(theSkill, SkillScope.GLOBAL, null).single().status)
+        assertEquals(SkillTargetStatus.LINKED, facade.targetStatuses(theSkill, SkillScope.GLOBAL, null).single { it.agentId == "claude" }.status)
 
         val prepared = facade.prepareUpdateSharing(theSkill, emptySet(), setOf("claude"), SkillScope.GLOBAL, null)
         val backup = prepared.planResult.plan.steps.filterIsInstance<SkillSyncStep.BackupExisting>().single()

@@ -73,6 +73,24 @@ class AgentEnvironmentDiscoveryServiceTest {
         org.junit.jupiter.api.Assertions.assertNull(service.cached("claude", emptyList()))
     }
 
+    @Test fun `an agent without any project still gets its global skills`(@org.junit.jupiter.api.io.TempDir home: java.nio.file.Path) {
+        com.shutterstar.agenthub.writeSkillMd(home.resolve(".claude/skills/review"), "# Review\n")
+        val discovery = ProjectEnvironmentDiscoveryService(
+            skillDiscovery = com.shutterstar.agenthub.environment.skills.discovery.SkillDiscoveryService(
+                listOf(com.shutterstar.agenthub.environment.skills.discovery.ClaudeSkillProvider(home)),
+            ),
+            mcpDiscovery = com.shutterstar.agenthub.environment.mcp.discovery.McpDiscoveryService(emptyList()),
+            instructionDiscovery = com.shutterstar.agenthub.environment.instructions.discovery.InstructionDiscoveryService(emptyList()),
+            configDiscovery = com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService(emptyList()),
+            persist = { _, _ -> },
+        )
+
+        val result = AgentEnvironmentDiscoveryService(discovery, cachedEnvironments = { emptyMap() }).discover("claude", emptyList())
+
+        assertEquals(listOf("review"), result.skills.map { it.name })
+        assertEquals(SkillScope.GLOBAL, result.skills.single().scope)
+    }
+
     private fun project(id: String, agentId: String) = com.shutterstar.agenthub.projects.model.DiscoveredProject(
         com.shutterstar.agenthub.projects.model.ProjectIdentity(id, null, null, null), id, null, null, null, null,
         listOf(com.shutterstar.agenthub.projects.model.AgentProject(agentId, id, 0, null, emptyList())), null,

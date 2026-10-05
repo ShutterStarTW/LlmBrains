@@ -86,4 +86,52 @@ class EnvHomeDirectorySupportTest {
 
         assertEquals(temporaryDirectory.resolve(".config").resolve("opencode"), resolved)
     }
+
+    @Test
+    fun `should place a config file inside the overridden directory`() {
+        val userHome = Path.of(System.getProperty("user.home"))
+
+        val resolved = EnvHomeDirectorySupport.resolveFileGuarded(
+            "CLAUDE_CONFIG_DIR",
+            userHome,
+            ".claude.json",
+            temporaryDirectory.toString(),
+        )
+
+        assertEquals(temporaryDirectory.resolve(".claude.json"), resolved)
+    }
+
+    @Test
+    fun `should keep the config file in the home directory without an override or for injected homes`() {
+        val userHome = Path.of(System.getProperty("user.home"))
+
+        assertEquals(
+            userHome.resolve(".claude.json"),
+            EnvHomeDirectorySupport.resolveFileGuarded("CLAUDE_CONFIG_DIR", userHome, ".claude.json", "  "),
+        )
+        assertEquals(
+            temporaryDirectory.resolve(".claude.json"),
+            EnvHomeDirectorySupport.resolveFileGuarded(
+                "CLAUDE_CONFIG_DIR",
+                temporaryDirectory,
+                ".claude.json",
+                userHome.resolve("elsewhere").toString(),
+            ),
+        )
+    }
+
+    @Test
+    fun `should expose the guarded configured directory only for the default home`() {
+        val userHome = Path.of(System.getProperty("user.home"))
+
+        assertEquals(
+            temporaryDirectory,
+            EnvHomeDirectorySupport.configuredDirectoryGuarded("OPENCODE_CONFIG_DIR", userHome, temporaryDirectory.toString()),
+        )
+        assertEquals(
+            null,
+            EnvHomeDirectorySupport.configuredDirectoryGuarded("OPENCODE_CONFIG_DIR", temporaryDirectory, "/somewhere"),
+        )
+        assertEquals(null, EnvHomeDirectorySupport.configuredDirectoryGuarded("OPENCODE_CONFIG_DIR", userHome, ""))
+    }
 }

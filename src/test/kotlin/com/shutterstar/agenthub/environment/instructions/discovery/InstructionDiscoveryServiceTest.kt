@@ -18,7 +18,7 @@ class InstructionDiscoveryServiceTest {
     lateinit var temporaryDirectory: Path
 
     @Test
-    fun `should merge AGENTS md support for Codex Cursor and OpenCode`() {
+    fun `should merge AGENTS md support for Claude Codex Cursor and OpenCode`() {
         val projectRoot = projectRoot()
         Files.writeString(projectRoot.resolve("AGENTS.md"), "Repository instructions")
 
@@ -26,7 +26,7 @@ class InstructionDiscoveryServiceTest {
 
         assertEquals(InstructionType.AGENTS_MD, source.type)
         assertEquals(InstructionScope.PROJECT, source.scope)
-        assertEquals(setOf("codex", "cursor", "opencode"), source.agentIds)
+        assertEquals(setOf("claude", "codex", "cursor", "opencode"), source.agentIds)
     }
 
     @Test

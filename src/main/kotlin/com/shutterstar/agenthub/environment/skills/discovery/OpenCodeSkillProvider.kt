@@ -18,11 +18,15 @@ class OpenCodeSkillProvider(
         OPENCODE_CONFIG_APP_NAME,
     )
 
+    // OPENCODE_CONFIG_DIR is searched "just like the standard .opencode directory" (documented), so it can hold skills/.
+    private val customConfigRoot = EnvHomeDirectorySupport.configuredDirectoryGuarded("OPENCODE_CONFIG_DIR", userHome)
+
     override fun discoverGlobal(): List<SkillSourceRecord> {
         val budget = scanner.newBudget()
-        return listOf(
+        return listOfNotNull(
             configRoot.resolve(SKILLS_DIRECTORY),
             userHome.resolve(CLAUDE_SKILLS),
+            customConfigRoot?.resolve(SKILLS_DIRECTORY),
         ).flatMap { root ->
             scanner.discover(
                 root = root,

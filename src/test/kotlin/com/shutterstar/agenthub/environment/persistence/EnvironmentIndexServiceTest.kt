@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.skills.model.AgentSkill
 import com.shutterstar.agenthub.environment.skills.model.SkillConsistency
 import com.shutterstar.agenthub.environment.skills.model.SkillIdentity
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
+import com.shutterstar.agenthub.storage.MemoryStateStore
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -56,6 +57,35 @@ class EnvironmentIndexServiceTest {
         assertTrue(service.state.projects.size <= 256)
         assertNull(service.cachedEnvironment("project-0"))
         assertEquals(environment("project-299"), service.cachedEnvironment("project-299"))
+    }
+
+    @Test
+    fun `re-recording identical content does not rewrite the store`() {
+        var tick = 0L
+        val store = MemoryStateStore(EnvironmentIndexState())
+        val service = EnvironmentIndexService(now = { Instant.EPOCH.plusSeconds(tick++) }, store = store)
+
+        service.record("project-a", environment("project-a"))
+        val stampAfterFirst = store.stamp()
+        service.record("project-a", environment("project-a"))
+
+        assertEquals(stampAfterFirst, store.stamp())
+        service.record("project-a", environment("project-a", skillCount = 2))
+        assertTrue(store.stamp() != stampAfterFirst)
+    }
+
+    @Test
+    fun `identical content is rewritten once the stored timestamp is older than an hour`() {
+        var moment = Instant.EPOCH
+        val store = MemoryStateStore(EnvironmentIndexState())
+        val service = EnvironmentIndexService(now = { moment }, store = store)
+
+        service.record("project-a", environment("project-a"))
+        val stampAfterFirst = store.stamp()
+        moment = moment.plusSeconds(2 * 3600)
+        service.record("project-a", environment("project-a"))
+
+        assertTrue(store.stamp() != stampAfterFirst)
     }
 
     @Test

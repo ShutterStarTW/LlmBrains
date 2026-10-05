@@ -12,8 +12,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.environment.ui.EnvironmentPanel
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.awt.BorderLayout
-import java.awt.Component
-import java.awt.Font
+import java.awt.Color
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
@@ -21,12 +20,10 @@ import java.awt.event.MouseEvent
 import java.time.Instant
 import javax.swing.AbstractAction
 import javax.swing.DefaultListModel
-import javax.swing.JList
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 import javax.swing.KeyStroke
-import javax.swing.ListCellRenderer
 import javax.swing.SwingUtilities
 import javax.swing.ToolTipManager
 
@@ -177,50 +174,18 @@ internal class AgentsPanel(
     fun refreshDetails() = detailsPanel.setAgent(list.selectedValue, projects, list.selectedValue?.agentId?.let(environmentLabels::get))
 
     private class AgentRenderer(
-        private val hover: ListHoverTracker,
+        hover: ListHoverTracker,
         private val environmentLabel: (String) -> String?,
-    ) : ListCellRenderer<DiscoveredAgentSummary> {
-        private val nameLabel = JBLabel()
-        private val totalsLabel = WrappedRowText()
-        private val environmentInfoLabel = WrappedRowText()
-        private val content = AgentHubUiComponents.verticalBox(opaque = false, border = AgentHubUiComponents.listRowBorder()).apply {
-            nameLabel.font = nameLabel.font.deriveFont(nameLabel.font.style or Font.BOLD)
-            nameLabel.alignmentX = Component.LEFT_ALIGNMENT
-            totalsLabel.foreground = JBColor.GRAY
-            environmentInfoLabel.foreground = JBColor.GRAY
-            add(nameLabel)
-            add(totalsLabel)
-            add(environmentInfoLabel)
-        }
-        private val wrapper = RoundedSelectionPanel.wrap(content).apply {
-            selectionArc = JBUI.scale(AgentHubUiComponents.SELECTION_ARC)
-            selectionInsets = AgentHubUiComponents.listSelectionInsets()
-        }
-
-        override fun getListCellRendererComponent(
-            list: JList<out DiscoveredAgentSummary>,
-            value: DiscoveredAgentSummary,
-            index: Int,
-            isSelected: Boolean,
-            cellHasFocus: Boolean,
-        ): Component {
-            nameLabel.text = value.name
-            nameLabel.accessibleContext.accessibleName = value.name
-            nameLabel.icon = AgentHubUiComponents.faviconFor(value.agentId)
-            val activity = value.lastActivity?.let(AgentHubUiFormat.dateTime::format) ?: "Unknown"
-            totalsLabel.text =
-                "${value.projectCount} projects · ${value.sessionCount} sessions · Last activity: $activity"
-            environmentInfoLabel.text = environmentLabel(value.agentId).orEmpty()
-            environmentInfoLabel.isVisible = environmentInfoLabel.text.isNotEmpty()
-            wrapper.background = list.background
-            WrappedRowText.prepareRow(list, wrapper, content, listOf(totalsLabel, environmentInfoLabel))
-            val colors = AgentHubUiComponents.rowTextColors(list.foreground, isSelected)
-            wrapper.selectionColor = AgentHubUiComponents.rowHighlight(isSelected, hover.isHovered(index))
-            nameLabel.foreground = colors.foreground
-            totalsLabel.foreground = colors.secondaryForeground
-            environmentInfoLabel.foreground = colors.secondaryForeground
-            return wrapper
-        }
+    ) : DetailRowRenderer<DiscoveredAgentSummary>(hover, maxDetailLines = 2) {
+        override fun bind(value: DiscoveredAgentSummary) = DetailRow(
+            title = value.name,
+            titleIcon = AgentHubUiComponents.faviconFor(value.agentId),
+            titleAccessibleName = value.name,
+            details = listOf(
+                agentActivityLabel(value),
+                environmentLabel(value.agentId).orEmpty(),
+            ),
+        )
     }
 
     /**
@@ -284,7 +249,12 @@ internal class AgentsPanel(
             add(tabs, BorderLayout.CENTER)
         }
 
-        fun showDefaultTab() = tabs.selectFirst()
+        fun showDefaultTab() = selectDefaultTab()
+
+        /** The first tab, or Environment for an agent without sessions (its Projects and Sessions tabs are greyed out). */
+        private fun selectDefaultTab() {
+            if (shownAgent?.sessionCount == 0) tabs.select("Environment") else tabs.selectFirst()
+        }
 
         fun dispose() = environmentPanel.dispose()
 
@@ -296,9 +266,13 @@ internal class AgentsPanel(
             // A *different* agent opens on the default (first) tab; a refresh of the same agent
             // keeps whatever tab the user was reading.
             val agentChanged = agent?.agentId != shownAgentId
-            if (agentChanged) tabs.selectFirst()
             shownAgentId = agent?.agentId
             shownAgent = agent
+            // Nothing to list before the first session: only the Environment tab has content.
+            val hasSessions = agent == null || agent.sessionCount > 0
+            tabs.setTabEnabled("Projects", hasSessions, NO_SESSIONS_TOOLTIP)
+            tabs.setTabEnabled("Sessions", hasSessions, NO_SESSIONS_TOOLTIP)
+            if (agentChanged || (!hasSessions && tabs.selectedTitle() != "Environment")) selectDefaultTab()
             environmentLabel = environmentInfo
             updateHeader()
             projectModel.removeAllElements()
@@ -320,9 +294,8 @@ internal class AgentsPanel(
             header.set(
                 agent?.let { DetailsTitle(it.name, AgentHubUiComponents.faviconFor(it.agentId)) },
                 agent?.let {
-                    val activity = it.lastActivity?.let(AgentHubUiFormat.dateTime::format) ?: "Unknown"
                     listOfNotNull(
-                        "${it.projectCount} projects · ${it.sessionCount} sessions · Last activity: $activity",
+                        agentActivityLabel(it),
                         installationStatus(it.agentId),
                         environmentLabel,
                     )
@@ -333,55 +306,30 @@ internal class AgentsPanel(
     }
 
     private class ProjectUsageRenderer(
-        private val hover: ListHoverTracker,
-    ) : ListCellRenderer<AgentProjectUsage> {
-        private val nameLabel = JBLabel()
+        hover: ListHoverTracker,
+    ) : DetailRowRenderer<AgentProjectUsage>(hover, MAX_DETAIL_LINES) {
         private val openHint = JBLabel("↗").apply {
             toolTipText = "Double-click to open project details"
             accessibleContext.accessibleName = "Open project details"
         }
-        private val topRow = JPanel(BorderLayout()).apply { isOpaque = false }
-        private val detailLabels = List(MAX_DETAIL_LINES) { WrappedRowText() }
-        private val content = AgentHubUiComponents.verticalBox(opaque = false, border = AgentHubUiComponents.listRowBorder()).apply {
-            nameLabel.font = nameLabel.font.deriveFont(nameLabel.font.style or Font.BOLD)
-            topRow.add(nameLabel, BorderLayout.CENTER)
+
+        init {
             topRow.add(openHint, BorderLayout.EAST)
-            topRow.alignmentX = Component.LEFT_ALIGNMENT
-            detailLabels.forEach { it.foreground = JBColor.GRAY }
-        }
-        private val wrapper = RoundedSelectionPanel.wrap(content).apply {
-            selectionArc = JBUI.scale(AgentHubUiComponents.SELECTION_ARC)
-            selectionInsets = AgentHubUiComponents.listSelectionInsets()
         }
 
-        override fun getListCellRendererComponent(
-            list: JList<out AgentProjectUsage>,
-            value: AgentProjectUsage,
-            index: Int,
-            isSelected: Boolean,
-            cellHasFocus: Boolean,
-        ): Component {
-            nameLabel.text = "${value.projectName} · ${value.sessionCount} sessions"
-            nameLabel.toolTipText = "Double-click to open project details"
+        override fun bind(value: AgentProjectUsage): DetailRow {
             val activity = value.lastActivity?.let(AgentHubUiFormat.dateTime::format) ?: "Unknown"
+            return DetailRow(
+                title = "${value.projectName} · ${value.sessionCount} sessions",
+                titleTooltip = "Double-click to open project details",
+                details = agentProjectUsageDetailLines(value, activity),
+                rowAccessibleName =
+                    "${value.projectName}, ${value.sessionCount} sessions. Open project details with Enter or double-click.",
+            )
+        }
 
-            content.removeAll()
-            content.add(topRow)
-            agentProjectUsageDetailLines(value, activity).forEachIndexed { detailIndex, text ->
-                detailLabels[detailIndex].text = text
-                content.add(detailLabels[detailIndex])
-            }
-
-            wrapper.background = list.background
-            WrappedRowText.prepareRow(list, wrapper, content, detailLabels)
-            val colors = AgentHubUiComponents.rowTextColors(list.foreground, isSelected)
-            wrapper.selectionColor = AgentHubUiComponents.rowHighlight(isSelected, hover.isHovered(index))
-            nameLabel.foreground = colors.foreground
-            openHint.foreground = colors.secondaryForeground
-            detailLabels.forEach { it.foreground = colors.secondaryForeground }
-            wrapper.accessibleContext.accessibleName =
-                "${value.projectName}, ${value.sessionCount} sessions. Open project details with Enter or double-click."
-            return wrapper
+        override fun styleTrailing(secondaryForeground: Color) {
+            openHint.foreground = secondaryForeground
         }
 
         companion object {
@@ -389,6 +337,16 @@ internal class AgentsPanel(
         }
     }
 }
+
+private const val NO_SESSIONS_TOOLTIP = "This agent has no recorded sessions yet"
+
+/** "N projects · M sessions · Last activity: …", or a plain note for an installed agent that has not been used here yet. */
+internal fun agentActivityLabel(agent: DiscoveredAgentSummary): String =
+    if (agent.sessionCount == 0 && agent.projectCount == 0) {
+        "No sessions yet"
+    } else {
+        AgentHubUiFormat.activitySummary("${agent.projectCount} projects", agent.sessionCount, agent.lastActivity)
+    }
 
 internal fun agentInstallationStatus(agentId: String, results: Map<String, Boolean>?, checkedAtMillis: Long): String {
     val installed = results?.get(agentId) ?: return "Installation not checked"

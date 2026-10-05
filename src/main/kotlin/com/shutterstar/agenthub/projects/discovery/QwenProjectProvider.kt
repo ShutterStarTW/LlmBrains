@@ -1,6 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -75,24 +75,17 @@ class QwenProjectProvider(
         var projectPath: String? = null
         var startedAt: Instant? = null
         var title: String? = null
-        var linesRead = 0
-        var remainingCharacters = MAX_HEADER_CHARACTERS
-        Files.newBufferedReader(sessionFile).use { reader ->
-            while (linesRead < MAX_HEADER_LINES && remainingCharacters > 0 && projectPath == null) {
-                val line = readBoundedLine(reader, remainingCharacters, MAX_LINE_CHARACTERS) ?: break
-                remainingCharacters -= line.charactersConsumed
-                linesRead++
-                val text = line.text ?: continue
-                val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
-                val longs = MetadataJsonParser.topLevelLongFields(text, TIME_FIELDS)
-                sessionId = sessionId
-                    ?: fields[SESSION_ID_CAMEL_FIELD]?.takeIf { it.isNotBlank() }
-                    ?: fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }
-                projectPath = fields[CWD_FIELD]?.takeIf { it.isNotBlank() }
-                    ?: fields[WORK_DIR_FIELD]?.takeIf { it.isNotBlank() }
-                startedAt = startedAt ?: timestamp(fields, longs, TIMESTAMP_FIELD, CREATED_AT_FIELD, STARTED_AT_FIELD)
-                title = title ?: fields[TITLE_FIELD]?.takeIf { it.isNotBlank() }
-            }
+        LocalSessionSupport.scanHeaderLines(sessionFile, MAX_HEADER_LINES, MAX_LINE_CHARACTERS) { text ->
+            val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
+            val longs = MetadataJsonParser.topLevelLongFields(text, TIME_FIELDS)
+            sessionId = sessionId
+                ?: fields[SESSION_ID_CAMEL_FIELD]?.takeIf { it.isNotBlank() }
+                ?: fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }
+            projectPath = fields[CWD_FIELD]?.takeIf { it.isNotBlank() }
+                ?: fields[WORK_DIR_FIELD]?.takeIf { it.isNotBlank() }
+            startedAt = startedAt ?: timestamp(fields, longs, TIMESTAMP_FIELD, CREATED_AT_FIELD, STARTED_AT_FIELD)
+            title = title ?: fields[TITLE_FIELD]?.takeIf { it.isNotBlank() }
+            projectPath != null
         }
         val resolvedProject = projectPath ?: return null
         val resolvedId = sessionId ?: sessionFile.nameWithoutExtension
@@ -163,7 +156,6 @@ class QwenProjectProvider(
         private const val MAX_SCAN_ENTRIES = 20_000
         private const val MAX_JSON_CHARACTERS = 256 * 1024
         private const val MAX_HEADER_LINES = 32
-        private const val MAX_HEADER_CHARACTERS = 512 * 1024
         private const val MAX_LINE_CHARACTERS = 256 * 1024
         private const val MAX_TAIL_BYTES = 256 * 1024
         private const val MAX_TAIL_LINES = 200
@@ -197,7 +189,10 @@ class QwenProjectProvider(
             TITLE_FIELD,
         )
 
+        // Sessions live under the runtime base directory: QWEN_RUNTIME_DIR, else QWEN_HOME, else ~/.qwen.
         private fun defaultQwenDirectory(): Path =
-            Path.of(System.getProperty("user.home"), ".qwen")
+            EnvHomeDirectorySupport.resolveFirst("QWEN_RUNTIME_DIR", "QWEN_HOME") {
+                Path.of(System.getProperty("user.home"), ".qwen")
+            }
     }
 }

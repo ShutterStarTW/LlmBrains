@@ -21,7 +21,7 @@ class AntigravityMcpProvider(
         val pluginServers = globalPluginConfigs().flatMap { configPath ->
             discoverConfig(configPath, McpScope.GLOBAL)
         }
-        return (directServers + pluginServers).distinctBy { it.name.lowercase() }
+        return (directServers + pluginServers).distinctBy { it.configPath to it.name.lowercase() }
     }
 
     override fun discoverProject(project: DiscoveredProject): List<RawMcpServer> {
@@ -32,7 +32,7 @@ class AntigravityMcpProvider(
         val pluginServers = projectPluginConfigs(projectRoot).flatMap { configPath ->
             discoverConfig(configPath, McpScope.PROJECT, project.name)
         }
-        return (directServers + pluginServers).distinctBy { it.name.lowercase() }
+        return (directServers + pluginServers).distinctBy { it.configPath to it.name.lowercase() }
     }
 
     private fun discoverConfig(

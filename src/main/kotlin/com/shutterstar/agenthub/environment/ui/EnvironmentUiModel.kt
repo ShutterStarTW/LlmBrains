@@ -207,6 +207,7 @@ object EnvironmentUiModel {
                         scope = source.scope.label(),
                         sourcePath = source.path,
                         detail = source.path,
+                        extraDetailLines = listOfNotNull(source.agentNotes[agentId]),
                     ),
                 )
             }
@@ -282,6 +283,9 @@ object EnvironmentUiModel {
                         scope = source.scope.label(),
                         sourcePath = source.path,
                         detail = source.path,
+                        extraDetailLines = source.agentNotes
+                            .filterKeys { it in environment.agentIds }
+                            .map { (id, note) -> "${agentName(id)}: $note" },
                     ),
                 )
             }

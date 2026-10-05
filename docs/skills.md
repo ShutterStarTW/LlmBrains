@@ -57,7 +57,7 @@ hand count too.
   (see [Settings](#settings)).
 
 A skill that exists only for one agent offers the same **Share…** button: it moves the skill into the shared folder (agents that read that folder directly are checked and greyed out) and can also share it with more
-agents in the same step. All ten environment providers have a validated sync adapter.
+agents in the same step. Every agent with a skill folder of its own has a validated sync adapter; Freebuff has none and reads the shared folder directly, so it is always shown checked and greyed out.
 
 Every change is planned as a dry run on a background thread, and you must review the preview before
 you click Apply. The preview lists each target's current state, planned change, path, requested

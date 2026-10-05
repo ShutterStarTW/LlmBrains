@@ -23,7 +23,7 @@ internal object CodexMcpConfigParser {
         }
     }.getOrNull()
 
-    private fun parseServer(
+    internal fun parseServer(
         serverName: String,
         values: Map<List<String>, String>,
         configPath: String,
@@ -229,7 +229,7 @@ internal object CodexMcpConfigParser {
         return result.toString()
     }
 
-    private fun parseStringArray(rawValue: String): List<String> =
+    internal fun parseStringArray(rawValue: String): List<String> =
         parseArrayElements(rawValue).mapNotNull(::parseString)
 
     private fun parseEnvironmentVariableArray(rawValue: String): Set<String> =

@@ -10,8 +10,9 @@ import com.shutterstar.agenthub.OsDetector
 class ConfigDiscoveryService(
     providers: List<ConfigProvider> = listOf(
         AntigravityConfigProvider(), ClaudeConfigProvider(), ClineConfigProvider(), CodexConfigProvider(),
-        CopilotConfigProvider(), CursorConfigProvider(), GrokConfigProvider(), KiroConfigProvider(),
-        OpenCodeConfigProvider(), QwenConfigProvider(),
+        CopilotConfigProvider(), CursorConfigProvider(), FreebuffConfigProvider(), GrokConfigProvider(), JunieConfigProvider(),
+        KiloConfigProvider(), KimiConfigProvider(), KiroConfigProvider(), MimoConfigProvider(), OmpConfigProvider(),
+        OpenCodeConfigProvider(), QwenConfigProvider(), VibeConfigProvider(),
     ),
     isAgentVisible: (String) -> Boolean = { true },
 ) : ProviderBackedDiscovery<ConfigProvider, AgentConfigSource>(

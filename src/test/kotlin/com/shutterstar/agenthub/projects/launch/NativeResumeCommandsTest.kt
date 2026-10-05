@@ -14,6 +14,20 @@ class NativeResumeCommandsTest {
         assertEquals("claude --resume $id", NativeResumeCommands.command("claude", id))
         assertEquals("codex resume $id", NativeResumeCommands.command("codex", id))
         assertEquals("opencode --session $id", NativeResumeCommands.command("opencode", id))
+        assertEquals("kilo --session $id", NativeResumeCommands.command("kilo", id))
+        assertEquals("omp --resume $id", NativeResumeCommands.command("omp", id))
+        assertEquals("kimi --session $id", NativeResumeCommands.command("kimi", id))
+        assertEquals("cline --id $id", NativeResumeCommands.command("cline", id))
+        assertEquals("agy --conversation $id", NativeResumeCommands.command("antigravity", id))
+        assertEquals("copilot --resume $id", NativeResumeCommands.command("copilot", id))
+        assertEquals("cursor-agent --resume $id", NativeResumeCommands.command("cursor", id))
+        assertEquals("grok --resume $id", NativeResumeCommands.command("grok", id))
+        assertEquals("kiro-cli chat --resume-id $id", NativeResumeCommands.command("kiro", id))
+        assertEquals("qwen --resume $id", NativeResumeCommands.command("qwen", id))
+        assertEquals("freebuff --continue $id", NativeResumeCommands.command("freebuff", id))
+        assertEquals("junie --resume --session-id=$id", NativeResumeCommands.command("junie", id))
+        assertEquals("mimo --session $id", NativeResumeCommands.command("mimo", id))
+        assertEquals("vibe --resume $id", NativeResumeCommands.command("vibe", id))
     }
 
     @Test
@@ -22,7 +36,7 @@ class NativeResumeCommandsTest {
         assertNull(NativeResumeCommands.unavailableReason("claude", id))
         assertEquals(
             "AgentHub does not know a native resume command for this agent yet",
-            NativeResumeCommands.unavailableReason("cursor", id),
+            NativeResumeCommands.unavailableReason("zzz", id),
         )
         assertEquals("This session has no resume ID recorded", NativeResumeCommands.unavailableReason("claude", null))
         assertEquals("This session has no resume ID recorded", NativeResumeCommands.unavailableReason("claude", "  "))
@@ -31,8 +45,8 @@ class NativeResumeCommandsTest {
 
     @Test
     fun `unsupported agents have no resume command`() {
-        assertFalse(NativeResumeCommands.supports("cursor"))
-        assertNull(NativeResumeCommands.command("cursor", "abc"))
+        assertFalse(NativeResumeCommands.supports("zzz"))
+        assertNull(NativeResumeCommands.command("zzz", "abc"))
         assertTrue(NativeResumeCommands.supports("claude"))
     }
 

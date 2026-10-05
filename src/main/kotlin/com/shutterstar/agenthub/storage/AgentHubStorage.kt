@@ -70,6 +70,7 @@ class RuntimeStateStore<S : Any>(
         val selected = current(runtime)
         return object : StateStore<S> by selected {
             override fun stamp(): String = "$runtime:${selected.stamp()}"
+            override fun externalStamp(): String = "$runtime:${selected.externalStamp()}"
         }
     }
     override fun snapshot(): S = current().snapshot()
@@ -77,5 +78,9 @@ class RuntimeStateStore<S : Any>(
     override fun stamp(): String {
         val runtime = runtimeId()
         return "$runtime:${current(runtime).stamp()}"
+    }
+    override fun externalStamp(): String {
+        val runtime = runtimeId()
+        return "$runtime:${current(runtime).externalStamp()}"
     }
 }

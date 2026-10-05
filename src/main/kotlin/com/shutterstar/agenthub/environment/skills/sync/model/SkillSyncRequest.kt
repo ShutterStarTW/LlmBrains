@@ -4,7 +4,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import java.nio.file.Path
 
 /**
- * Pure request shapes accepted by `SkillSyncService.plan()`. No IntelliJ dependencies, so
+ * Pure request shapes accepted by `SkillSyncEngine.plan()`. No IntelliJ dependencies, so
  * planning and execution tests remain lightweight.
  */
 sealed interface SkillSyncRequest {

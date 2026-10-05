@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.environment.mcp.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.environment.mcp.model.McpTransport
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -15,7 +16,8 @@ class ClaudeMcpProvider(
 ) : McpProvider {
     override val agentId: String = AGENT_ID
 
-    private val userConfig = homeDirectory.resolve(CLAUDE_CONFIG_FILE)
+    // With CLAUDE_CONFIG_DIR set, Claude Code keeps .claude.json inside that directory instead of the home directory.
+    private val userConfig = EnvHomeDirectorySupport.resolveFileGuarded("CLAUDE_CONFIG_DIR", homeDirectory, CLAUDE_CONFIG_FILE)
 
     override fun discoverGlobal(): List<RawMcpServer> {
         val root = readRoot(userConfig) ?: return emptyList()

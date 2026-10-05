@@ -119,15 +119,15 @@ class SessionListModelTest {
                 session("k1", "claude", t1).copy(nativeResumeId = "k1"),
                 session("k2", "claude", t2),
             ),
-            relation("cursor", "a", session("u1", "cursor", t3).copy(nativeResumeId = "u1")),
+            relation("zzzagent", "a", session("u1", "zzzagent", t3).copy(nativeResumeId = "u1")),
         )
 
-        val rows = SessionListModel.byAgent(project, setOf("agent:claude", "agent:cursor"), { it }, format)
+        val rows = SessionListModel.byAgent(project, setOf("agent:claude", "agent:zzzagent"), { it }, format)
         val byId = rows.filterIsInstance<SessionRowItem.Session>().associateBy { it.session.id }
 
         assertTrue(byId.getValue("k1").resumable)
         assertTrue(!byId.getValue("k2").resumable, "no native id")
-        assertTrue(!byId.getValue("u1").resumable, "Cursor has no known resume command")
+        assertTrue(!byId.getValue("u1").resumable, "Unknown agent has no known resume command")
         assertEquals("This session has no resume ID recorded", byId.getValue("k2").resumeBlockedReason)
         assertEquals("AgentHub does not know a native resume command for this agent yet", byId.getValue("u1").resumeBlockedReason)
         assertNull(byId.getValue("k1").resumeBlockedReason)

@@ -475,6 +475,23 @@ class EnvironmentUiModelTest {
         assertEquals(listOf("settings.json", "settings.local.json"), agentNames)
     }
 
+    @Test
+    fun `instruction rows show the per-agent note of a listed file`() {
+        val base = environment()
+        val unused = base.instructions.single().copy(agentNotes = mapOf("claude" to "CLAUDE.md takes precedence."))
+
+        val projectRow = EnvironmentUiModel.comparison(base.copy(instructions = listOf(unused))) { it.replaceFirstChar(Char::uppercase) }
+            .rows.single { it.category == "Instruction" }
+        assertEquals(listOf("Claude: CLAUDE.md takes precedence."), projectRow.extraDetailLines)
+        assertTrue(EnvironmentUiModel.detailLines(projectRow).contains("Claude: CLAUDE.md takes precedence."))
+
+        val agentEnvironment = AgentEnvironment("claude", emptyList(), emptyList(), listOf(unused))
+        val agentRow = EnvironmentUiModel.agentComparison(agentEnvironment, "claude").rows.single()
+        assertEquals(listOf("CLAUDE.md takes precedence."), agentRow.extraDetailLines)
+        val otherAgentRow = EnvironmentUiModel.agentComparison(agentEnvironment, "codex").rows.single()
+        assertTrue(otherAgentRow.extraDetailLines.isEmpty())
+    }
+
     private fun environment(): ProjectEnvironment = ProjectEnvironment(
         projectId = "project",
         agentIds = setOf("claude", "codex"),

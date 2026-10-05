@@ -11,6 +11,19 @@ $gradleWrapper = Join-Path $repositoryRoot "gradlew.bat"
 $ideaJava = Join-Path $IdeaPath "jbr\bin\java.exe"
 $standalone = Join-Path $repositoryRoot "tmp\junit-libs\junit-platform-console-standalone-1.10.2.jar"
 
+# tmp/ is not version-controlled: on a fresh clone, fetch the JUnit console launcher from Maven Central.
+if (-not (Test-Path -LiteralPath $standalone -PathType Leaf)) {
+    $standaloneUrl = "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar"
+    Write-Host "JUnit console launcher not found, downloading: $standaloneUrl"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $standalone) | Out-Null
+    try {
+        Invoke-WebRequest -Uri $standaloneUrl -OutFile $standalone -UseBasicParsing
+    } catch {
+        Remove-Item -LiteralPath $standalone -Force -ErrorAction SilentlyContinue
+        throw "Could not download the JUnit console launcher ($($_.Exception.Message)). Download it manually from $standaloneUrl to $standalone."
+    }
+}
+
 foreach ($requiredPath in @($gradleWrapper, $ideaJava, $standalone)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "Required test dependency is missing: $requiredPath"

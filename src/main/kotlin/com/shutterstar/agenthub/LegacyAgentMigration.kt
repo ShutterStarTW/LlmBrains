@@ -41,7 +41,7 @@ object LegacyAgentMigration {
     /**
      * Installs the successor FIRST and removes the legacy installs only if that succeeded, so a
      * missing npm or a failed install never leaves the user without a working CLI. Single quotes
-     * only (no double quotes - see the WSL note in CLAUDE.md).
+     * only (no double quotes: Java's ProcessBuilder escapes an embedded `"` as `\"`, which wsl.exe does not unwrap).
      */
     fun command(migration: Migration, powerShell: Boolean): String {
         val install = "npm install -g ${migration.newPackage}"

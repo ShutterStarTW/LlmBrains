@@ -47,6 +47,24 @@ class AntigravityMcpProviderTest {
     }
 
     @Test
+    fun `should keep same-named servers from different configuration files`() {
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("dup-project"))
+        Files.writeString(
+            Files.createDirectories(projectRoot.resolve(".agents")).resolve("mcp_config.json"),
+            """{"mcpServers":{"Docs":{"command":"npx","args":["docs-a"]}}}""",
+        )
+        Files.writeString(
+            projectRoot.resolve("mcp_config.json"),
+            """{"mcpServers":{"docs":{"command":"npx","args":["docs-b"]}}}""",
+        )
+
+        val servers = AntigravityMcpProvider(temporaryDirectory).discoverProject(project(projectRoot))
+
+        assertEquals(2, servers.size)
+        assertEquals(2, servers.map { it.configPath }.toSet().size)
+    }
+
+    @Test
     fun `should discover plugin MCP configurations, bare configs, and tolerant jsonc comments`() {
         val cliDirectory = Files.createDirectories(temporaryDirectory.resolve(".gemini/antigravity-cli"))
         Files.writeString(

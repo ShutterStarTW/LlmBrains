@@ -12,6 +12,8 @@ class EnvironmentIndexService(
     private val now: () -> Instant = Instant::now,
     private val store: StateStore<EnvironmentIndexState> = AgentHubStorage.cache("environment", EnvironmentIndexState::class.java, ::EnvironmentIndexState),
 ) {
+    private val index = CachedEnvironmentIndex(store)
+
     private var storedState: EnvironmentIndexState
         get() = store.snapshot()
         set(value) { store.update { value } }
@@ -22,26 +24,17 @@ class EnvironmentIndexService(
         this.storedState = state
     }
 
-    fun cachedEnvironment(projectId: String): ProjectEnvironment? =
-        EnvironmentIndexStateMapper.decode(storedState)[projectId]
+    fun cachedEnvironment(projectId: String): ProjectEnvironment? = index.decoded()[projectId]
 
-    fun cachedEnvironments(): Map<String, ProjectEnvironment> = EnvironmentIndexStateMapper.decode(storedState)
+    fun cachedEnvironments(): Map<String, ProjectEnvironment> = index.decoded()
 
     @Synchronized
     fun record(
         projectId: String,
         environment: ProjectEnvironment,
     ) {
-        val updated = EnvironmentIndexStateMapper.encodeProject(projectId, environment, now())
-        store.update { previous ->
-            val projects = previous.projects
-                .filterNot { it.projectId == projectId }
-                .plus(updated)
-                .sortedByDescending { it.refreshedAtEpochMillis }
-                .take(MAX_PERSISTED_PROJECTS)
-                .toMutableList()
-            EnvironmentIndexState(projects = projects)
-        }
+        val moment = now()
+        index.record(EnvironmentIndexStateMapper.encodeProject(projectId, environment, moment), moment.toEpochMilli(), MAX_PERSISTED_PROJECTS)
     }
 
     @Synchronized
@@ -49,7 +42,7 @@ class EnvironmentIndexService(
         storedState = EnvironmentIndexState()
     }
 
-    fun storageStamp(): String = store.stamp()
+    fun storageStamp(): String = store.externalStamp()
 
     companion object {
         private const val MAX_PERSISTED_PROJECTS = 256

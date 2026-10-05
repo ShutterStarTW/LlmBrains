@@ -8,7 +8,7 @@ buildscript {
     }
     dependencies {
         classpath("org.commonmark:commonmark:0.22.0")
-        // Plugin ZIP size ("Fázis 1" - see ai-docs/PROGUARD_R8_SHRINK_PROPOSAL.md): shrink-only,
+        // Plugin ZIP size (ProGuard phase 1): shrink-only,
         // no obfuscation. Only used by the standalone shrinkPluginJar/buildShrunkPlugin tasks below -
         // the everyday build/test/runIde path never depends on it.
         classpath("com.guardsquare:proguard-gradle:7.10.0")
@@ -149,7 +149,7 @@ tasks {
 }
 
 // --- Plugin ZIP size: ProGuard "Fázis 1" (shrink only, no obfuscation) -----------------
-// See ai-docs/PROGUARD_R8_SHRINK_PROPOSAL.md. Deliberately NOT wired into `build`/`test`/
+// Phase 1 only shrinks (about 15% smaller ZIP); full obfuscation was deliberately not adopted. Deliberately NOT wired into `build`/`test`/
 // `runIde`/`buildPlugin` - the everyday dev loop stays on the unshrunk jar; these are opt-in
 // tasks for evaluating/producing a smaller release artifact, run explicitly before a release
 // together with the manual validation checklist from the proposal doc.

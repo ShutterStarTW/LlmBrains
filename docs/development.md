@@ -109,7 +109,7 @@ If the script stops with `No cached version of org.junit.jupiter:junit-jupiter:5
 offline mode` (the Gradle cache lost the JUnit aggregator artifact and Java has no network here),
 compile the tests with IDEA's `kotlinc` instead and run the same JUnit launcher: build the main
 classes with `gradle compileKotlin --offline`; compile every file under `src/test/kotlin` with
-`kotlinc` against `build/classes/kotlin/main`, the JARs in `tmp/junit-libs` and the IntelliJ
+`kotlinc` against `build/classes/kotlin/main`, the JUnit JARs in `tmp/junit-libs` (a local, untracked folder you create; `run-all-tests.ps1` expects `junit-platform-console-standalone-1.10.2.jar` there) and the IntelliJ
 platform JARs that `run-all-tests.ps1` lists, passing
 `-Xfriend-paths=build/classes/kotlin/main` (without it, tests cannot see `internal` declarations)
 and putting the long classpath and file list in an `@argfile` (the command line is too long for

@@ -254,6 +254,8 @@ profile = "off"
             Triple("copilot", "{/*comment*/ \"model\":\"gpt-5\",}", "gpt-5"),
             Triple("cursor", "{\"permissions\":{\"allow\":[\"secret\"]}}", "1"),
             Triple("kiro", "{\"chat.defaultModel\":\"claude-sonnet-4-5\"}", "claude-sonnet-4-5"),
+            Triple("kilo", "{\"plugin\":[\"secret\"]}", "1"),
+            Triple("mimo", "{\"plugin\":[\"secret\"]}", "1"),
             Triple("opencode", "{\"plugin\":[\"secret\"]}", "1"),
             Triple("qwen", "{\"tools\":{\"approvalMode\":\"yolo\"}}", "yolo"),
             Triple("antigravity", "{\"enableTerminalSandbox\":false}", "false"),

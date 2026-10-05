@@ -8,9 +8,16 @@ object AgentProjectProviders {
         CodexProjectProvider(),
         CopilotProjectProvider(),
         CursorProjectProvider(),
+        FreebuffProjectProvider(),
         GrokProjectProvider(),
+        JunieProjectProvider(),
+        KiloProjectProvider(),
+        KimiProjectProvider(),
         KiroProjectProvider(),
+        MimoProjectProvider(),
+        OmpProjectProvider(),
         OpenCodeProjectProvider(),
         QwenProjectProvider(),
+        VibeProjectProvider(),
     )
 }

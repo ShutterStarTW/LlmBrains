@@ -2,7 +2,6 @@ package com.shutterstar.agenthub.projects.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
 import com.shutterstar.agenthub.ScanBudget
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
@@ -167,26 +166,18 @@ class CopilotProjectProvider(
         var startedAt: Instant? = null
         var title: String? = null
         var sawTimestamp = false
-        var remainingCharacters = MAX_HEADER_CHARACTERS
-        var linesRead = 0
 
-        Files.newBufferedReader(sessionFile).use { reader ->
-            while (linesRead < MAX_HEADER_LINES && remainingCharacters > 0) {
-                val line = readBoundedLine(reader, remainingCharacters, MAX_LINE_CHARACTERS) ?: break
-                remainingCharacters -= line.charactersConsumed
-                linesRead++
-                val text = line.text ?: continue
-                val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
-                fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }?.let { sessionId = it }
-                fields[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }?.let { projectPath = it }
-                fields[NAME_FIELD]?.takeIf { it.isNotBlank() }?.let { title = it }
-                fields[TITLE_FIELD]?.takeIf { it.isNotBlank() }?.let { title = it }
-                fields[TIMESTAMP_FIELD]?.let { timestamp ->
-                    sawTimestamp = true
-                    startedAt = LocalSessionSupport.parseTimestamp(timestamp)
-                }
-                if (sessionId != null && projectPath != null && sawTimestamp) break
+        LocalSessionSupport.scanHeaderLines(sessionFile, MAX_HEADER_LINES, MAX_LINE_CHARACTERS) { text ->
+            val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
+            fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }?.let { sessionId = it }
+            fields[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }?.let { projectPath = it }
+            fields[NAME_FIELD]?.takeIf { it.isNotBlank() }?.let { title = it }
+            fields[TITLE_FIELD]?.takeIf { it.isNotBlank() }?.let { title = it }
+            fields[TIMESTAMP_FIELD]?.let { timestamp ->
+                sawTimestamp = true
+                startedAt = LocalSessionSupport.parseTimestamp(timestamp)
             }
+            sessionId != null && projectPath != null && sawTimestamp
         }
 
         val resolvedSessionId = sessionId ?: return null
@@ -231,7 +222,6 @@ class CopilotProjectProvider(
         private const val GIT_ROOT_FIELD = "git_root"
         private const val JSONL_EXTENSION = "jsonl"
         private const val MAX_HEADER_LINES = 32
-        private const val MAX_HEADER_CHARACTERS = 512 * 1024
         private const val MAX_LINE_CHARACTERS = 256 * 1024
         private const val MAX_PROJECT_DIRECTORY_ENTRIES = 10_000
         private const val MAX_SESSION_ENTRIES_PER_PROJECT = 10_000

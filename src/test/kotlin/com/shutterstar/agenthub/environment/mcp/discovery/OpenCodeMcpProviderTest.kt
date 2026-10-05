@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.mcp.model.McpScope
 import com.shutterstar.agenthub.environment.mcp.model.McpTransport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -60,5 +61,24 @@ class OpenCodeMcpProviderTest {
         assertFalse(server.url.orEmpty().contains("pass"))
         assertFalse(server.url.orEmpty().contains("secret"))
         assertEquals("project", server.projectName)
+    }
+
+    @Test
+    fun `should read both the project root config and the dot-opencode directory config`() {
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("project"))
+        Files.writeString(
+            projectRoot.resolve("opencode.json"),
+            """{"mcp":{"root-server":{"type":"local","command":["root-cmd"]}}}""",
+        )
+        val dotDirectory = Files.createDirectories(projectRoot.resolve(".opencode"))
+        Files.writeString(
+            dotDirectory.resolve("opencode.jsonc"),
+            """{"mcp":{"dot-server":{"type":"local","command":["dot-cmd"]}}}""",
+        )
+
+        val servers = OpenCodeMcpProvider(temporaryDirectory).discoverProject(project(projectRoot))
+
+        assertEquals(setOf("root-server", "dot-server"), servers.map { it.name }.toSet())
+        assertTrue(servers.all { it.scope == McpScope.PROJECT && it.projectName == "project" })
     }
 }

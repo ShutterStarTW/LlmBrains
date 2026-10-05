@@ -22,4 +22,19 @@ class SharedStateChangeMonitorTest {
         assertTrue(monitor.observe(reader.stamp()))
         assertFalse(monitor.observe(reader.stamp()))
     }
+
+    @Test fun `should not report this stores own saves as external changes`() {
+        fun store() = SharedXmlStore(AgentHubHome(directory), "state/sync-settings.xml",
+            SkillSyncSettingsState::class.java, ::SkillSyncSettingsState, statIntervalMillis = 0)
+        val reader = store()
+        val writer = store()
+        val monitor = SharedStateChangeMonitor()
+        assertFalse(monitor.observe(reader.externalStamp()))
+        reader.update { it.copy(preferredSyncMode = "LINK") }
+        assertFalse(monitor.observe(reader.externalStamp()))
+        writer.update { it.copy(preferredSyncMode = "COPY") }
+        assertTrue(monitor.observe(reader.externalStamp()))
+        reader.update { it.copy(preferredSyncMode = "LINK") }
+        assertFalse(monitor.observe(reader.externalStamp()))
+    }
 }

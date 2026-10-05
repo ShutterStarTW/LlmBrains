@@ -32,22 +32,54 @@ class ClaudeInstructionProvider(
 
     override fun discoverProject(project: DiscoveredProject): List<InstructionSource> {
         val projectRoot = InstructionFileSupport.projectRoot(project) ?: return emptyList()
-        return InstructionFileSupport.scan(projectRoot) { root, file ->
+        val files = InstructionFileSupport.scan(projectRoot) { root, file ->
             val fileName = file.fileName.toString()
             fileName == CLAUDE_FILE ||
                 fileName == CLAUDE_LOCAL_FILE ||
+                fileName == AGENTS_FILE ||
                 (
                     file.extension.equals(MARKDOWN_EXTENSION, ignoreCase = true) &&
                         InstructionFileSupport.isWithinDirectory(root, file, CLAUDE_DIRECTORY, RULES_DIRECTORY)
                     )
-        }.mapNotNull { path ->
-            val type = if (path.fileName.toString() == CLAUDE_FILE || path.fileName.toString() == CLAUDE_LOCAL_FILE) {
-                InstructionType.CLAUDE_MD
-            } else {
-                InstructionType.AGENT_SPECIFIC
-            }
-            InstructionFileSupport.source(path, InstructionScope.PROJECT, agentId, type, project.name)
         }
+        // Claude Code (v2.1.277+) reads AGENTS.md only as a fallback: when no CLAUDE.md,
+        // .claude/CLAUDE.md or CLAUDE.local.md exists in the working directory (or above it);
+        // in a subdirectory it applies only if that directory has none of them either.
+        val root = projectRoot.toAbsolutePath().normalize()
+        val claudeDirectories = files
+            .filter { it.fileName.toString() == CLAUDE_FILE || it.fileName.toString() == CLAUDE_LOCAL_FILE }
+            .map { it.instructionDirectory() }
+            .toSet()
+        val agentsRootShadowed = root in claudeDirectories
+        return files.mapNotNull { path ->
+            val name = path.fileName.toString()
+            val type = when (name) {
+                AGENTS_FILE -> InstructionType.AGENTS_MD
+                CLAUDE_FILE, CLAUDE_LOCAL_FILE -> InstructionType.CLAUDE_MD
+                else -> InstructionType.AGENT_SPECIFIC
+            }
+            val note = if (name == AGENTS_FILE) {
+                agentsNotUsedReason(path, agentsRootShadowed, claudeDirectories)
+            } else {
+                null
+            }
+            InstructionFileSupport.source(path, InstructionScope.PROJECT, agentId, type, project.name, note)
+        }
+    }
+
+    /** Why Claude Code does not apply this `AGENTS.md`, or null when it does (fallback). */
+    private fun agentsNotUsedReason(path: Path, rootShadowed: Boolean, claudeDirectories: Set<Path>): String? = when {
+        path.any { it.toString() == ".agents" } -> "Not used by Claude Code: it does not read files under .agents/."
+        rootShadowed -> "Not used by Claude Code: it reads AGENTS.md only when no CLAUDE.md exists; the project's CLAUDE.md is used instead."
+        path.instructionDirectory() in claudeDirectories ->
+            "Not used by Claude Code: it reads AGENTS.md only when its directory has no CLAUDE.md; the CLAUDE.md there is used instead."
+        else -> null
+    }
+
+    /** The directory an instruction file belongs to: `<dir>/CLAUDE.md` and `<dir>/.claude/CLAUDE.md` both map to `<dir>`. */
+    private fun Path.instructionDirectory(): Path {
+        val parent = parent ?: return this
+        return if (parent.fileName?.toString() == CLAUDE_DIRECTORY) parent.parent ?: parent else parent
     }
 
     private companion object {
@@ -56,6 +88,7 @@ class ClaudeInstructionProvider(
         const val RULES_DIRECTORY = "rules"
         const val CLAUDE_FILE = "CLAUDE.md"
         const val CLAUDE_LOCAL_FILE = "CLAUDE.local.md"
+        const val AGENTS_FILE = "AGENTS.md"
         const val MARKDOWN_EXTENSION = "md"
     }
 }

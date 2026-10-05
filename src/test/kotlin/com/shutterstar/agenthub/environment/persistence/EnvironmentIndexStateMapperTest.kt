@@ -108,6 +108,7 @@ class EnvironmentIndexStateMapperTest {
                 agentIds = setOf("claude"),
                 type = InstructionType.CLAUDE_MD,
                 projectName = "LlmBrains",
+                agentNotes = mapOf("claude" to "Claude Code reads AGENTS.md only when no CLAUDE.md exists; a=b is fine."),
             ),
         ),
         warnings = listOf(

@@ -4,7 +4,6 @@ import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.epochTimestamp
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.parseTimestamp
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedText
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
@@ -61,6 +60,9 @@ class AntigravityProjectProvider(
         var skippedSessions = 0
 
         Files.walk(directory, MAX_SCAN_DEPTH).use { paths ->
+            // The limit is a traversal budget, applied before sorting on purpose: sorting first would mean
+            // walking (and holding) the whole tree, which is exactly what the budget prevents. Below the budget
+            // the result is deterministic (sorted); above it, which files are reached follows the walk order.
             paths
                 .limit(MAX_SCAN_ENTRIES.toLong())
                 .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
@@ -204,72 +206,62 @@ class AntigravityProjectProvider(
         var projectPath: String? = null
         var startedAt: Instant? = null
         var title: String? = null
-        var remainingCharacters = MAX_HEADER_CHARACTERS
-        var linesRead = 0
 
-        Files.newBufferedReader(sessionFile).use { reader ->
-            while (linesRead < MAX_HEADER_LINES && remainingCharacters > 0) {
-                val line = readBoundedLine(reader, remainingCharacters, MAX_LINE_CHARACTERS) ?: break
-                remainingCharacters -= line.charactersConsumed
-                linesRead++
-                val text = line.text ?: continue
+        LocalSessionSupport.scanHeaderLines(sessionFile, MAX_HEADER_LINES, MAX_LINE_CHARACTERS) { text ->
 
-                val topLevel = MetadataJsonParser.topLevelStringFields(text, TOP_LEVEL_JSONL_FIELDS)
+            val topLevel = MetadataJsonParser.topLevelStringFields(text, TOP_LEVEL_JSONL_FIELDS)
 
-                if (sessionId == null) {
-                    sessionId = topLevel[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[SESSION_ID_SNAKE_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[CONVERSATION_ID_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[CONVERSATION_ID_SNAKE_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[ID_FIELD]?.takeIf { it.isNotBlank() }
-                }
-
-                if (projectPath == null) {
-                    projectPath = topLevel[WORKSPACE_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[CWD_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[PROJECT_PATH_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[PROJECT_PATH_SNAKE_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[WORKING_DIRECTORY_CAMEL_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[WORKSPACE_ROOT_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[WORKSPACE_ROOT_CAMEL_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[RAW_PROJECT_PATH_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: MetadataJsonParser.objectStringFields(text, WORKSPACE_FIELD, NESTED_WORKSPACE_FIELDS)["root"]
-                        ?: MetadataJsonParser.objectStringFields(text, WORKSPACE_FIELD, NESTED_WORKSPACE_FIELDS)["path"]
-                        ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[CWD_PASCAL_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[CWD_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[DIRECTORY_PATH_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[SEARCH_DIRECTORY_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[SEARCH_PATH_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[CWD_PASCAL_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[CWD_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[DIRECTORY_PATH_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[SEARCH_DIRECTORY_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[SEARCH_PATH_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PAYLOAD_FIELD, PAYLOAD_FIELDS)[CWD_FIELD]
-                        ?: MetadataJsonParser.objectStringFields(text, PAYLOAD_FIELD, PAYLOAD_FIELDS)[WORKSPACE_FIELD]
-                        ?: extractPathRegex(text)
-                }
-
-                if (startedAt == null) {
-                    startedAt = parseTimestamp(topLevel[CREATED_AT_FIELD])
-                        ?: parseTimestamp(topLevel[CREATED_AT_CAMEL_FIELD])
-                        ?: parseTimestamp(topLevel[TIMESTAMP_FIELD])
-                        ?: parseTimestamp(topLevel[STARTED_AT_FIELD])
-                        ?: parseTimestamp(topLevel[STARTED_AT_CAMEL_FIELD])
-                        ?: parseTimestamp(topLevel[TIME_FIELD])
-                }
-
-                if (title == null) {
-                    title = topLevel[TITLE_FIELD]?.takeIf { it.isNotBlank() }
-                        ?: topLevel[SUMMARY_FIELD]?.takeIf { it.isNotBlank() }
-                }
-
-                if (sessionId != null && projectPath != null && startedAt != null) {
-                    break
-                }
+            if (sessionId == null) {
+                sessionId = topLevel[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[SESSION_ID_SNAKE_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[CONVERSATION_ID_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[CONVERSATION_ID_SNAKE_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[ID_FIELD]?.takeIf { it.isNotBlank() }
             }
+
+            if (projectPath == null) {
+                projectPath = topLevel[WORKSPACE_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[CWD_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[PROJECT_PATH_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[PROJECT_PATH_SNAKE_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[WORKING_DIRECTORY_CAMEL_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[WORKSPACE_ROOT_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[WORKSPACE_ROOT_CAMEL_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[RAW_PROJECT_PATH_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: MetadataJsonParser.objectStringFields(text, WORKSPACE_FIELD, NESTED_WORKSPACE_FIELDS)["root"]
+                    ?: MetadataJsonParser.objectStringFields(text, WORKSPACE_FIELD, NESTED_WORKSPACE_FIELDS)["path"]
+                    ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[CWD_PASCAL_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[CWD_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[DIRECTORY_PATH_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[SEARCH_DIRECTORY_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, ARGS_FIELD, PARAMETER_FIELDS)[SEARCH_PATH_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[CWD_PASCAL_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[CWD_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[DIRECTORY_PATH_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[SEARCH_DIRECTORY_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PARAMETERS_FIELD, PARAMETER_FIELDS)[SEARCH_PATH_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PAYLOAD_FIELD, PAYLOAD_FIELDS)[CWD_FIELD]
+                    ?: MetadataJsonParser.objectStringFields(text, PAYLOAD_FIELD, PAYLOAD_FIELDS)[WORKSPACE_FIELD]
+                    ?: extractPathRegex(text)
+            }
+
+            if (startedAt == null) {
+                startedAt = parseTimestamp(topLevel[CREATED_AT_FIELD])
+                    ?: parseTimestamp(topLevel[CREATED_AT_CAMEL_FIELD])
+                    ?: parseTimestamp(topLevel[TIMESTAMP_FIELD])
+                    ?: parseTimestamp(topLevel[STARTED_AT_FIELD])
+                    ?: parseTimestamp(topLevel[STARTED_AT_CAMEL_FIELD])
+                    ?: parseTimestamp(topLevel[TIME_FIELD])
+            }
+
+            if (title == null) {
+                title = topLevel[TITLE_FIELD]?.takeIf { it.isNotBlank() }
+                    ?: topLevel[SUMMARY_FIELD]?.takeIf { it.isNotBlank() }
+            }
+
+            sessionId != null && projectPath != null && startedAt != null
         }
 
         val resolvedProjectPath = projectPath ?: return null
@@ -425,7 +417,6 @@ class AntigravityProjectProvider(
         private const val MAX_SCAN_DEPTH = 5
         private const val MAX_SCAN_ENTRIES = 50_000
         private const val MAX_HEADER_LINES = 100
-        private const val MAX_HEADER_CHARACTERS = 512 * 1024
         private const val MAX_LINE_CHARACTERS = 64 * 1024
         private const val MAX_JSON_FILE_CHARACTERS = 256 * 1024
         private const val MAX_TAIL_BYTES = 256 * 1024

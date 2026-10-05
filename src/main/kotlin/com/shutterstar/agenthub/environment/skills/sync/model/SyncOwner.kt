@@ -12,7 +12,7 @@ package com.shutterstar.agenthub.environment.skills.sync.model
  * detect external managers without controlling them") — there is no concrete third-party manager
  * signature (e.g. a `skillshare`/`skill-manager` marker file) to recognize yet, and fabricating one
  * without a real integration to test against would just be a guess dressed up as detection. The
- * value exists so a future concrete [com.shutterstar.agenthub.environment.skills.sync.SkillSyncService]-external
+ * value exists so a future concrete [com.shutterstar.agenthub.environment.skills.sync.SkillSyncEngine]-external
  * check has somewhere to report to without another enum migration.
  */
 enum class SyncOwner {

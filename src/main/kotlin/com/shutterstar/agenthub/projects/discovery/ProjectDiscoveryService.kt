@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.projects.launch.NativeResumeCommands
 import com.shutterstar.agenthub.projects.model.AgentProject
 import com.shutterstar.agenthub.projects.model.AgentSession
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -148,7 +149,7 @@ class ProjectDiscoveryService(
             updatedAt = raw.updatedAt,
             sourcePath = raw.sourcePath,
             title = raw.metadata["title"],
-            nativeResumeId = raw.sessionId.takeIf { raw.agentId in NATIVE_RESUME_AGENT_IDS },
+            nativeResumeId = raw.sessionId.takeIf { NativeResumeCommands.supports(raw.agentId) },
             messageCount = raw.metadata[UserMessageTally.MESSAGE_COUNT_KEY]?.toIntOrNull(),
             firstMessage = raw.metadata[UserMessageTally.FIRST_MESSAGE_KEY],
             statistics = raw.statistics,
@@ -158,7 +159,6 @@ class ProjectDiscoveryService(
     companion object {
         private const val DEFAULT_PROVIDER_TIMEOUT_MILLIS = 30_000L
         private const val MAX_PROVIDER_THREADS = 4
-        private val NATIVE_RESUME_AGENT_IDS = setOf("claude", "codex", "opencode")
         private val LOG = Logger.getLogger(ProjectDiscoveryService::class.java.name)
 
         private fun activity(raw: RawAgentProject): Instant = raw.updatedAt ?: raw.startedAt ?: Instant.MIN

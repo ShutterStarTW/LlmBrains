@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.ui
 
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -7,6 +8,12 @@ import java.time.format.FormatStyle
 internal object AgentHubUiFormat {
     val dateTime: DateTimeFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
         .withZone(ZoneId.systemDefault())
+
+    /** "<count> · N sessions · Last activity: <date>", the summary line of project and agent rows and headers. */
+    fun activitySummary(countLabel: String, sessionCount: Int, lastActivity: Instant?): String {
+        val activity = lastActivity?.let(dateTime::format) ?: "Unknown"
+        return "$countLabel · $sessionCount sessions · Last activity: $activity"
+    }
 
     private val sizeUnits = listOf("KB", "MB", "GB", "TB")
 

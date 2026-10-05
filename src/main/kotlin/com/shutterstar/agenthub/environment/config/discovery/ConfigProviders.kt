@@ -1,6 +1,8 @@
 package com.shutterstar.agenthub.environment.config.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
+import com.shutterstar.agenthub.environment.discovery.MimoHomeSupport
+import com.shutterstar.agenthub.environment.discovery.OmpHomeSupport
 import java.nio.file.Path
 import com.shutterstar.agenthub.OsDetector
 
@@ -64,6 +66,31 @@ class OpenCodeConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
     listOf("opencode.json", "opencode.jsonc", "tui.json"),
 )
 
+/** Kilo Code CLI: `kilo.json(c)`/`config.json` and `tui.json(c)` in `~/.config/kilo`, `kilo.json(c)` in project `.kilo/`. */
+class KiloConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "kilo",
+    EnvHomeDirectorySupport.resolveXdgGuarded("XDG_CONFIG_HOME", homeDirectory, ".config", "kilo").let { directory ->
+        listOf("kilo.json", "kilo.jsonc", "config.json", "tui.json", "tui.jsonc").map(directory::resolve)
+    },
+    listOf("kilo.json", "kilo.jsonc", ".kilo/kilo.json", ".kilo/kilo.jsonc", ".kilocode/kilo.json", ".kilocode/kilo.jsonc", ".kilo/tui.json", ".kilo/tui.jsonc"),
+)
+
+/** Kimi Code CLI: `config.toml` and `tui.toml` in the data root (`~/.kimi-code`, or `KIMI_CODE_HOME`). */
+class KimiConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "kimi",
+    EnvHomeDirectorySupport.resolveGuarded("KIMI_CODE_HOME", homeDirectory, ".kimi-code").let { directory ->
+        listOf("config.toml", "tui.toml").map(directory::resolve)
+    },
+    emptyList(),
+)
+
+/** Oh My Pi: the global `config.yml`/`config.yaml` of the agent directory and the project `.omp/config.yml`; inventory only (YAML). */
+class OmpConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "omp",
+    OmpHomeSupport.agentDirectory(homeDirectory).let { directory -> listOf("config.yml", "config.yaml").map(directory::resolve) },
+    listOf(".omp/config.yml", ".omp/config.yaml"),
+)
+
 /** CLI state file is mixed settings/credentials; highlights remain strictly allowlisted. */
 class ClineConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
     "cline",
@@ -83,4 +110,39 @@ class AntigravityConfigProvider(homeDirectory: Path = home()) : FileConfigProvid
         homeDirectory.resolve(".gemini/config/hooks.json"),
     ),
     listOf(".agents/hooks.json"),
+)
+
+/** MiMo Code CLI (an OpenCode fork): `mimocode.json(c)`/`tui.json(c)` in its config directory, `mimocode.json(c)` in the project root and `.mimocode/`. */
+class MimoConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "mimo",
+    MimoHomeSupport.configDirectory(homeDirectory).let { directory ->
+        listOf("mimocode.json", "mimocode.jsonc", "tui.json", "tui.jsonc").map(directory::resolve)
+    },
+    listOf("mimocode.json", "mimocode.jsonc", ".mimocode/mimocode.json", ".mimocode/mimocode.jsonc", ".mimocode/tui.json", ".mimocode/tui.jsonc"),
+)
+
+/** Mistral Vibe: `config.toml` in the vibe home (`~/.vibe`, or `VIBE_HOME`) and the project's `.vibe/config.toml`; inventory only (TOML). */
+class VibeConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "vibe",
+    listOf(agentHome(homeDirectory, "VIBE_HOME", ".vibe").resolve("config.toml")),
+    listOf(".vibe/config.toml"),
+)
+
+/**
+ * Junie CLI: `config.json`, `settings.json`, `allowlist.json` and `sandbox.json` in the junie home (`~/.junie`, or `JUNIE_HOME`) and
+ * the project's `.junie/config.json`. Credentials (`secure_credentials.json`, `authentication-key`, `dpapi_credentials/`) are not inventoried.
+ */
+class JunieConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "junie",
+    agentHome(homeDirectory, "JUNIE_HOME", ".junie").let { directory ->
+        listOf("config.json", "settings.json", "allowlist.json", "sandbox.json").map(directory::resolve)
+    },
+    listOf(".junie/config.json"),
+)
+
+/** Freebuff: `settings.json` in the CLI config directory (`~/.config/manicode`, or `FREEBUFF_CONFIG_DIR`); `credentials.json` is deliberately not inventoried. */
+class FreebuffConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
+    "freebuff",
+    listOf(agentHome(homeDirectory, "FREEBUFF_CONFIG_DIR", ".config/manicode").resolve("settings.json")),
+    emptyList(),
 )

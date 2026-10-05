@@ -1,7 +1,7 @@
 package com.shutterstar.agenthub.projects.discovery
 
+import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -19,7 +19,7 @@ class ClaudeProjectProvider(
 ) : AgentProjectProvider {
     override val agentId: String = AGENT_ID
 
-    private val projectsDirectory = homeDirectory.resolve(CLAUDE_DIRECTORY).resolve(PROJECTS_DIRECTORY)
+    private val projectsDirectory = EnvHomeDirectorySupport.resolveGuarded("CLAUDE_CONFIG_DIR", homeDirectory, CLAUDE_DIRECTORY).resolve(PROJECTS_DIRECTORY)
 
     override fun isAvailable(): Boolean = Files.isDirectory(projectsDirectory, LinkOption.NOFOLLOW_LINKS)
 
@@ -80,24 +80,16 @@ class ClaudeProjectProvider(
         var projectPath: String? = null
         var startedAt: Instant? = null
         var sawTimestamp = false
-        var remainingCharacters = MAX_HEADER_CHARACTERS
-        var linesRead = 0
 
-        Files.newBufferedReader(sessionFile).use { reader ->
-            while (linesRead < MAX_HEADER_LINES && remainingCharacters > 0) {
-                val line = readBoundedLine(reader, remainingCharacters, MAX_LINE_CHARACTERS) ?: break
-                remainingCharacters -= line.charactersConsumed
-                linesRead++
-                val text = line.text ?: continue
-                val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
-                fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }?.let { sessionId = it }
-                fields[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }?.let { projectPath = it }
-                fields[TIMESTAMP_FIELD]?.let { timestamp ->
-                    sawTimestamp = true
-                    startedAt = LocalSessionSupport.parseTimestamp(timestamp)
-                }
-                if (sessionId != null && projectPath != null && sawTimestamp) break
+        LocalSessionSupport.scanHeaderLines(sessionFile, MAX_HEADER_LINES, MAX_LINE_CHARACTERS) { text ->
+            val fields = MetadataJsonParser.topLevelStringFields(text, METADATA_FIELDS)
+            fields[SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }?.let { sessionId = it }
+            fields[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() }?.let { projectPath = it }
+            fields[TIMESTAMP_FIELD]?.let { timestamp ->
+                sawTimestamp = true
+                startedAt = LocalSessionSupport.parseTimestamp(timestamp)
             }
+            sessionId != null && projectPath != null && sawTimestamp
         }
 
         val resolvedSessionId = sessionId ?: return null
@@ -166,7 +158,6 @@ class ClaudeProjectProvider(
         private const val MAX_PROJECT_DIRECTORY_ENTRIES = 20_000
         private const val MAX_SESSION_ENTRIES = 50_000
         private const val MAX_HEADER_LINES = 100
-        private const val MAX_HEADER_CHARACTERS = 512 * 1024
         private const val MAX_LINE_CHARACTERS = 64 * 1024
         private const val SESSION_ID_FIELD = "sessionId"
         private const val WORKING_DIRECTORY_FIELD = "cwd"

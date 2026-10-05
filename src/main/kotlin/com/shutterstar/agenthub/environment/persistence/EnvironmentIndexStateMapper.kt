@@ -124,6 +124,7 @@ object EnvironmentIndexStateMapper {
         type = instruction.type.name,
         agentIds = instruction.agentIds.toMutableList(),
         projectName = instruction.projectName,
+        agentNotes = instruction.agentNotes.map { (agentId, reason) -> "$agentId=$reason" }.toMutableList(),
     )
 
     private fun encodeWarning(warning: EnvironmentWarning) = EnvironmentIndexWarningState(
@@ -220,6 +221,9 @@ object EnvironmentIndexStateMapper {
             agentIds = instruction.agentIds.toSet(),
             type = type,
             projectName = instruction.projectName,
+            agentNotes = instruction.agentNotes
+                .mapNotNull { entry -> entry.substringBefore('=', "").takeIf { it.isNotBlank() }?.let { it to entry.substringAfter('=') } }
+                .toMap(),
         )
     }
 

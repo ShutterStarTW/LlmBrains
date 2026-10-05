@@ -49,7 +49,7 @@ private data class PlanContext(
 
 /**
  * Translates a user-facing [SkillSyncRequest] into a [SkillSyncPlan] — the read-only, no-I/O-beyond-
- * observation half of [SkillSyncService]. Execution, undo and history live in [SkillSyncOperationRunner];
+ * observation half of [SkillSyncEngine]. Execution, undo and history live in [SkillSyncOperationRunner];
  * the two are split only to keep each file focused, they still share [ownershipStore] and [runtimeId]
  * (via [resolveInstanceKey]) so a plan built here and later executed there resolves to the same
  * [com.shutterstar.agenthub.environment.skills.sync.ownership.SkillInstanceKey].

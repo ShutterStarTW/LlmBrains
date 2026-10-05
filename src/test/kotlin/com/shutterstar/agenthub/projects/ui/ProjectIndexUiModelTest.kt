@@ -55,6 +55,30 @@ class ProjectIndexUiModelTest {
     }
 
     @Test
+    fun `installed agents without sessions are listed with zero counts`() {
+        val projects = listOf(project("Recent", "K:/Recent", null, "codex", 2))
+
+        val agents = ProjectIndexUiModel.agents(projects, "", setOf("codex", "kilo")) { it }
+
+        assertEquals(listOf("codex", "kilo"), agents.map { it.agentId })
+        val kilo = agents.first { it.agentId == "kilo" }
+        assertEquals(0, kilo.projectCount)
+        assertEquals(0, kilo.sessionCount)
+        assertEquals(emptyList<AgentProjectUsage>(), kilo.projects)
+        assertEquals("No sessions yet", agentActivityLabel(kilo))
+        // An agent that does have sessions is not duplicated by being installed too.
+        assertEquals(1, agents.count { it.agentId == "codex" })
+        assertEquals(2, agents.first { it.agentId == "codex" }.sessionCount)
+    }
+
+    @Test
+    fun `agent search also finds an installed agent without sessions by name`() {
+        val agents = ProjectIndexUiModel.agents(emptyList(), "ki", setOf("kilo", "codex")) { it.uppercase() }
+
+        assertEquals(listOf("kilo"), agents.map { it.agentId })
+    }
+
+    @Test
     fun `agent search also matches participating project`() {
         val projects = listOf(project("AgentHub", "K:/AgentHub", "github.com/team/agenthub", "codex", 2))
 

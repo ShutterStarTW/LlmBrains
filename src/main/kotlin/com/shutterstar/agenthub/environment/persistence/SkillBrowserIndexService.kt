@@ -13,6 +13,8 @@ import java.time.Instant
 class SkillBrowserIndexService(
     private val store: StateStore<EnvironmentIndexState> = AgentHubStorage.cache("skill-browser", EnvironmentIndexState::class.java, ::EnvironmentIndexState),
 ) {
+    private val index = CachedEnvironmentIndex(store)
+
     private var storedState: EnvironmentIndexState
         get() = store.snapshot()
         set(value) { store.update { value } }
@@ -24,21 +26,16 @@ class SkillBrowserIndexService(
     }
 
     fun cachedSkills(contextKey: String): List<AgentSkill> =
-        EnvironmentIndexStateMapper.decode(storedState)[contextKey]?.skills.orEmpty()
+        index.decoded()[contextKey]?.skills.orEmpty()
 
     @Synchronized
     fun record(contextKey: String, skills: List<AgentSkill>) {
         val environment = ProjectEnvironment(contextKey, emptySet(), skills, emptyList(), emptyList())
-        val updated = EnvironmentIndexStateMapper.encodeProject(contextKey, environment, Instant.now())
-        store.update { previous -> EnvironmentIndexState(
-            projects = (previous.projects.filterNot { it.projectId == contextKey } + updated)
-                .sortedByDescending { it.refreshedAtEpochMillis }
-                .take(MAX_CONTEXTS)
-                .toMutableList(),
-        ) }
+        val moment = Instant.now()
+        index.record(EnvironmentIndexStateMapper.encodeProject(contextKey, environment, moment), moment.toEpochMilli(), MAX_CONTEXTS)
     }
 
-    fun storageStamp(): String = store.stamp()
+    fun storageStamp(): String = store.externalStamp()
 
     companion object {
         private const val MAX_CONTEXTS = 256

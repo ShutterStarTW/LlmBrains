@@ -1,7 +1,6 @@
 package com.shutterstar.agenthub.projects.discovery
 
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
-import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedLine
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readTailLines
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.projects.model.RawAgentProject
@@ -89,25 +88,18 @@ class CodexProjectProvider(
 
     private fun parseSession(sessionFile: Path): RawAgentProject? {
         var metadata: SessionMetadata? = null
-        var remainingCharacters = MAX_HEADER_CHARACTERS
-        var linesRead = 0
-        Files.newBufferedReader(sessionFile).use { reader ->
-            while (metadata == null && linesRead < MAX_HEADER_LINES && remainingCharacters > 0) {
-                val line = readBoundedLine(reader, remainingCharacters, MAX_LINE_CHARACTERS) ?: break
-                remainingCharacters -= line.charactersConsumed
-                linesRead++
-                val text = line.text ?: continue
-                val topLevel = MetadataJsonParser.topLevelStringFields(text, TOP_LEVEL_FIELDS)
-                if (topLevel[TYPE_FIELD] != SESSION_META_TYPE) continue
-                val payload = MetadataJsonParser.objectStringFields(text, PAYLOAD_FIELD, PAYLOAD_FIELDS)
-                val projectPath = payload[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() } ?: continue
-                val sessionId = payload[ID_FIELD]
-                    ?.takeIf { it.isNotBlank() }
-                    ?: payload[LEGACY_SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }
-                    ?: sessionIdFromFileName(sessionFile)
-                val startedAt = LocalSessionSupport.parseTimestamp(payload[TIMESTAMP_FIELD] ?: topLevel[TIMESTAMP_FIELD])
-                metadata = SessionMetadata(sessionId, projectPath, startedAt)
-            }
+        LocalSessionSupport.scanHeaderLines(sessionFile, MAX_HEADER_LINES, MAX_LINE_CHARACTERS) { text ->
+            val topLevel = MetadataJsonParser.topLevelStringFields(text, TOP_LEVEL_FIELDS)
+            if (topLevel[TYPE_FIELD] != SESSION_META_TYPE) return@scanHeaderLines false
+            val payload = MetadataJsonParser.objectStringFields(text, PAYLOAD_FIELD, PAYLOAD_FIELDS)
+            val projectPath = payload[WORKING_DIRECTORY_FIELD]?.takeIf { it.isNotBlank() } ?: return@scanHeaderLines false
+            val sessionId = payload[ID_FIELD]
+                ?.takeIf { it.isNotBlank() }
+                ?: payload[LEGACY_SESSION_ID_FIELD]?.takeIf { it.isNotBlank() }
+                ?: sessionIdFromFileName(sessionFile)
+            val startedAt = LocalSessionSupport.parseTimestamp(payload[TIMESTAMP_FIELD] ?: topLevel[TIMESTAMP_FIELD])
+            metadata = SessionMetadata(sessionId, projectPath, startedAt)
+            metadata != null
         }
         val resolved = metadata ?: return null
         val lastEventAt = findLastEventTimestamp(sessionFile)
@@ -197,7 +189,6 @@ class CodexProjectProvider(
         private const val MAX_SCAN_DEPTH = 4
         private const val MAX_SCAN_ENTRIES = 50_000
         private const val MAX_HEADER_LINES = 32
-        private const val MAX_HEADER_CHARACTERS = 512 * 1024
         private const val MAX_LINE_CHARACTERS = 256 * 1024
         private const val MAX_TAIL_BYTES = 256 * 1024
         private const val MAX_TAIL_LINES = 200

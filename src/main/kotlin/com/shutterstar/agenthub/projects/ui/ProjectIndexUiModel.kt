@@ -53,13 +53,22 @@ object ProjectIndexUiModel {
         }
     }
 
+    /**
+     * The agents of the Agents tab: those with sessions in [projects], plus every id in [installedAgentIds]
+     * that has none yet (shown with zero projects/sessions - its environment exists regardless).
+     */
     fun agents(
         projects: List<DiscoveredProject>,
         query: String,
+        installedAgentIds: Set<String> = emptySet(),
         agentName: (String) -> String,
     ): List<DiscoveredAgentSummary> {
         val needle = query.trim()
-        return projects.flatMap { project -> project.agents.map { project to it } }
+        val withSessions = projects.flatMapTo(mutableSetOf()) { project -> project.agents.map { it.agentId } }
+        val withoutSessions = (installedAgentIds - withSessions).map { agentId ->
+            DiscoveredAgentSummary(agentId, agentName(agentId), 0, 0, null, emptyList())
+        }
+        return (projects.flatMap { project -> project.agents.map { project to it } }
             .groupBy { (_, relation) -> relation.agentId }
             .map { (agentId, relations) ->
                 val usages = relations.map { (project, relation) ->
@@ -84,7 +93,7 @@ object ProjectIndexUiModel {
                     lastActivity = usages.mapNotNull { it.lastActivity }.maxOrNull(),
                     projects = usages,
                 )
-            }
+            } + withoutSessions)
             .filter { summary ->
                 needle.isEmpty() ||
                     summary.agentId.contains(needle, ignoreCase = true) ||

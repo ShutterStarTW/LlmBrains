@@ -29,6 +29,9 @@ class SharedXmlStore<S : Any>(
     private var loadedStamp: String? = null
     private var checkedAt = Long.MIN_VALUE
     private var generation = 0L
+    /** Last on-disk stamp this store has seen or produced itself; a different one means someone else wrote. */
+    private var seenDiskStamp: String? = null
+    private var externalGeneration = 0L
     private var newerVersion = false
     private var readFailed = false
 
@@ -49,6 +52,7 @@ class SharedXmlStore<S : Any>(
         if (loadedStamp == null || checkedAt == Long.MIN_VALUE || now - checkedAt >= TimeUnit.MILLISECONDS.toNanos(statIntervalMillis)) {
             checkedAt = now
             val currentStamp = diskStamp()
+            noteDiskStamp(currentStamp)
             if (loadedStamp != currentStamp) {
                 try {
                     cached = read(recoverCorrupt = false)
@@ -95,6 +99,8 @@ class SharedXmlStore<S : Any>(
                 if (!home.withLock("format", lockTimeoutMillis) { home.canWriteFormat() }) {
                     throw SharedStorageException("AgentHub data was created by a newer or unsupported plugin. Update AgentHub before changing it.")
                 }
+                // A write by someone else since we last looked must still count as external.
+                noteDiskStamp(diskStamp())
                 val latest = read(recoverCorrupt = true)
                 if (newerVersion) throw SharedStorageException("AgentHub data uses a newer schema. Update AgentHub before changing it.")
                 val updated = transform(copy(latest))
@@ -102,6 +108,7 @@ class SharedXmlStore<S : Any>(
                 home.atomicWrite(path, JDOMUtil.writeElement(xml).toByteArray(Charsets.UTF_8))
                 cached = updated
                 loadedStamp = diskStamp()
+                seenDiskStamp = loadedStamp
                 checkedAt = System.nanoTime()
                 readFailed = false
                 generation++
@@ -117,6 +124,16 @@ class SharedXmlStore<S : Any>(
     @Synchronized override fun stamp(): String {
         refresh()
         return if (path == null || home.memoryOnly) "memory:$generation" else "${loadedStamp.orEmpty()}:$readFailed"
+    }
+
+    @Synchronized override fun externalStamp(): String {
+        refresh()
+        return if (path == null || home.memoryOnly) "memory" else "$externalGeneration:$readFailed"
+    }
+
+    private fun noteDiskStamp(current: String) {
+        if (seenDiskStamp != null && seenDiskStamp != current) externalGeneration++
+        seenDiskStamp = current
     }
 
     /** Must be called under the store lock whenever quarantine is permitted. */

@@ -19,8 +19,9 @@
                 confirmation dialog.</li>
             <li><b>Detection</b> of installed agents on startup.</li>
             <li><b>Project discovery</b> &mdash; browse the projects and sessions of Antigravity,
-                Claude Code, Cline, Codex CLI, GitHub Copilot CLI, Cursor CLI, Grok Build, Kiro CLI,
-                OpenCode and Qwen Code, and resume a session from the tool window.</li>
+                Claude Code, Cline, Codex CLI, GitHub Copilot CLI, Cursor CLI, Freebuff, Grok Build, Junie CLI,
+                Kilo Code, Kimi Code, Kiro CLI, MiMo Code, Mistral Vibe, Oh My Pi, OpenCode and Qwen Code,
+                and resume a session from the tool window.</li>
             <li><b>Environment</b> &mdash; see the skills, MCP servers, instruction files and
                 configuration files each of those agents uses.</li>
             <li><b>Shared skills</b> &mdash; share a skill between agents, with a preview, backups and Undo.</li>
@@ -49,8 +50,8 @@
         </p>
         <ul>
             <li><b>Projects and Agents</b> &mdash; sessions from Antigravity, Claude Code, Cline, Codex CLI,
-                GitHub Copilot CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode and Qwen Code, grouped by
-                project or by agent. Sessions from several agents in the same repository appear as one project.</li>
+                GitHub Copilot CLI, Cursor CLI, Freebuff, Grok Build, Junie CLI, Kilo Code, Kimi Code, Kiro CLI, MiMo Code,
+                Mistral Vibe, Oh My Pi, OpenCode and Qwen Code, grouped by project or by agent. Sessions from several agents in the same repository appear as one project.</li>
             <li><b>Sessions</b> &mdash; each session shows the agent's title (or your first prompt), how many
                 prompts you sent and when it ran. <b>Resume</b> reopens a Claude Code, Codex CLI or OpenCode
                 session in a terminal; <b>Transcript</b> opens the session file.</li>
@@ -60,7 +61,7 @@
                 different. MCP secrets are never shown, only variable names.</li>
             <li><b>Skills</b> &mdash; share a skill between agents, resolve conflicts, restore backups and undo.
                 Every change shows a plan first and backs up what it replaces.</li>
-            <li><b>Installed agents only</b> &mdash; only agents whose CLI the latest detection found are shown.</li>
+            <li><b>Installed agents only</b> &mdash; only agents whose CLI the latest detection found are shown, even before their first session.</li>
             <li><b>Open in IDE and Launch</b> &mdash; open a project in a detected JetBrains IDE, or start an
                 agent with the project directory as its working directory.</li>
             <li><b>Cached index</b> &mdash; kept across IDE restarts and refreshed in the background.</li>
@@ -130,6 +131,15 @@
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.3.1</b></p>
+        <ul>
+            <li>The tool window discovers <b>seven more agents</b>: Kilo Code, Kimi Code, Oh My Pi, Junie CLI, Mistral Vibe, Freebuff and MiMo Code (17 in total) &mdash; projects and sessions, Skills, MCP servers, instruction files and Config.</li>
+            <li><b>Resume</b> now works for all 17 agents, using each CLI's own resume command. A session id that is not safe to pass to a command line is refused rather than quoted.</li>
+            <li>Skills: the sync engine was reorganised, and symlinked skill folders are now walked. Kilo Code, Kimi Code, Oh My Pi, Junie CLI, Mistral Vibe and MiMo Code are Share/Promote targets.</li>
+            <li>Discovery fixes: Claude <code>AGENTS.md</code> and <code>CLAUDE_CONFIG_DIR</code>, OpenCode <code>.opencode</code> and <code>OPENCODE_CONFIG(_DIR)</code>, Qwen <code>.qwen/rules</code>, and same-named Antigravity MCP servers are listed separately. An instruction file that an agent does not apply is still listed, with an info line saying why.</li>
+            <li>The Agents tab lists every installed agent, also before its first session: Projects and Sessions are greyed out until then, and Environment already shows the agent's global skills, MCP servers, instructions and configuration.</li>
+            <li>Fewer needless rescans: AgentHub's own saves no longer look like changes made by another IDE, unchanged results are not written again, and the Skills and Environment data is no longer re-read and re-scanned on every click in the tool window.</li>
+        </ul>
         <p><b>1.3.0</b></p>
         <ul>
             <li>New <b>Skills</b> tab: browse global or project skills, search and filter them, and open or reveal their files.</li>

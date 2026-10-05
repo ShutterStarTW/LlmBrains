@@ -16,7 +16,7 @@ data class SkillSyncSettings(
      * step before any Share/Repair/Resync/Promote/Stop Sharing/ResolveConflict(KEEP_CANONICAL,
      * KEEP_TARGET) replacement or removal — read once per `prepare*` call in
      * [com.shutterstar.agenthub.environment.skills.sync.SkillSyncApplicationService] and threaded
-     * through [com.shutterstar.agenthub.environment.skills.sync.SkillSyncService.plan]. Turning it
+     * through [com.shutterstar.agenthub.environment.skills.sync.SkillSyncEngine.plan]. Turning it
      * off removes the safety net under Undo (which then only deletes what it just created, instead
      * of restoring what was replaced) and "Restore Backup…" (which has nothing to offer for an
      * operation that skipped its backup) — the settings dialog spells this out next to the toggle.

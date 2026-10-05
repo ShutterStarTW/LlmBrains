@@ -21,6 +21,7 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncStep
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncStepResult
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTargetResult
+import com.shutterstar.agenthub.environment.skills.sync.model.SkillTargetStatus
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncError
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncOperationStatus
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncTargetOutcome
@@ -269,18 +270,25 @@ internal class SkillSyncOperationRunner(
         )
     }
 
-    /** Read-only batch used by the Skills dashboard; performs the same observation as planning. */
+    /**
+     * Read-only batch used by the Skills dashboard; performs the same observation as planning.
+     *
+     * [directReaderIds] are agents that read the shared directory themselves but have no sync target
+     * (nothing is ever created for them, so there is no directory to observe): they are reported as
+     * [SkillTargetStatus.NATIVE], exactly like a native agent that does have a target.
+     */
     fun targetStatuses(
         skill: AgentSkill,
         scope: SkillScope,
         project: DiscoveredProject?,
         targetsByAgentId: Map<String, SkillSyncTarget>,
         requestedMode: SkillSyncMode = SkillSyncMode.SYMLINK,
+        directReaderIds: Set<String> = emptySet(),
     ): List<ObservedSkillTarget> {
         val canonical = canonicalResolver.resolve(skill)?.takeIf { it.scope == scope } ?: return emptyList()
         val key = instanceKey(canonical.skillId, scope, project, canonical.canonicalPath)
         val currentCanonicalFingerprint = fingerprint.calculate(canonical.canonicalPath)
-        return targetsByAgentId.values.sortedBy { it.agentId }.map { target ->
+        val observed = targetsByAgentId.values.map { target ->
             observer.observe(
                 target,
                 canonical.canonicalPath,
@@ -291,6 +299,13 @@ internal class SkillSyncOperationRunner(
                 ownershipStore.managedTarget(key, target.agentId),
             )
         }
+        // Like the observer, only a canonical that actually has content counts as read by the agent.
+        val direct = if (currentCanonicalFingerprint == null) emptyList() else {
+            (directReaderIds - targetsByAgentId.keys).map { agentId ->
+                ObservedSkillTarget(agentId, canonical.canonicalPath, SkillTargetStatus.NATIVE, requestedMode)
+            }
+        }
+        return (observed + direct).sortedBy { it.agentId }
     }
 
     /**

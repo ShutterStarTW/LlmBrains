@@ -70,7 +70,7 @@ class SkillSyncPlanner {
     /**
      * Purely mechanical — reads only [target]'s path/mode fields and [request]'s canonical
      * path/fingerprint, never branches on [target]'s status. `internal` (not `private`) so
-     * [com.shutterstar.agenthub.environment.skills.sync.SkillSyncService] can reuse the exact same
+     * [com.shutterstar.agenthub.environment.skills.sync.SkillSyncEngine] can reuse the exact same
      * step shape for `ResolveConflict`'s `KEEP_CANONICAL` resolution, which deliberately bypasses
      * [plan]'s own DIFFERENT-is-untouchable policy (an explicit, user-authorized exception to it,
      * not a change to that policy).

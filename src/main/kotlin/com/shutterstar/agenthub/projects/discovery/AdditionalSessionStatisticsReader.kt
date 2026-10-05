@@ -21,7 +21,7 @@ internal class AdditionalSessionStatisticsReader(
             "cline" -> cline(json)
             "kiro" -> kiro(json)
             "antigravity" -> antigravity(json)
-            "opencode" -> openCode(json)
+            "opencode", "kilo" -> openCode(json)
         }
     }
 

@@ -62,19 +62,24 @@ class AdditionalAgentInstructionProviderTest {
     }
 
     @Test
-    fun `should discover Qwen global project local and AGENTS md instructions`() {
+    fun `should discover Qwen global project local rules and AGENTS md instructions`() {
         writeFile(temporaryDirectory.resolve(".qwen/QWEN.md"), "Instructions")
+        writeFile(temporaryDirectory.resolve(".qwen/rules/team/style.md"), "Instructions")
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("qwen-project"))
         writeFile(projectRoot.resolve("QWEN.md"), "Instructions")
         writeFile(projectRoot.resolve(".qwen/QWEN.local.md"), "Instructions")
         writeFile(projectRoot.resolve("src/AGENTS.md"), "Instructions")
         writeFile(projectRoot.resolve("nested/QWEN.md"), "Instructions")
+        writeFile(projectRoot.resolve(".qwen/rules/frontend/react.md"), "Instructions")
+        writeFile(projectRoot.resolve(".qwen/rules/notes.txt"), "Not a rule")
 
         val provider = QwenInstructionProvider(temporaryDirectory)
         val project = provider.discoverProject(project(projectRoot))
 
-        assertEquals(1, provider.discoverGlobal().size)
-        assertEquals(3, project.size)
+        assertEquals(2, provider.discoverGlobal().size)
+        assertEquals(5, project.size)
+        // Qwen searches upward from the working directory, so only a nested QWEN.md carries a note.
+        assertEquals(listOf("nested/QWEN.md"), project.filter { it.agentNotes.isNotEmpty() }.map { projectRoot.relativize(Path.of(it.path)).toString().replace('\\', '/') })
         assertEquals(1, project.count { it.type == InstructionType.AGENTS_MD })
     }
 
@@ -105,5 +110,56 @@ class AdditionalAgentInstructionProviderTest {
             project.mapTo(mutableSetOf()) { it.type },
         )
         assertEquals(2, project.count { it.type == InstructionType.AGENTS_MD })
+    }
+
+    @Test
+    fun `should list Claude AGENTS dot md and flag it unused only where Claude ignores it`() {
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("agents-only"))
+        Files.writeString(projectRoot.resolve("AGENTS.md"), "Shared guidance")
+        Files.writeString(Files.createDirectories(projectRoot.resolve("pkg")).resolve("AGENTS.md"), "Package guidance")
+        Files.writeString(Files.createDirectories(projectRoot.resolve(".agents")).resolve("AGENTS.md"), "Not read")
+
+        val sources = ClaudeInstructionProvider(temporaryDirectory).discoverProject(project(projectRoot))
+        val byPath = sources.associateBy { projectRoot.relativize(Path.of(it.path)).toString().replace('\\', '/') }
+
+        assertEquals(setOf("AGENTS.md", "pkg/AGENTS.md", ".agents/AGENTS.md"), byPath.keys)
+        assertTrue(sources.all { it.type == InstructionType.AGENTS_MD && it.agentIds == setOf("claude") })
+        assertTrue(byPath.getValue("AGENTS.md").agentNotes.isEmpty())
+        assertTrue(byPath.getValue("pkg/AGENTS.md").agentNotes.isEmpty())
+        assertTrue(byPath.getValue(".agents/AGENTS.md").agentNotes.getValue("claude").contains(".agents"))
+    }
+
+    @Test
+    fun `should list Claude AGENTS dot md with a reason when CLAUDE md or CLAUDE local md exists at the project root`() {
+        val withClaude = Files.createDirectories(temporaryDirectory.resolve("with-claude"))
+        Files.writeString(withClaude.resolve("AGENTS.md"), "Shared guidance")
+        Files.writeString(Files.createDirectories(withClaude.resolve(".claude")).resolve("CLAUDE.md"), "Claude guidance")
+        val withLocal = Files.createDirectories(temporaryDirectory.resolve("with-local"))
+        Files.writeString(withLocal.resolve("AGENTS.md"), "Shared guidance")
+        Files.writeString(withLocal.resolve("CLAUDE.local.md"), "Personal guidance")
+
+        val provider = ClaudeInstructionProvider(temporaryDirectory)
+
+        listOf(withClaude, withLocal).forEach { root ->
+            val sources = provider.discoverProject(project(root))
+            assertEquals(setOf(InstructionType.AGENTS_MD, InstructionType.CLAUDE_MD), sources.map { it.type }.toSet())
+            assertTrue(sources.first { it.type == InstructionType.AGENTS_MD }.agentNotes.getValue("claude").contains("CLAUDE.md"))
+            assertTrue(sources.first { it.type == InstructionType.CLAUDE_MD }.agentNotes.isEmpty())
+        }
+    }
+
+    @Test
+    fun `should flag a nested Claude AGENTS dot md only when its own directory has a CLAUDE md`() {
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("nested"))
+        val covered = Files.createDirectories(projectRoot.resolve("covered"))
+        Files.writeString(covered.resolve("AGENTS.md"), "Covered")
+        Files.writeString(covered.resolve("CLAUDE.md"), "Claude")
+        Files.writeString(Files.createDirectories(projectRoot.resolve("plain")).resolve("AGENTS.md"), "Plain")
+
+        val sources = ClaudeInstructionProvider(temporaryDirectory).discoverProject(project(projectRoot))
+        val unused = sources.filter { it.agentNotes.isNotEmpty() }.map { projectRoot.relativize(Path.of(it.path)).toString().replace('\\', '/') }
+
+        assertEquals(listOf("covered/AGENTS.md"), unused)
+        assertEquals(3, sources.size)
     }
 }

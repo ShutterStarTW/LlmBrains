@@ -1,6 +1,7 @@
 package com.shutterstar.agenthub.projects.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
+import com.shutterstar.agenthub.environment.discovery.MimoHomeSupport
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.latest
 import com.shutterstar.agenthub.projects.discovery.LocalSessionSupport.readBoundedText
 import com.shutterstar.agenthub.projects.model.RawAgentProject
@@ -25,17 +26,45 @@ data class OpenCodeSessionRecord(
     val statistics: Map<String, String> = emptyMap(),
 )
 
-class OpenCodeProjectProvider(
-    private val dataDirectory: Path = defaultDataDirectory(),
-    private val maxLegacyScanEntries: Int = MAX_LEGACY_SCAN_ENTRIES,
-    private val databaseReader: (Path) -> List<OpenCodeSessionRecord> = OpenCodeSqliteReader()::readSessions,
-) : AgentProjectProvider {
-    override val agentId: String = AGENT_ID
+/** What differs between OpenCode and its forks: ids, data directory name, database file names, legacy JSON storage. */
+data class OpenCodeStorageFlavor(
+    val agentId: String,
+    /** The `$XDG_DATA_HOME/<appName>` directory name. */
+    val appName: String,
+    val databaseName: String,
+    /** Channel databases: `<prefix><channel>.db` next to the stable one. */
+    val databasePrefix: String,
+    /** The pre-SQLite `storage/…` JSON layout (OpenCode only; Kilo never had it). */
+    val hasLegacyJsonStorage: Boolean,
+) {
+    companion object {
+        val OPENCODE = OpenCodeStorageFlavor("opencode", "opencode", "opencode.db", "opencode-", true)
+        val KILO = OpenCodeStorageFlavor("kilo", "kilo", "kilo.db", "kilo-", false)
+        val MIMO = OpenCodeStorageFlavor("mimo", "mimocode", "mimocode.db", "mimocode-", false)
+    }
+}
 
-    private val legacyDirectories = listOf(
-        dataDirectory.resolve(STORAGE_DIRECTORY).resolve(SESSION_DIRECTORY),
-        dataDirectory.resolve(PROJECT_DIRECTORY),
-    )
+/**
+ * Session discovery shared by OpenCode and its SQLite-compatible forks (Kilo): the same
+ * `session`/`message`/`part` schema, differing only in [flavor]. Use [OpenCodeProjectProvider],
+ * [KiloProjectProvider] or [MimoProjectProvider].
+ */
+open class OpenCodeFamilyProjectProvider(
+    private val flavor: OpenCodeStorageFlavor,
+    private val dataDirectory: Path,
+    private val maxLegacyScanEntries: Int = MAX_LEGACY_SCAN_ENTRIES,
+    private val databaseReader: (Path) -> List<OpenCodeSessionRecord> = OpenCodeSqliteReader(flavor.agentId)::readSessions,
+) : AgentProjectProvider {
+    override val agentId: String = flavor.agentId
+
+    private val legacyDirectories = if (flavor.hasLegacyJsonStorage) {
+        listOf(
+            dataDirectory.resolve(STORAGE_DIRECTORY).resolve(SESSION_DIRECTORY),
+            dataDirectory.resolve(PROJECT_DIRECTORY),
+        )
+    } else {
+        emptyList()
+    }
 
     override fun isAvailable(): Boolean =
         legacyDirectories.any { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) } || databaseFiles().isNotEmpty()
@@ -52,10 +81,10 @@ class OpenCodeProjectProvider(
         }
         sessions += discoverLegacySessions()
         if (sessions.isEmpty() && databaseFailure != null) {
-            throw IOException("OpenCode session database could not be read", databaseFailure)
+            throw IOException("${flavor.appName} session database could not be read", databaseFailure)
         }
         if (databaseFailure != null) {
-            LOG.fine("[ProjectDiscovery] OpenCode: a database was skipped; legacy or alternate storage was used")
+            LOG.fine("[ProjectDiscovery] ${flavor.appName}: a database was skipped; legacy or alternate storage was used")
         }
         return LocalSessionSupport.deduplicate(sessions)
     }
@@ -69,7 +98,7 @@ class OpenCodeProjectProvider(
                     .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
                     .filter { file ->
                         val name = file.fileName.toString()
-                        name == DATABASE_NAME || (name.startsWith(DATABASE_PREFIX) && name.endsWith(DATABASE_SUFFIX))
+                        name == flavor.databaseName || (name.startsWith(flavor.databasePrefix) && name.endsWith(DATABASE_SUFFIX))
                     }
                     .sorted()
                     .toList()
@@ -200,14 +229,11 @@ class OpenCodeProjectProvider(
     }
 
     companion object {
-        private const val AGENT_ID = "opencode"
         private const val STORAGE_DIRECTORY = "storage"
         private const val SESSION_DIRECTORY = "session"
         private const val MESSAGE_DIRECTORY = "message"
         private const val PART_DIRECTORY = "part"
         private const val PROJECT_DIRECTORY = "project"
-        private const val DATABASE_NAME = "opencode.db"
-        private const val DATABASE_PREFIX = "opencode-"
         private const val DATABASE_SUFFIX = ".db"
         private const val JSON_EXTENSION = "json"
         private const val MAX_DATABASE_FILES = 100
@@ -235,15 +261,35 @@ class OpenCodeProjectProvider(
         private val LEGACY_MESSAGE_FIELDS = setOf(ID_FIELD, SESSION_ID_FIELD, ROLE_FIELD)
         private val LEGACY_PART_FIELDS = setOf(TYPE_FIELD, MESSAGE_ID_FIELD)
         private val LEGACY_TIME_FIELDS = setOf(CREATED_FIELD, UPDATED_FIELD)
-        private val LOG = Logger.getLogger(OpenCodeProjectProvider::class.java.name)
+        private val LOG = Logger.getLogger(OpenCodeFamilyProjectProvider::class.java.name)
+        internal const val MAX_LEGACY_SCAN_ENTRIES_DEFAULT = MAX_LEGACY_SCAN_ENTRIES
 
-        private fun defaultDataDirectory(): Path = EnvHomeDirectorySupport.resolveXdgGuarded(
-            "XDG_DATA_HOME", Path.of(System.getProperty("user.home")), ".local/share", "opencode",
+        internal fun defaultDataDirectory(flavor: OpenCodeStorageFlavor): Path = EnvHomeDirectorySupport.resolveXdgGuarded(
+            "XDG_DATA_HOME", Path.of(System.getProperty("user.home")), ".local/share", flavor.appName,
         )
     }
 }
 
+class OpenCodeProjectProvider(
+    dataDirectory: Path = OpenCodeFamilyProjectProvider.defaultDataDirectory(OpenCodeStorageFlavor.OPENCODE),
+    maxLegacyScanEntries: Int = OpenCodeFamilyProjectProvider.MAX_LEGACY_SCAN_ENTRIES_DEFAULT,
+    databaseReader: (Path) -> List<OpenCodeSessionRecord> = OpenCodeSqliteReader(OpenCodeStorageFlavor.OPENCODE.agentId)::readSessions,
+) : OpenCodeFamilyProjectProvider(OpenCodeStorageFlavor.OPENCODE, dataDirectory, maxLegacyScanEntries, databaseReader)
+
+/** Kilo Code CLI: an OpenCode fork with the same SQLite schema in `$XDG_DATA_HOME/kilo/kilo.db`. */
+class KiloProjectProvider(
+    dataDirectory: Path = OpenCodeFamilyProjectProvider.defaultDataDirectory(OpenCodeStorageFlavor.KILO),
+    databaseReader: (Path) -> List<OpenCodeSessionRecord> = OpenCodeSqliteReader(OpenCodeStorageFlavor.KILO.agentId)::readSessions,
+) : OpenCodeFamilyProjectProvider(OpenCodeStorageFlavor.KILO, dataDirectory, OpenCodeFamilyProjectProvider.MAX_LEGACY_SCAN_ENTRIES_DEFAULT, databaseReader)
+
+/** MiMo Code CLI (Xiaomi): an OpenCode fork with the same SQLite schema in `mimocode.db` of its data directory (`MIMOCODE_HOME/data`, or `$XDG_DATA_HOME/mimocode`). */
+class MimoProjectProvider(
+    dataDirectory: Path = MimoHomeSupport.dataDirectory(Path.of(System.getProperty("user.home"))),
+    databaseReader: (Path) -> List<OpenCodeSessionRecord> = OpenCodeSqliteReader(OpenCodeStorageFlavor.MIMO.agentId)::readSessions,
+) : OpenCodeFamilyProjectProvider(OpenCodeStorageFlavor.MIMO, dataDirectory, OpenCodeFamilyProjectProvider.MAX_LEGACY_SCAN_ENTRIES_DEFAULT, databaseReader)
+
 class OpenCodeSqliteReader(
+    private val statisticsAgentId: String = "opencode",
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
     private val commandRunner: (List<String>, Long) -> String? = ProcessCommandRunner::run,
 ) {
@@ -258,7 +304,7 @@ class OpenCodeSqliteReader(
             if (columns.size != 2) return@forEach
             val sessionId = decodeHex(columns[0]) ?: return@forEach
             val record = decodeHex(columns[1]) ?: return@forEach
-            val accumulator = usage.getOrPut(sessionId) { SessionStatisticsAccumulator("opencode") }
+            val accumulator = usage.getOrPut(sessionId) { SessionStatisticsAccumulator(statisticsAgentId) }
             accumulator.record(record)
             if (MetadataJsonParser.topLevelStringFields(record, setOf("role"))["role"] == "user") accumulator.userPrompt()
         }

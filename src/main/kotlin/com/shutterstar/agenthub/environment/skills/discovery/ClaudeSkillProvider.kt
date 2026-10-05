@@ -2,6 +2,8 @@ package com.shutterstar.agenthub.environment.skills.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
+import com.shutterstar.agenthub.projects.model.DiscoveredProject
+import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 
 /**
@@ -44,7 +46,23 @@ class ClaudeSkillProvider(
         return (own + synced).distinctBy { it.path }
     }
 
+    /**
+     * Claude Code also loads nested `<subdir>/.claude/skills` (monorepo packages): sessions started in or
+     * below that directory load them directly, a session above it loads them once Claude works on files there.
+     */
+    override fun discoverProject(project: DiscoveredProject): List<SkillSourceRecord> {
+        val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()
+        return scanner.discoverNestedProjectSkills(
+            projectRoot = projectRoot,
+            ownerDirectoryName = CLAUDE_DIRECTORY,
+            agentId = agentId,
+            shared = false,
+            projectName = project.name,
+        )
+    }
+
     private companion object {
+        const val CLAUDE_DIRECTORY = ".claude"
         const val SYNCED_DIRECTORY = "synced"
     }
 }

@@ -25,6 +25,7 @@ internal object InstructionFileSupport {
         agentId: String,
         type: InstructionType,
         projectName: String? = null,
+        note: String? = null,
     ): InstructionSource? {
         if (!isNonEmptyRegularFile(path)) return null
         return InstructionSource(
@@ -33,6 +34,7 @@ internal object InstructionFileSupport {
             agentIds = setOf(agentId),
             type = type,
             projectName = projectName,
+            agentNotes = if (note == null) emptyMap() else mapOf(agentId to note),
         )
     }
 

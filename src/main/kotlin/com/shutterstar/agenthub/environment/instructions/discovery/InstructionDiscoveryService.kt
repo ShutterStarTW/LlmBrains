@@ -16,10 +16,17 @@ class InstructionDiscoveryService(
         CodexInstructionProvider(),
         CopilotInstructionProvider(),
         CursorInstructionProvider(),
+        FreebuffInstructionProvider(),
         GrokInstructionProvider(),
+        JunieInstructionProvider(),
+        KiloInstructionProvider(),
+        KimiInstructionProvider(),
         KiroInstructionProvider(),
+        MimoInstructionProvider(),
+        OmpInstructionProvider(),
         OpenCodeInstructionProvider(),
         QwenInstructionProvider(),
+        VibeInstructionProvider(),
     ),
     /** Only installed agents are discovered. */
     isAgentVisible: (String) -> Boolean = { true },
@@ -45,6 +52,7 @@ class InstructionDiscoveryService(
                 val representative = groupedSources.first()
                 representative.copy(
                     agentIds = groupedSources.flatMapTo(sortedSetOf(), InstructionSource::agentIds),
+                    agentNotes = groupedSources.fold(emptyMap()) { merged, source -> merged + source.agentNotes },
                 )
             }
             .sortedWith(

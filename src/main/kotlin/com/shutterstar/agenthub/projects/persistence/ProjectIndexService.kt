@@ -34,6 +34,20 @@ class ProjectIndexService(
         get() = store.snapshot()
         set(value) { store.update { value } }
 
+    /** The stored state and its decoded projects, rebuilt only when the store's stamp moves (a snapshot is a full XML copy). */
+    private class StoredView(val stamp: String, val state: ProjectIndexState) {
+        val projects: List<DiscoveredProject> by lazy { ProjectIndexStateMapper.decode(state) }
+    }
+
+    @Volatile
+    private var storedView: StoredView? = null
+
+    private fun storedView(): StoredView {
+        val stamp = store.stamp()
+        storedView?.takeIf { it.stamp == stamp }?.let { return it }
+        return StoredView(stamp, store.snapshot()).also { storedView = it }
+    }
+
     @Volatile
     private var activeRefresh: CompletableFuture<ProjectDiscoveryResult>? = null
 
@@ -61,13 +75,13 @@ class ProjectIndexService(
     fun cachedProjects(): List<DiscoveredProject> {
         val currentStamp = store.stamp()
         if (liveStamp != currentStamp) liveProjects = null
-        return ProjectVisibility.filter(liveProjects ?: ProjectIndexStateMapper.decode(storedState), isAgentVisible)
+        return ProjectVisibility.filter(liveProjects ?: storedView().projects, isAgentVisible)
     }
 
     /** Whether this IDE session has run discovery yet. */
     fun hasLiveResults(): Boolean = liveProjects != null
 
-    fun lastRefreshedAt(): Instant? = storedState.refreshedAtEpochMillis
+    fun lastRefreshedAt(): Instant? = storedView().state.refreshedAtEpochMillis
         .takeIf { it > 0L }
         ?.let(Instant::ofEpochMilli)
 
@@ -143,7 +157,7 @@ class ProjectIndexService(
         activeRefresh = null
     }
 
-    fun storageStamp(): String = store.stamp()
+    fun storageStamp(): String = store.externalStamp()
 
     companion object {
         private const val MAX_DISCOVERY_ATTEMPTS = 3

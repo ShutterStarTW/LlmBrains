@@ -50,6 +50,7 @@ import com.shutterstar.agenthub.environment.skills.ui.SkillsPanel
 import com.shutterstar.agenthub.environment.ui.EnvironmentUiModel
 import com.shutterstar.agenthub.projects.launch.NativeResumeCommands
 import com.shutterstar.agenthub.projects.model.AgentSession
+import com.shutterstar.agenthub.projects.discovery.AgentProjectProviders
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import com.shutterstar.agenthub.projects.persistence.ProjectIndexService
@@ -232,15 +233,25 @@ class AgentHubToolWindowPanel(
     private var disposed = false
     private val checkingSharedState = AtomicBoolean()
     private val sharedChanges = SharedStateChangeMonitor()
+    private val lastSharedCheckNanos = AtomicLong(System.nanoTime() - SHARED_CHECK_MIN_INTERVAL_NANOS)
     private val sharedFocusListener = PropertyChangeListener { event ->
         val focused = event.newValue as? Component
         if (focused != null && SwingUtilities.isDescendingFrom(focused, this)) {
-            refreshSharedDataIfChanged()
+            refreshSharedDataIfChanged(throttle = true)
         }
     }
 
-    private fun refreshSharedDataIfChanged() {
-        if (disposed || !checkingSharedState.compareAndSet(false, true)) return
+    /** [throttle]: focus moves inside the panel are frequent; explicit calls (open, Refresh) always check. */
+    private fun refreshSharedDataIfChanged(throttle: Boolean = false) {
+        if (disposed) return
+        if (throttle) {
+            val now = System.nanoTime()
+            val last = lastSharedCheckNanos.get()
+            if (now - last < SHARED_CHECK_MIN_INTERVAL_NANOS || !lastSharedCheckNanos.compareAndSet(last, now)) return
+        } else {
+            lastSharedCheckNanos.set(System.nanoTime())
+        }
+        if (!checkingSharedState.compareAndSet(false, true)) return
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val stamp = listOf(
@@ -286,6 +297,8 @@ class AgentHubToolWindowPanel(
     }
     private val skillProjectScanGeneration = AtomicLong()
     private val environmentSummaryGeneration = AtomicLong()
+    /** Set before the init block runs: the first scan there must be remembered. */
+    private var environmentScanKey: EnvironmentScanKey? = null
     private var projectEnvironmentLabels: Map<String, String> = emptyMap()
     private var agentEnvironmentLabels: Map<String, String> = emptyMap()
     private val environmentSummaryResults = mutableMapOf<String, Result<ProjectEnvironment>>()
@@ -295,8 +308,12 @@ class AgentHubToolWindowPanel(
     private val refreshSubscription = indexService.addRefreshListener {
         ApplicationManager.getApplication().invokeLater {
             if (!disposed) {
-                // A refresh initiated elsewhere must also invalidate this window's detail caches.
-                if (!refreshing) environmentDiscovery.invalidateAll()
+                // A refresh initiated elsewhere must also invalidate this window's detail caches - unless it
+                // found the same projects and agents, in which case the environments are still current (they
+                // also expire by themselves after a few minutes).
+                if (!refreshing && environmentInputs(indexService.cachedProjects()) != environmentInputs(projects)) {
+                    environmentDiscovery.invalidateAll()
+                }
                 reloadFromCache()
             }
         }
@@ -455,9 +472,36 @@ class AgentHubToolWindowPanel(
         render()
     }
 
+    /** Installed agents without a single indexed session: still listed, because their environment exists. */
+    private fun sessionlessAgentIds(): Set<String> {
+        val withSessions = projects.flatMapTo(mutableSetOf()) { project -> project.agents.map { it.agentId } }
+        return DISCOVERABLE_AGENT_IDS.filterTo(sortedSetOf()) { it !in withSessions && isAgentVisible(it) }
+    }
+
+    /** What the running/finished environment scan was started for; an identical request needs no new scan. */
+    private data class EnvironmentScanKey(
+        val cacheGeneration: Long,
+        val projects: List<Triple<String, String?, Set<String>>>,
+        val sessionlessAgents: Set<String>,
+    )
+
+
+    /** The parts of a project list its environment depends on (not session counts or activity times). */
+    private fun environmentInputs(list: List<DiscoveredProject>): List<Triple<String, String?, Set<String>>> =
+        list.map { Triple(it.identity.id, it.path, it.agents.mapTo(mutableSetOf()) { relation -> relation.agentId }) }
+
     private fun updateEnvironmentSummaries() {
-        val ticket = environmentSummaryGeneration.incrementAndGet()
         val candidates = projects.toList()
+        val sessionless = sessionlessAgentIds()
+        val scanKey = EnvironmentScanKey(environmentDiscovery.generation, environmentInputs(candidates), sessionless)
+        // Same projects, same agents and no cache invalidation since the last scan: its results (or its
+        // still-running scan) are current. Failures are retried explicitly, which bumps the generation.
+        if (scanKey == environmentScanKey) {
+            publishEnvironmentSummaryLabels()
+            return
+        }
+        environmentScanKey = scanKey
+        val ticket = environmentSummaryGeneration.incrementAndGet()
         environmentSummaryResults.clear()
         candidates.forEach { candidate ->
             val cached = EnvironmentIndexService.getInstance().cachedEnvironment(candidate.identity.id)
@@ -476,14 +520,35 @@ class AgentHubToolWindowPanel(
                     ?: SCANNING_ENVIRONMENT
             )
         }
-        agentEnvironmentLabels = environmentSummaryProjectsByAgent.keys.associateWith(::agentEnvironmentLabel)
+        agentEnvironmentLabels = environmentSummaryProjectsByAgent.keys.associateWith(::agentEnvironmentLabel) +
+            sessionless.associateWith { SCANNING_ENVIRONMENT }
         publishEnvironmentSummaryLabels()
         ApplicationManager.getApplication().executeOnPooledThread {
             candidates.forEach { candidate ->
                 if (ticket != environmentSummaryGeneration.get()) return@executeOnPooledThread
                 scanProjectEnvironmentSummary(candidate, ticket)
             }
+            sessionless.forEach { agentId ->
+                if (ticket != environmentSummaryGeneration.get()) return@executeOnPooledThread
+                scanSessionlessAgentEnvironment(agentId, ticket)
+            }
         }
+    }
+
+    /** An installed agent without sessions has no project to scan: its summary is its global environment. */
+    private fun scanSessionlessAgentEnvironment(agentId: String, ticket: Long) {
+        val result = runCatching { agentEnvironmentDiscovery.discover(agentId, emptyList()) }
+        result.onFailure { error -> LOG.log(Level.WARNING, "Environment summary failed for agent $agentId", error) }
+        ApplicationManager.getApplication().invokeLater({
+            if (disposed || project.isDisposed || ticket != environmentSummaryGeneration.get()) return@invokeLater
+            agentEnvironmentLabels = agentEnvironmentLabels + (
+                agentId to result.fold(
+                    onSuccess = { EnvironmentUiModel.agentSummaryLabel(EnvironmentUiModel.agentSummary(it), it.warnings.size) },
+                    onFailure = { ENVIRONMENT_UNAVAILABLE },
+                )
+            )
+            publishEnvironmentSummaryLabels()
+        }, ModalityState.any())
     }
 
     private fun scanProjectEnvironmentSummary(candidate: DiscoveredProject, ticket: Long) {
@@ -687,13 +752,14 @@ class AgentHubToolWindowPanel(
             return
         }
         val filteredProjects = ProjectIndexUiModel.filterProjects(projects, query, AgentHubUiComponents::displayName)
-        val agents = ProjectIndexUiModel.agents(projects, query, AgentHubUiComponents::displayName)
+        val sessionless = sessionlessAgentIds()
+        val agents = ProjectIndexUiModel.agents(projects, query, sessionless, AgentHubUiComponents::displayName)
         val filtered = query.isNotBlank()
         projectsPanel.setProjects(filteredProjects, refreshing, filtered)
         agentsPanel.setAgents(agents, projects, refreshing, filtered)
 
         val sessionCount = projects.sumOf { project -> project.agents.sumOf { it.sessionCount } }
-        val agentCount = projects.flatMap { it.agents }.map { it.agentId }.distinct().size
+        val agentCount = projects.flatMap { it.agents }.map { it.agentId }.toSet().size + sessionless.size
         val refreshedAt = indexService.lastRefreshedAt()?.let(AgentHubUiFormat.dateTime::format)
         val counts = if (activeTab == "Agents") {
             "${ProjectIndexUiModel.countLabel(agents.size, agentCount, "agents", filtered)} · ${projects.size} projects · $sessionCount sessions"
@@ -847,6 +913,10 @@ class AgentHubToolWindowPanel(
         private const val HISTORY_PAGE_LIMIT = 50
         /** A plain success message in the Skills status line fades after this long. */
         private const val SKILLS_STATUS_VISIBLE_MILLIS = 15_000
+        /** Agents the tool window can discover sessions for (one project provider each); static, as the init block already needs it. */
+        private val DISCOVERABLE_AGENT_IDS: Set<String> by lazy { AgentProjectProviders.all.mapTo(sortedSetOf()) { it.agentId } }
+        /** Focus changes inside the panel check the shared files for foreign changes at most this often. */
+        private val SHARED_CHECK_MIN_INTERVAL_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(3)
         private const val CARD_MAIN = "main"
         private const val CARD_CHECKING = "checking"
         private const val SCANNING_ENVIRONMENT = "Scanning environment…"

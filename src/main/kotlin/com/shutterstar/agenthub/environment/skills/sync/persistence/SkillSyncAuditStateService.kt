@@ -39,7 +39,7 @@ class SkillSyncAuditStateService(
 
     fun checkWritable() = store.checkWritable()
 
-    fun storageStamp(): String = store.stamp()
+    fun storageStamp(): String = store.externalStamp()
 
     companion object {
         fun getInstance(): SkillSyncAuditStateService = service()

@@ -78,6 +78,15 @@ class SkillDiscoveryServiceTest {
     }
 
     @Test
+    fun `should treat the shared agents skills folder as a documented Copilot personal skills location`() {
+        val skill = service.normalize(
+            listOf(record(agentId = null, path = "/home/me/.agents/skills/review", fingerprint = "shared", shared = true)),
+        ).single()
+
+        assertTrue("copilot" in skill.compatibleAgents)
+    }
+
+    @Test
     fun `should keep global and project definitions separate`() {
         val skills = service.normalize(
             listOf(

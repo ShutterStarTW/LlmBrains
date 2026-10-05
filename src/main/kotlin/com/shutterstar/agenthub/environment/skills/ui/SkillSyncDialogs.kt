@@ -652,7 +652,7 @@ internal class SkillRestoreBackupDialog(
     }
 
     // Read-only preview text only — a deliberate, documented exception to the facade-only rule
-    // (see CLAUDE.md's SkillSyncDialogs.kt note); the actual restore still goes through
+    // (it only reads and never writes); the actual restore still goes through
     // SkillMutationController → SkillSyncApplicationService like every other action.
     private fun renderImpact() {
         val record = selectedRecord ?: return

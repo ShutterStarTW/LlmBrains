@@ -137,13 +137,25 @@ class ProjectEnvironmentDiscoveryService(
         return globalConfigsForAgent(agentId, cached.records)
     }
 
-    private fun globalConfigsForAgent(agentId: String, global: GlobalRecords): AgentEnvironment =
-        AgentEnvironment(agentId, emptyList(), emptyList(), emptyList(),
+    /**
+     * Everything global that belongs to [agentId] - skills, MCP servers, instructions and configs - so an
+     * installed agent without any session still has its environment. For an agent with sessions the
+     * project environments repeat the global items; the aggregation drops those duplicates.
+     */
+    private fun globalConfigsForAgent(agentId: String, global: GlobalRecords): AgentEnvironment {
+        val environment = ProjectEnvironment(
+            projectId = "global:$agentId",
+            agentIds = sortedSetOf(agentId),
+            skills = skillDiscovery.normalize(global.skills.filter { it.shared || it.agentId == null || it.agentId == agentId }),
+            mcpServers = mcpDiscovery.normalize(global.mcpServers.filter { it.agentId == agentId }),
+            instructions = instructionDiscovery.normalize(global.instructions.filter { agentId in it.agentIds }),
             configs = global.configs.filter { it.agentId == agentId },
-            warnings = global.warnings.filter { it.capability == "config" && it.agentId == agentId },
+            warnings = global.warnings.filter { it.agentId == null || it.agentId == agentId },
         )
+        return forAgent(environment, agentId)
+    }
 
-    /** Global config inventory is available even before an agent has any indexed sessions. */
+    /** Global inventory is available even before an agent has any indexed sessions. */
     fun globalConfigsForAgent(agentId: String): AgentEnvironment {
         if (!isAgentVisible(agentId)) return AgentEnvironment(agentId, emptyList(), emptyList(), emptyList())
         return globalConfigsForAgent(agentId, globalRecords())

@@ -40,6 +40,35 @@ internal object EnvHomeDirectorySupport {
     }
 
     /**
+     * For agents that keep a file *next to* their config directory by default (Claude's
+     * `~/.claude.json`) but move it *into* the directory when the override env var is set:
+     * returns `<$envVar>/<fileName>` when the override is honored (same test-isolation guard as
+     * [resolveGuarded]), else `<homeDirectory>/<fileName>`.
+     */
+    fun resolveFileGuarded(
+        envVar: String,
+        homeDirectory: Path,
+        fileName: String,
+        configuredValue: String? = System.getenv(envVar),
+    ): Path =
+        configuredDirectoryGuarded(envVar, homeDirectory, configuredValue)?.resolve(fileName)
+            ?: homeDirectory.resolve(fileName)
+
+    /**
+     * The directory named by the env var, or null when it is unset/blank or [homeDirectory] is not the
+     * system default (test isolation, same guard as [resolveGuarded]).
+     */
+    fun configuredDirectoryGuarded(
+        envVar: String,
+        homeDirectory: Path,
+        configuredValue: String? = System.getenv(envVar),
+    ): Path? {
+        val defaultHome = Path.of(System.getProperty("user.home"))
+        if (homeDirectory.toAbsolutePath().normalize() != defaultHome.toAbsolutePath().normalize()) return null
+        return configuredValue?.trim()?.takeIf(String::isNotEmpty)?.let(::configuredPath)
+    }
+
+    /**
      * Resolves an XDG-style config root: `$<envVar>/<appName>` when the env var is set, else
      * `<homeDirectory>/<defaultBaseDirName>/<appName>` (e.g. `~/.config/<appName>` for
      * `XDG_CONFIG_HOME`). Same test-isolation guard as [resolveGuarded] — the env var is only

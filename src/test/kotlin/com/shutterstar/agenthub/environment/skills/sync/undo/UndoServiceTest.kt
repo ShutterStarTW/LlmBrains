@@ -8,7 +8,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillConsistency
 import com.shutterstar.agenthub.environment.skills.model.SkillIdentity
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.environment.skills.model.SkillSource
-import com.shutterstar.agenthub.environment.skills.sync.SkillSyncService
+import com.shutterstar.agenthub.environment.skills.sync.SkillSyncEngine
 import com.shutterstar.agenthub.environment.skills.sync.execution.BackupService
 import com.shutterstar.agenthub.environment.skills.sync.model.EffectiveSyncMode
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncMode
@@ -135,9 +135,9 @@ class UndoServiceTest {
             compatibleAgents = emptySet(),
             consistency = SkillConsistency.SINGLE_SOURCE,
         )
-        val service = SkillSyncService(sharedSkillDirectory = SharedSkillProvider(userHome))
+        val service = SkillSyncEngine(sharedSkillDirectory = SharedSkillProvider(userHome))
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL),
             skill,
             "op-1",
@@ -146,12 +146,12 @@ class UndoServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val syncResult = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
         assertEquals(SyncOperationStatus.SUCCESS, syncResult.status)
         val canonicalPath = userHome.resolve(".agents").resolve("skills").resolve("php-review")
         assertTrue(Files.exists(canonicalPath))
 
-        val undoResult = service.undo(syncResult)
+        val undoResult = service.runner.undo(syncResult)
 
         assertTrue(undoResult.errors.isEmpty())
         assertFalse(Files.exists(canonicalPath))
@@ -165,8 +165,8 @@ class UndoServiceTest {
         val sourcePath = writeSkillMd(userHome.resolve(".claude").resolve("skills").resolve("php-review"), "original content")
         val target = ClaudeSkillSyncTarget(userHome)
         val skill = agentSkill(emptyList())
-        val service = SkillSyncService(sharedSkillDirectory = SharedSkillProvider(userHome))
-        val plan = service.plan(
+        val service = SkillSyncEngine(sharedSkillDirectory = SharedSkillProvider(userHome))
+        val plan = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL),
             skill,
             "op-1",
@@ -175,11 +175,11 @@ class UndoServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val syncResult = service.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
         val canonicalPath = userHome.resolve(".agents").resolve("skills").resolve("php-review")
         Files.writeString(canonicalPath.resolve("SKILL.md"), "changed after sync")
 
-        val undoResult = service.undo(syncResult)
+        val undoResult = service.runner.undo(syncResult)
 
         assertTrue(undoResult.errors.isNotEmpty())
         assertEquals("changed after sync", Files.readString(canonicalPath.resolve("SKILL.md")))
@@ -192,11 +192,11 @@ class UndoServiceTest {
         val canonicalPath = writeSkillMd(userHome.resolve(".agents").resolve("skills").resolve("php-review"), "content")
         val target = ClaudeSkillSyncTarget(userHome)
         val ownershipStore = InMemorySyncOwnershipStore()
-        val service = SkillSyncService(
+        val service = SkillSyncEngine(
             ownershipStore = ownershipStore,
             sharedSkillDirectory = SharedSkillProvider(userHome),
         )
-        val plan = service.plan(
+        val plan = service.planner.plan(
             SkillSyncRequest.ShareSkill("skill-1", "claude", SkillSyncMode.COPY),
             agentSkill(listOf(SkillSource(null, canonicalPath.toString(), SkillScope.GLOBAL, shared = true, fingerprint = "fixture"))),
             "op-1",
@@ -205,10 +205,10 @@ class UndoServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val syncResult = service.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
         assertTrue(ownershipStore.managedTarget("skill-1", "claude") != null)
 
-        val undoResult = service.undo(syncResult)
+        val undoResult = service.runner.undo(syncResult)
 
         assertTrue(undoResult.errors.isEmpty())
         assertNull(ownershipStore.managedTarget("skill-1", "claude"))
@@ -230,11 +230,11 @@ class UndoServiceTest {
             SkillFingerprint().calculate(targetPath),
         )
         ownershipStore.record("skill-1", managedTarget)
-        val service = SkillSyncService(
+        val service = SkillSyncEngine(
             ownershipStore = ownershipStore,
             sharedSkillDirectory = SharedSkillProvider(userHome),
         )
-        val plan = service.plan(
+        val plan = service.planner.plan(
             SkillSyncRequest.StopSharing("skill-1", "claude"),
             agentSkill(listOf(SkillSource(null, canonicalPath.toString(), SkillScope.GLOBAL, shared = true, fingerprint = "fixture"))),
             "op-1",
@@ -243,11 +243,11 @@ class UndoServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val syncResult = service.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
         assertFalse(Files.exists(targetPath))
         assertNull(ownershipStore.managedTarget("skill-1", "claude"))
 
-        val undoResult = service.undo(syncResult)
+        val undoResult = service.runner.undo(syncResult)
 
         assertTrue(undoResult.errors.isEmpty())
         assertEquals("content", Files.readString(targetPath.resolve("SKILL.md")))

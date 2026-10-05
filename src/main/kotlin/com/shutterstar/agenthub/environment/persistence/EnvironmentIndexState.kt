@@ -63,6 +63,8 @@ data class EnvironmentIndexInstructionState(
     var type: String = "",
     var agentIds: MutableList<String> = mutableListOf(),
     var projectName: String? = null,
+    /** `agentId=reason` entries (see InstructionSource.agentNotes). */
+    var agentNotes: MutableList<String> = mutableListOf(),
 )
 
 data class EnvironmentIndexWarningState(

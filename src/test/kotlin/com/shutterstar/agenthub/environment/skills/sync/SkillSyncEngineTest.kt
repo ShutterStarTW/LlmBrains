@@ -50,11 +50,11 @@ import java.nio.file.Path
  * skills *root*, and the observer appends the canonical skill's directory name itself (always
  * `"canonical"` here, since canonical is always created at `root.resolve("canonical")`).
  */
-class SkillSyncServiceTest {
+class SkillSyncEngineTest {
     @TempDir
     lateinit var root: Path
 
-    private val service = SkillSyncService()
+    private val service = SkillSyncEngine()
 
     @Test
     fun `ShareSkill against a not-available target produces create-link steps`() {
@@ -62,7 +62,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill(sharedPath = canonicalDir)
         val target = FakeTarget("claude", root.resolve("claude-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -83,7 +83,7 @@ class SkillSyncServiceTest {
         writeSkillMd(targetRoot.resolve("canonical"), "content")
         val target = FakeTarget("claude", targetRoot)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkill("skill-1", "claude", SkillSyncMode.SYMLINK),
             agentSkill(sharedPath = canonicalDir),
             "op-1",
@@ -109,7 +109,7 @@ class SkillSyncServiceTest {
             else -> SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.valueOf(kind))
         }
 
-        val result = service.plan(
+        val result = service.planner.plan(
             request,
             agentSkill(sharedPath = canonicalDir),
             "op-1",
@@ -129,7 +129,7 @@ class SkillSyncServiceTest {
         val canonicalDir = writeSkillMd(root.resolve("canonical"), "content")
         val target = FakeTarget("claude", root.resolve("claude-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkill("skill-1", "claude"),
             agentSkill(sharedPath = canonicalDir),
             "op-1",
@@ -148,7 +148,7 @@ class SkillSyncServiceTest {
         val canonicalDir = writeSkillMd(root.resolve("canonical"), "content")
         val targetRoot = root.resolve("claude-root")
         val target = FakeTarget("claude", targetRoot)
-        val plan = service.plan(
+        val plan = service.planner.plan(
             SkillSyncRequest.ShareSkill("skill-1", "claude"),
             agentSkill(sharedPath = canonicalDir),
             "op-1",
@@ -158,7 +158,7 @@ class SkillSyncServiceTest {
             null,
         )
 
-        val result = service.execute(plan, mapOf("claude" to target), SkillScope.PROJECT, null, root.resolve("backups"))
+        val result = service.runner.execute(plan, mapOf("claude" to target), SkillScope.PROJECT, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.FAILED, result.status)
         assertFalse(Files.exists(targetRoot.resolve("canonical")))
@@ -169,7 +169,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill(agentOnlyPath = root.resolve("claude-only"))
         val target = FakeTarget("claude", root.resolve("claude-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -190,7 +190,7 @@ class SkillSyncServiceTest {
         val claudeTarget = FakeTarget("claude", root.resolve("claude-root"))
         val codexTarget = FakeTarget("codex", root.resolve("codex-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkillEverywhere(skillId = "skill-1"),
             skill,
             "op-1",
@@ -210,7 +210,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill(sharedPath = canonicalDir)
         val claudeTarget = FakeTarget("claude", root.resolve("claude-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkillEverywhere(skillId = "skill-1"),
             skill,
             "op-1",
@@ -236,7 +236,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill(sharedPath = canonicalDir)
         val target = FakeTarget("codex", root.resolve("codex-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "codex"),
             skill,
             "op-1",
@@ -258,7 +258,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill(sharedPath = canonicalDir)
         val target = FakeTarget("codex", root.resolve("codex-root"))
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.StopSharing(skillId = "skill-1", targetAgentId = "codex"),
             skill,
             "op-1",
@@ -283,7 +283,7 @@ class SkillSyncServiceTest {
         assumeTrue(linked, "symlink creation requires elevated privilege on this machine")
         val target = FakeTarget("claude", targetRoot)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.StopSharing(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -305,7 +305,7 @@ class SkillSyncServiceTest {
         writeSkillMd(targetRoot.resolve("canonical"), "content")
         val target = FakeTarget("claude", targetRoot)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.StopSharing(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -337,9 +337,9 @@ class SkillSyncServiceTest {
                 SkillFingerprint().calculate(targetPath),
             ),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.StopSharing(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -374,9 +374,9 @@ class SkillSyncServiceTest {
                 SkillFingerprint().calculate(targetPath),
             ),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.StopSharing(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -396,9 +396,9 @@ class SkillSyncServiceTest {
         val skill = agentSkill(sharedPath = canonicalDir)
         val targetRoot = root.resolve("claude-root")
         val target = FakeTarget("claude", targetRoot)
-        val service = SkillSyncService()
+        val service = SkillSyncEngine()
 
-        val firstPlan = service.plan(
+        val firstPlan = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude", mode = SkillSyncMode.COPY),
             skill,
             "op-1",
@@ -407,10 +407,10 @@ class SkillSyncServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val firstResult = service.execute(firstPlan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val firstResult = service.runner.execute(firstPlan, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
         assertEquals(SyncOperationStatus.SUCCESS, firstResult.status)
 
-        val secondPlan = service.plan(
+        val secondPlan = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude", mode = SkillSyncMode.COPY),
             skill,
             "op-2",
@@ -436,9 +436,9 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("claude", targetPath.toString(), SkillSyncMode.COPY, EffectiveSyncMode.COPY, previousFingerprint),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ResyncSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -475,9 +475,9 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("claude", targetPath.toString(), SkillSyncMode.COPY, EffectiveSyncMode.COPY, previousFingerprint),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ResyncSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -486,7 +486,7 @@ class SkillSyncServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val syncResult = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.SUCCESS, syncResult.status)
         assertEquals("canonical content", Files.readString(targetPath.resolve("SKILL.md")))
@@ -501,10 +501,10 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("claude", root.resolve("claude-root/canonical").toString(), SkillSyncMode.COPY, EffectiveSyncMode.COPY, "fixture"),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        assertEquals(setOf("claude"), service.managedTargetIds(skill, SkillScope.GLOBAL, null))
-        assertEquals(emptySet<String>(), service.managedTargetIds(skill, SkillScope.PROJECT, null))
+        assertEquals(setOf("claude"), service.runner.managedTargetIds(skill, SkillScope.GLOBAL, null))
+        assertEquals(emptySet<String>(), service.runner.managedTargetIds(skill, SkillScope.PROJECT, null))
     }
 
     @Test
@@ -515,9 +515,9 @@ class SkillSyncServiceTest {
         val target = FakeTarget("claude", targetRoot)
         val backupRoot = root.resolve("backups")
         val ownershipStore = InMemorySyncOwnershipStore()
-        val originalService = SkillSyncService(ownershipStore = ownershipStore)
+        val originalService = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val plan = originalService.plan(
+        val plan = originalService.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -526,34 +526,34 @@ class SkillSyncServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val shareResult = originalService.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, backupRoot)
+        val shareResult = originalService.runner.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, backupRoot)
         assertEquals(SyncOperationStatus.SUCCESS, shareResult.status)
         val targetPath = targetRoot.resolve("canonical")
         assertTrue(Files.exists(targetPath.resolve("SKILL.md")))
-        assertEquals(setOf("claude"), originalService.managedTargetIds(skill, SkillScope.GLOBAL, null))
+        assertEquals(setOf("claude"), originalService.runner.managedTargetIds(skill, SkillScope.GLOBAL, null))
 
-        // Simulate an IDE restart: a brand-new SkillSyncService instance, holding no reference to
+        // Simulate an IDE restart: a brand-new SkillSyncEngine instance, holding no reference to
         // `shareResult` at all — only the ownership store (which is really persisted) survives.
-        val restartedService = SkillSyncService(ownershipStore = ownershipStore)
+        val restartedService = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val preview = restartedService.previewUndoOperation("op-1", backupRoot)
+        val preview = restartedService.runner.previewUndoOperation("op-1", backupRoot)
         assertNotNull(preview)
         assertEquals("skill-1", preview!!.skillId)
         assertEquals(setOf("claude"), preview.affectedAgents)
         assertEquals(listOf(targetPath.toString()), preview.affectedPaths)
 
-        val undoResult = restartedService.undoOperation("op-1", backupRoot)
+        val undoResult = restartedService.runner.undoOperation("op-1", backupRoot)
 
         assertNotNull(undoResult)
         assertTrue(undoResult!!.errors.isEmpty(), "Undo errors: ${undoResult.errors}")
         assertFalse(Files.exists(targetPath), "Undo should remove what Share created")
-        assertFalse("claude" in restartedService.managedTargetIds(skill, SkillScope.GLOBAL, null), "Undo should restore ownership to unmanaged")
+        assertFalse("claude" in restartedService.runner.managedTargetIds(skill, SkillScope.GLOBAL, null), "Undo should restore ownership to unmanaged")
     }
 
     @Test
     fun `undoOperation returns null when no journal was ever written for that operation id`() {
-        assertNull(service.previewUndoOperation("never-happened", root.resolve("backups")))
-        assertNull(service.undoOperation("never-happened", root.resolve("backups")))
+        assertNull(service.runner.previewUndoOperation("never-happened", root.resolve("backups")))
+        assertNull(service.runner.undoOperation("never-happened", root.resolve("backups")))
     }
 
     @Test
@@ -564,9 +564,9 @@ class SkillSyncServiceTest {
         val targetPath = writeSkillMd(targetRoot.resolve("canonical"), "content")
         val target = FakeTarget("claude", targetRoot)
         val ownershipStore = InMemorySyncOwnershipStore()
-        val localService = SkillSyncService(ownershipStore = ownershipStore)
+        val localService = SkillSyncEngine(ownershipStore = ownershipStore)
         val backupRoot = root.resolve("backups")
-        val prepared = localService.plan(
+        val prepared = localService.planner.plan(
             SkillSyncRequest.ShareSkill("skill-1", "claude", SkillSyncMode.COPY),
             skill,
             "replacement",
@@ -575,13 +575,13 @@ class SkillSyncServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val result = localService.execute(prepared, mapOf("claude" to target), SkillScope.GLOBAL, null, backupRoot)
+        val result = localService.runner.execute(prepared, mapOf("claude" to target), SkillScope.GLOBAL, null, backupRoot)
         val backup = result.restorableBackups.single()
         DirectoryDeleter.deleteRecursively(backup.backupPath)
         Files.deleteIfExists(BackupMetadataStore.sidecarPathFor(backup.backupPath))
 
-        assertNull(localService.previewUndoOperation("replacement", backupRoot))
-        val undo = localService.undoOperation("replacement", backupRoot)
+        assertNull(localService.runner.previewUndoOperation("replacement", backupRoot))
+        val undo = localService.runner.undoOperation("replacement", backupRoot)
 
         assertNotNull(undo)
         assertTrue(undo!!.errors.any { it.message.contains("Required backup") })
@@ -609,9 +609,9 @@ class SkillSyncServiceTest {
             },
             restoreCopyStrategy = CopyStrategy(),
         )
-        val localService = SkillSyncService(backupService = failingBackupService)
+        val localService = SkillSyncEngine(backupService = failingBackupService)
 
-        val result = localService.restoreBackup(
+        val result = localService.runner.restoreBackup(
             StoredBackupRecord(key, "claude", selected),
             backupRoot,
             "restore",
@@ -636,9 +636,9 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("claude", targetPath.toString(), SkillSyncMode.SYMLINK, EffectiveSyncMode.SYMLINK, "content"),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.RepairSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -661,7 +661,7 @@ class SkillSyncServiceTest {
         writeSkillMd(targetRoot.resolve("canonical"), "drifted content")
         val target = FakeTarget("claude", targetRoot)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ResyncSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -689,9 +689,9 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("claude", targetPath.toString(), SkillSyncMode.SYMLINK, EffectiveSyncMode.SYMLINK, "content"),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ResyncSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -710,7 +710,7 @@ class SkillSyncServiceTest {
         val canonicalDir = writeSkillMd(root.resolve("canonical"), "content")
         val skill = agentSkill(sharedPath = canonicalDir)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.RepairSkill(skillId = "skill-1", targetAgentId = null),
             skill,
             "op-1",
@@ -745,9 +745,9 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("missing-adapter", root.resolve("nowhere").toString(), SkillSyncMode.COPY, EffectiveSyncMode.COPY, null),
         )
-        val serviceWithOwnership = SkillSyncService(ownershipStore = ownershipStore)
+        val serviceWithOwnership = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val result = serviceWithOwnership.plan(
+        val result = serviceWithOwnership.planner.plan(
             SkillSyncRequest.RepairSkill(skillId = "skill-1", targetAgentId = null),
             skill,
             "op-1",
@@ -769,7 +769,7 @@ class SkillSyncServiceTest {
         val targetPath = writeSkillMd(targetRoot.resolve("canonical"), "conflicting content")
         val target = FakeTarget("claude", targetRoot)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.KEEP_CANONICAL),
             skill,
             "op-1",
@@ -780,7 +780,7 @@ class SkillSyncServiceTest {
         )
         assertTrue(planResult.plan.warnings.isEmpty())
 
-        val syncResult = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.SUCCESS, syncResult.status)
         assertEquals("canonical content", Files.readString(targetPath.resolve("SKILL.md")))
@@ -794,7 +794,7 @@ class SkillSyncServiceTest {
         val targetPath = writeSkillMd(targetRoot.resolve("canonical"), "conflicting content")
         val target = FakeTarget("claude", targetRoot)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.KEEP_TARGET),
             skill,
             "op-1",
@@ -805,7 +805,7 @@ class SkillSyncServiceTest {
         )
         assertTrue(planResult.plan.warnings.isEmpty())
 
-        val syncResult = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.SUCCESS, syncResult.status)
         assertEquals("conflicting content", Files.readString(canonicalDir.resolve("SKILL.md")))
@@ -824,9 +824,9 @@ class SkillSyncServiceTest {
             "skill-1",
             ManagedTarget("codex", "/codex/canonical", SkillSyncMode.COPY, EffectiveSyncMode.COPY, "canonical content"),
         )
-        val service = SkillSyncService(ownershipStore = ownershipStore)
+        val service = SkillSyncEngine(ownershipStore = ownershipStore)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.KEEP_TARGET),
             skill,
             "op-1",
@@ -848,7 +848,7 @@ class SkillSyncServiceTest {
         writeSkillMd(targetRoot.resolve("canonical"), "conflicting content")
         val target = FakeTarget("claude", targetRoot)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.CANCEL),
             skill,
             "op-1",
@@ -873,7 +873,7 @@ class SkillSyncServiceTest {
         writeSkillMd(targetRoot.resolve("canonical-mine"), "already here")
         val newName = if (requestedName == "<absolute>") root.resolve("absolute-copy").toAbsolutePath().toString() else requestedName
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.KEEP_BOTH, newName),
             agentSkill(sharedPath = canonicalDir),
             "op-1",
@@ -898,7 +898,7 @@ class SkillSyncServiceTest {
         val originalTargetPath = writeSkillMd(targetRoot.resolve("canonical"), "conflicting content")
         val target = FakeTarget("claude", targetRoot)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ResolveConflict("skill-1", "claude", ConflictResolution.KEEP_BOTH, newDirectoryName = "canonical-mine"),
             skill,
             "op-1",
@@ -907,7 +907,7 @@ class SkillSyncServiceTest {
             SkillScope.GLOBAL,
             null,
         )
-        val result = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val result = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status)
         val newPath = targetRoot.resolve("canonical-mine")
@@ -924,7 +924,7 @@ class SkillSyncServiceTest {
         val target = AntigravitySkillSyncTarget(userHome)
         val service = promoteService(userHome)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ReplaceCopy("skill-1", source, "antigravity", targetPath, SkillScope.GLOBAL),
             agentSkill(),
             "op-1",
@@ -935,7 +935,7 @@ class SkillSyncServiceTest {
         )
 
         assertTrue(planResult.plan.steps.isNotEmpty(), planResult.plan.warnings.toString())
-        val result = service.execute(planResult, mapOf("antigravity" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val result = service.runner.execute(planResult, mapOf("antigravity" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status)
         assertEquals("claude version", Files.readString(targetPath.resolve("SKILL.md")))
@@ -952,7 +952,7 @@ class SkillSyncServiceTest {
         val target = AntigravitySkillSyncTarget(userHome)
         val service = promoteService(userHome)
 
-        fun plan(targetPath: Path) = service.plan(
+        fun plan(targetPath: Path) = service.planner.plan(
             SkillSyncRequest.ReplaceCopy("skill-1", source, "antigravity", targetPath, SkillScope.GLOBAL),
             agentSkill(),
             "op-1",
@@ -974,7 +974,7 @@ class SkillSyncServiceTest {
         val target = AntigravitySkillSyncTarget(userHome)
         val service = promoteService(userHome)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "antigravity", sourcePath, SkillScope.GLOBAL),
             agentSkill(),
             "op-1",
@@ -996,7 +996,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.PromoteSkill(
                 skillId = "skill-1",
                 sourceAgentId = "claude",
@@ -1014,7 +1014,7 @@ class SkillSyncServiceTest {
         assertTrue(planResult.plan.warnings.isEmpty())
         assertEquals(8, planResult.plan.steps.size)
 
-        val syncResult = service.execute(
+        val syncResult = service.runner.execute(
             planResult,
             mapOf("claude" to target),
             SkillScope.GLOBAL,
@@ -1037,7 +1037,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.PromoteSkill(
                 skillId = "skill-1",
                 sourceAgentId = "claude",
@@ -1056,7 +1056,7 @@ class SkillSyncServiceTest {
         assertTrue(planResult.plan.steps.none { it is SkillSyncStep.BackupExisting })
         assertEquals(7, planResult.plan.steps.size, "one fewer than the default 8-step plan")
 
-        val syncResult = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.SUCCESS, syncResult.status)
         assertEquals("content", Files.readString(sourcePath.resolve("SKILL.md")), "still replaced with a link back to the canonical copy")
@@ -1070,7 +1070,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.PromoteSkill(
                 skillId = "skill-1",
                 sourceAgentId = "claude",
@@ -1099,7 +1099,7 @@ class SkillSyncServiceTest {
         val sourcePath = writeSkillMd(userHome.resolve(".claude").resolve("skills").resolve("php-review"), "content")
         val target = ClaudeSkillSyncTarget(userHome)
         val service = promoteService(userHome)
-        val plan = service.plan(
+        val plan = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL),
             agentSkill(),
             "op-1",
@@ -1113,7 +1113,7 @@ class SkillSyncServiceTest {
         Files.createDirectories(blockedBackupPath.parent)
         Files.writeString(blockedBackupPath, "blocks backup directory creation")
 
-        val result = service.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, backupRoot)
+        val result = service.runner.execute(plan, mapOf("claude" to target), SkillScope.GLOBAL, null, backupRoot)
 
         assertEquals(SyncOperationStatus.FAILED, result.status)
         assertFalse(Files.exists(userHome.resolve(".agents").resolve("skills").resolve("php-review")))
@@ -1128,7 +1128,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL),
             skill,
             "op-1",
@@ -1151,7 +1151,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL),
             skill,
             "op-1",
@@ -1173,7 +1173,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL, alsoShareWith = setOf("codex")),
             skill,
             "op-1",
@@ -1187,7 +1187,7 @@ class SkillSyncServiceTest {
         assertEquals(1, result.plan.warnings.size)
         assertTrue(result.plan.warnings.single().message.contains("codex"))
         // The actual chaining (rediscover + ShareSkill per target) is orchestrated one layer up,
-        // in SkillSyncApplicationService.execute() - see SkillSyncApplicationServiceTest.
+        // in SkillSyncApplicationService.runner.execute() - see SkillSyncApplicationServiceTest.
     }
 
     @Test
@@ -1197,7 +1197,7 @@ class SkillSyncServiceTest {
         val skill = agentSkill()
         val service = promoteService(userHome)
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.PromoteSkill("skill-1", "claude", sourcePath, SkillScope.GLOBAL),
             skill,
             "op-1",
@@ -1219,9 +1219,9 @@ class SkillSyncServiceTest {
         val targetPath = targetRoot.resolve("canonical")
         val target = FakeTarget("claude", targetRoot)
         val auditTrail = InMemorySyncAuditTrail()
-        val service = SkillSyncService(auditTrail = auditTrail)
+        val service = SkillSyncEngine(auditTrail = auditTrail)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -1231,7 +1231,7 @@ class SkillSyncServiceTest {
             null,
         )
 
-        val syncResult = service.execute(
+        val syncResult = service.runner.execute(
             planResult,
             mapOf("claude" to target),
             SkillScope.GLOBAL,
@@ -1258,9 +1258,9 @@ class SkillSyncServiceTest {
         val targetPath = targetRoot.resolve("canonical")
         val target = FakeTarget("claude", targetRoot)
         val auditTrail = InMemorySyncAuditTrail()
-        val service = SkillSyncService(auditTrail = auditTrail)
+        val service = SkillSyncEngine(auditTrail = auditTrail)
 
-        val planResult = service.plan(
+        val planResult = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -1272,7 +1272,7 @@ class SkillSyncServiceTest {
         // Drifts the target after the plan was built, forcing revalidation to abort it.
         writeSkillMd(targetPath, "unexpected content placed after the preview")
 
-        val syncResult = service.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
+        val syncResult = service.runner.execute(planResult, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"))
 
         assertEquals(SyncOperationStatus.FAILED, syncResult.status)
         val entry = auditTrail.entriesFor("skill-1").single()
@@ -1291,7 +1291,7 @@ class SkillSyncServiceTest {
         val realTarget = ClaudeSkillSyncTarget(userHome)
         val expectedTargetPath = userHome.resolve(".claude").resolve("skills").resolve("canonical")
 
-        val result = service.plan(
+        val result = service.planner.plan(
             SkillSyncRequest.ShareSkill(skillId = "skill-1", targetAgentId = "claude"),
             skill,
             "op-1",
@@ -1307,11 +1307,11 @@ class SkillSyncServiceTest {
     }
 
     /**
-     * [SkillSyncService]'s default [SharedSkillProvider] resolves against the real system
+     * [SkillSyncEngine]'s default [SharedSkillProvider] resolves against the real system
      * `user.home` — PromoteSkill tests must inject one scoped to the test's own fake home so the
      * "does a canonical already exist" check never touches the real filesystem.
      */
-    private fun promoteService(userHome: Path) = SkillSyncService(sharedSkillDirectory = SharedSkillProvider(userHome))
+    private fun promoteService(userHome: Path) = SkillSyncEngine(sharedSkillDirectory = SharedSkillProvider(userHome))
 
     private fun agentSkill(sharedPath: Path? = null, agentOnlyPath: Path? = null): AgentSkill {
         val sources = buildList {

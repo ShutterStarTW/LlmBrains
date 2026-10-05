@@ -92,9 +92,9 @@ class SkillSyncSafetyRegressionTest {
     fun `copy fallback preserves requested symlink mode`() {
         val canonical = writeSkillMd(root.resolve("canonical"), "content")
         val store = InMemorySyncOwnershipStore()
-        val service = SkillSyncService(ownershipStore = store)
+        val service = SkillSyncEngine(ownershipStore = store)
         val targets = mapOf("claude" to Target("claude", root.resolve("claude")))
-        val result = service.execute(
+        val result = service.runner.execute(
             plan(service, SkillSyncRequest.ShareSkill("review", "claude", SkillSyncMode.SYMLINK), skill(canonical), targets, "fallback"),
             targets,
             SkillScope.GLOBAL,
@@ -113,13 +113,13 @@ class SkillSyncSafetyRegressionTest {
         // copy/conflict here instead of short-circuiting to NATIVE.
         val canonical = writeSkillMd(root.resolve("canonical"), "content")
         writeSkillMd(root.resolve("cline/canonical"), "different")
-        val service = SkillSyncService()
+        val service = SkillSyncEngine()
         val targets = mapOf(
             "claude" to Target("claude", root.resolve("claude")),
             "cline" to Target("cline", root.resolve("cline")),
         )
 
-        val result = service.execute(
+        val result = service.runner.execute(
             plan(service, SkillSyncRequest.ShareSkillEverywhere("review", SkillSyncMode.COPY), skill(canonical), targets, "partial"),
             targets,
             SkillScope.GLOBAL,
@@ -136,7 +136,7 @@ class SkillSyncSafetyRegressionTest {
     fun `undo promotion retains a canonical used by a newer share`() {
         val source = writeSkillMd(root.resolve("claude/review"), "content")
         val store = InMemorySyncOwnershipStore()
-        val service = SkillSyncService(ownershipStore = store, sharedSkillDirectory = SharedSkillProvider(root))
+        val service = SkillSyncEngine(ownershipStore = store, sharedSkillDirectory = SharedSkillProvider(root))
         val targets = mapOf(
             "claude" to Target("claude", root.resolve("claude"), links = true),
             "cline" to Target("cline", root.resolve("cline"), links = true),
@@ -148,9 +148,9 @@ class SkillSyncSafetyRegressionTest {
             targets,
             "promote",
         )
-        val promoted = service.execute(promotion, targets, SkillScope.GLOBAL, null, root.resolve("backups"))
+        val promoted = service.runner.execute(promotion, targets, SkillScope.GLOBAL, null, root.resolve("backups"))
         val canonical = promotion.plan.canonicalPath
-        val shared = service.execute(
+        val shared = service.runner.execute(
             plan(service, SkillSyncRequest.ShareSkill("review", "cline"), skill(canonical), targets, "share-later"),
             targets,
             SkillScope.GLOBAL,
@@ -160,7 +160,7 @@ class SkillSyncSafetyRegressionTest {
 
         assertEquals(SyncOperationStatus.SUCCESS, promoted.status)
         assertEquals(SyncOperationStatus.SUCCESS, shared.status)
-        val undo = service.undo(promoted)
+        val undo = service.runner.undo(promoted)
         assertTrue(undo.errors.any { it.message.contains("newer managed target") })
         assertTrue(Files.exists(canonical))
         assertTrue(Files.isSameFile(canonical, root.resolve("cline/review")))
@@ -189,7 +189,7 @@ class SkillSyncSafetyRegressionTest {
         )
         Files.writeString(first.resolve("SKILL.md"), "changed later")
 
-        val undo = SkillSyncService().undo(result)
+        val undo = SkillSyncEngine().runner.undo(result)
 
         assertTrue(undo.errors.isNotEmpty())
         assertTrue(Files.exists(second), "Preflight must not remove an earlier path before detecting later drift")
@@ -199,17 +199,17 @@ class SkillSyncSafetyRegressionTest {
     @Test
     fun `stop sharing undo restores the managed link representation`() {
         val canonical = writeSkillMd(root.resolve("canonical"), "content")
-        val service = SkillSyncService()
+        val service = SkillSyncEngine()
         val targetPath = root.resolve("claude/canonical")
         val targets = mapOf("claude" to Target("claude", root.resolve("claude"), links = true))
-        val shared = service.execute(
+        val shared = service.runner.execute(
             plan(service, SkillSyncRequest.ShareSkill("review", "claude"), skill(canonical), targets, "share"),
             targets,
             SkillScope.GLOBAL,
             null,
             root.resolve("backups"),
         )
-        val stopped = service.execute(
+        val stopped = service.runner.execute(
             plan(service, SkillSyncRequest.StopSharing("review", "claude"), skill(canonical), targets, "stop"),
             targets,
             SkillScope.GLOBAL,
@@ -220,7 +220,7 @@ class SkillSyncSafetyRegressionTest {
         assertEquals(SyncOperationStatus.SUCCESS, shared.status)
         assertEquals(SyncOperationStatus.SUCCESS, stopped.status, stopped.errors.toString())
         assertFalse(Files.exists(targetPath))
-        val undone = service.undo(stopped)
+        val undone = service.runner.undo(stopped)
         assertTrue(undone.errors.isEmpty(), undone.errors.toString())
         assertTrue(Files.isSameFile(canonical, targetPath), "Undo must restore the link or junction, not a detached copy")
     }
@@ -230,7 +230,7 @@ class SkillSyncSafetyRegressionTest {
         val canonical = writeSkillMd(root.resolve("canonical"), "content")
         writeSkillMd(root.resolve("claude/canonical"), "content")
         val targets = mapOf("claude" to Target("claude", root.resolve("claude")))
-        val service = SkillSyncService()
+        val service = SkillSyncEngine()
         val preview = plan(service, SkillSyncRequest.ShareSkill("review", "claude", SkillSyncMode.COPY), skill(canonical), targets, "rollback")
         val invalidPlan = preview.plan.copy(steps = preview.plan.steps.map { step ->
             if (step is SkillSyncStep.VerifyFingerprint) step.copy(expectedFingerprint = "verification-fails") else step
@@ -262,12 +262,12 @@ class SkillSyncSafetyRegressionTest {
     }
 
     private fun plan(
-        service: SkillSyncService,
+        service: SkillSyncEngine,
         request: SkillSyncRequest,
         skill: AgentSkill,
         targets: Map<String, SkillSyncTarget>,
         operationId: String,
-    ) = service.plan(request, skill, operationId, targets, targets.keys, SkillScope.GLOBAL, null)
+    ) = service.planner.plan(request, skill, operationId, targets, targets.keys, SkillScope.GLOBAL, null)
 
     private fun skill(path: Path, shared: Boolean = true) = AgentSkill(
         SkillIdentity("review"),

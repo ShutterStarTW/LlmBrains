@@ -68,6 +68,13 @@ internal class LeftAlignedTabbedPane : JPanel(BorderLayout()) {
         (0 until tabs.tabCount).firstOrNull { tabs.getTitleAt(it) == title }?.let { tabs.selectedIndex = it }
     }
 
+    /** Greys a tab out (or back in) without adding or removing it, so the tab strip's size never changes. */
+    fun setTabEnabled(title: String, enabled: Boolean, disabledTooltip: String? = null) {
+        val index = (0 until tabs.tabCount).firstOrNull { tabs.getTitleAt(it) == title } ?: return
+        tabs.setEnabledAt(index, enabled)
+        tabs.setToolTipTextAt(index, if (enabled) null else disabledTooltip)
+    }
+
     fun addSelectionListener(listener: () -> Unit) {
         tabs.addChangeListener(ChangeListener { listener() })
     }

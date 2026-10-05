@@ -133,7 +133,9 @@ you review a plan and confirm it.
 ### Features
 
 - **Projects and Agents** — sessions from Antigravity, Claude Code, Cline, Codex CLI, GitHub Copilot
-  CLI, Cursor CLI, Grok Build, Kiro CLI, OpenCode and Qwen Code, grouped by project or by agent.
+  CLI, Cursor CLI, Freebuff, Grok Build, Junie CLI, Kilo Code, Kimi Code, Kiro CLI, MiMo Code, Mistral Vibe,
+  Oh My Pi, OpenCode and Qwen Code, grouped by
+  project or by agent.
   Sessions from several agents in the same repository appear as one project (local path and Git
   remote are matched).
 - **Sessions** — each session shows the agent's title (or your first prompt), how many prompts you
@@ -146,7 +148,9 @@ you review a plan and confirm it.
 - **Skills** — share a skill between agents, resolve conflicts, restore backups and undo. See [the Skills page](docs/skills.md).
 - **Installed agents only** — only agents whose CLI the latest detection found are shown. Detection
   runs on every IDE start and after Detect, Settings install/remove and WSL switches. If you
-  reinstall an agent, its data still on disk reappears.
+  reinstall an agent, its data still on disk reappears. An installed agent that has no session yet is
+  listed on the Agents tab too: its Projects and Sessions tabs stay greyed out, while Environment already
+  shows its global skills, MCP servers, instructions and configuration.
 - **Open in IDE and Launch** — open a project in a detected JetBrains IDE, or start an agent with
   the project directory as its working directory.
 - **Cached index** — kept across IDE restarts and refreshed in the background. The refresh button

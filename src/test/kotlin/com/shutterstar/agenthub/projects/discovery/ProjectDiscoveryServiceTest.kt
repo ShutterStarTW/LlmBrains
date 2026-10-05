@@ -153,7 +153,7 @@ class ProjectDiscoveryServiceTest {
             provider("claude", raw("claude", project, "claude-session", "2026-08-01T10:00:00Z")),
             provider("codex", raw("codex", project, "codex-session", "2026-08-01T10:00:00Z")),
             provider("opencode", raw("opencode", project, "opencode-session", "2026-08-01T10:00:00Z")),
-            provider("cline", raw("cline", project, "cline-session", "2026-08-01T10:00:00Z")),
+            provider("zzzagent", raw("zzzagent", project, "zzzagent-session", "2026-08-01T10:00:00Z")),
         )
 
         val agents = service.discover().projects.single().agents.associateBy { it.agentId }
@@ -161,7 +161,7 @@ class ProjectDiscoveryServiceTest {
         assertEquals("claude-session", agents.getValue("claude").sessions.single().nativeResumeId)
         assertEquals("codex-session", agents.getValue("codex").sessions.single().nativeResumeId)
         assertEquals("opencode-session", agents.getValue("opencode").sessions.single().nativeResumeId)
-        assertEquals(null, agents.getValue("cline").sessions.single().nativeResumeId)
+        assertEquals(null, agents.getValue("zzzagent").sessions.single().nativeResumeId)
     }
 
     @Test

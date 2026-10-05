@@ -152,9 +152,22 @@ class ProjectProviderContractTest {
                 val meta = """{"schemaVersion":1,"createdAtMs":${at.toEpochMilli()},"hasConversation":true,"title":${json(id)},"updatedAtMs":${at.toEpochMilli()},"cwd":${json(project.toString())}}"""
                 file(home.resolve(".cursor/chats/hash$slot/$id/meta.json"), meta, at)
             },
+            fixture("freebuff", { FreebuffProjectProvider(it.resolve(".config/manicode")) }, { it.resolve(".config/manicode/projects") }) { home, id, project, at, slot ->
+                val chat = home.resolve(".config/manicode/projects/p$slot/chats/$id")
+                file(chat.resolve("run-state.json"), """{"sessionState":{"fileContext":{"projectRoot":${json(project.toString())}}}}""", at)
+                file(chat.resolve("chat-messages.json"), """[{"id":"m","variant":"user","content":"Hi","blocks":[],"timestamp":"t"}]""", at)
+                chat
+            },
             fixture("grok", { GrokProjectProvider(it.resolve(".grok")) }, { it.resolve(".grok/sessions") }) { home, id, project, at, _ ->
                 val summary = """{"info":{"id":${json(id)},"cwd":${json(project.toString())}},"created_at":${json(at.toString())},"last_active_at":${json(at.toString())}}"""
                 file(home.resolve(".grok/sessions/${percentEncode(project.toString())}/$id/summary.json"), summary, at)
+            },
+            fixture("junie", { JunieProjectProvider(it.resolve(".junie")) }, { it.resolve(".junie/sessions") }) { home, id, project, at, slot ->
+                val session = home.resolve(".junie/sessions/dir$slot")
+                val summary = """{"sessionId":${json(id)},"createdAt":${at.toEpochMilli()},"updatedAt":${at.toEpochMilli()},"projectDir":${json(project.toString())}}"""
+                file(session.resolve("summary.json"), summary, at)
+                file(session.resolve("events.jsonl"), """{"kind":"UserPromptEvent","prompt":"Hi","presentablePrompt":"Hi"}""" + "\n", at)
+                session
             },
             fixture("kiro", { KiroProjectProvider(it.resolve(".kiro")) }, { it.resolve(".kiro/sessions/cli") }) { home, id, project, at, slot ->
                 val meta = """{"session_id":${json(id)},"cwd":${json(project.toString())},"updated_at":${json(at.toString())}}"""
@@ -167,6 +180,12 @@ class ProjectProviderContractTest {
             fixture("qwen", { QwenProjectProvider(it.resolve(".qwen")) }, { it.resolve(".qwen/projects") }) { home, id, project, at, slot ->
                 val line = """{"sessionId":${json(id)},"cwd":${json(project.toString())},"timestamp":${json(at.toString())},"type":"system"}"""
                 file(home.resolve(".qwen/projects/key$slot/chats/$id-$slot.jsonl"), line + "\n", at)
+            },
+            fixture("vibe", { VibeProjectProvider(it.resolve(".vibe")) }, { it.resolve(".vibe/logs/session") }) { home, id, project, at, slot ->
+                val session = home.resolve(".vibe/logs/session/session_2026082${slot}_100000_$slot")
+                val meta = """{"session_id": ${json(id)}, "start_time": ${json(at.toString())}, "end_time": ${json(at.toString())}, "environment": {"working_directory": ${json(project.toString())}}}"""
+                file(session.resolve("meta.json"), meta, at)
+                session
             },
         )
     }

@@ -1,17 +1,13 @@
 package com.shutterstar.agenthub.projects.ui
 
 import com.intellij.openapi.project.Project
-import com.intellij.ui.JBColor
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.shutterstar.agenthub.environment.discovery.ProjectEnvironmentDiscoveryService
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.awt.BorderLayout
-import java.awt.Component
 import java.awt.FlowLayout
-import java.awt.Font
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
@@ -19,12 +15,10 @@ import java.awt.event.MouseEvent
 import javax.swing.AbstractAction
 import javax.swing.DefaultListModel
 import javax.swing.JLabel
-import javax.swing.JList
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 import javax.swing.KeyStroke
-import javax.swing.ListCellRenderer
 import javax.swing.SwingUtilities
 import javax.swing.ToolTipManager
 
@@ -177,68 +171,33 @@ internal class ProjectsPanel(
 
     private class ProjectRenderer(
         private val agentName: (String) -> String,
-        private val hover: ListHoverTracker,
+        hover: ListHoverTracker,
         private val environmentLabel: (String) -> String?,
-    ) : ListCellRenderer<DiscoveredProject> {
-        private val nameLabel = JBLabel()
+    ) : DetailRowRenderer<DiscoveredProject>(hover, maxDetailLines = 3) {
         private val iconsPanel = JPanel(
             FlowLayout(FlowLayout.LEFT, JBUI.scale(AgentHubUiComponents.SMALL_GAP), 0),
         ).apply { isOpaque = false }
-        private val topRow = JPanel(BorderLayout()).apply { isOpaque = false }
-        private val pathLabel = WrappedRowText()
-        private val summaryLabel = WrappedRowText()
-        private val environmentInfoLabel = WrappedRowText()
-        private val content = AgentHubUiComponents.verticalBox(opaque = false, border = AgentHubUiComponents.listRowBorder()).apply {
-            nameLabel.font = nameLabel.font.deriveFont(nameLabel.font.style or Font.BOLD)
-            pathLabel.foreground = JBColor.GRAY
-            summaryLabel.foreground = JBColor.GRAY
-            environmentInfoLabel.foreground = JBColor.GRAY
-            topRow.add(nameLabel, BorderLayout.CENTER)
+
+        init {
             topRow.add(iconsPanel, BorderLayout.EAST)
-            topRow.alignmentX = Component.LEFT_ALIGNMENT
-            pathLabel.alignmentX = Component.LEFT_ALIGNMENT
-            summaryLabel.alignmentX = Component.LEFT_ALIGNMENT
-            environmentInfoLabel.alignmentX = Component.LEFT_ALIGNMENT
-            add(topRow)
-            add(pathLabel)
-            add(summaryLabel)
-            add(environmentInfoLabel)
-        }
-        private val wrapper = RoundedSelectionPanel.wrap(content).apply {
-            selectionArc = JBUI.scale(AgentHubUiComponents.SELECTION_ARC)
-            selectionInsets = AgentHubUiComponents.listSelectionInsets()
         }
 
-        override fun getListCellRendererComponent(
-            list: JList<out DiscoveredProject>,
-            value: DiscoveredProject,
-            index: Int,
-            isSelected: Boolean,
-            cellHasFocus: Boolean,
-        ): Component {
-            nameLabel.text = value.name
-            nameLabel.accessibleContext.accessibleName = value.name
-            pathLabel.text = value.path?.let { "Path: $it" } ?: value.gitRemote?.let { "Git: $it" } ?: "Unknown location"
+        override fun bind(value: DiscoveredProject) = DetailRow(
+            title = value.name,
+            titleAccessibleName = value.name,
+            details = listOf(
+                value.path?.let { "Path: $it" } ?: value.gitRemote?.let { "Git: $it" } ?: "Unknown location",
+                AgentHubUiFormat.activitySummary("${value.agents.size} agents", value.agents.sumOf { it.sessionCount }, value.lastActivity),
+                environmentLabel(value.identity.id).orEmpty(),
+            ),
+        )
+
+        override fun bindTrailing(value: DiscoveredProject) {
             iconsPanel.removeAll()
             value.agents.forEach { relation ->
                 val icon = AgentHubUiComponents.faviconFor(relation.agentId) ?: return@forEach
                 iconsPanel.add(JLabel(icon).apply { toolTipText = agentName(relation.agentId); accessibleContext.accessibleName = toolTipText })
             }
-            val totalSessions = value.agents.sumOf { it.sessionCount }
-            val activity = value.lastActivity?.let(AgentHubUiFormat.dateTime::format) ?: "Unknown"
-            summaryLabel.text = "${value.agents.size} agents · $totalSessions sessions · Last activity: $activity"
-            environmentInfoLabel.text = environmentLabel(value.identity.id).orEmpty()
-            environmentInfoLabel.isVisible = environmentInfoLabel.text.isNotEmpty()
-            wrapper.background = list.background
-            WrappedRowText.prepareRow(list, wrapper, content, listOf(pathLabel, summaryLabel, environmentInfoLabel))
-            val colors = AgentHubUiComponents.rowTextColors(list.foreground, isSelected)
-            wrapper.selectionColor = AgentHubUiComponents.rowHighlight(isSelected, hover.isHovered(index))
-            nameLabel.foreground = colors.foreground
-            pathLabel.foreground = colors.secondaryForeground
-            summaryLabel.foreground = colors.secondaryForeground
-            environmentInfoLabel.foreground = colors.secondaryForeground
-            return wrapper
         }
-
     }
 }

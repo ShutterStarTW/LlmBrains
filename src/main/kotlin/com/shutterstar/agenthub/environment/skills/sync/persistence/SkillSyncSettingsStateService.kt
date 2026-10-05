@@ -28,7 +28,7 @@ class SkillSyncSettingsStateService(
         store.update { SkillSyncSettingsStateMapper.toState(settings) }
     }
 
-    fun storageStamp(): String = store.stamp()
+    fun storageStamp(): String = store.externalStamp()
 
     companion object {
         fun getInstance(): SkillSyncSettingsStateService = service()

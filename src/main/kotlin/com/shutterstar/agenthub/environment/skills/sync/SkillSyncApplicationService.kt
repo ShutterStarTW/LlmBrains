@@ -44,7 +44,13 @@ import com.shutterstar.agenthub.environment.skills.sync.target.CodexSkillSyncTar
 import com.shutterstar.agenthub.environment.skills.sync.target.CopilotSkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.target.CursorSkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.target.GrokSkillSyncTarget
+import com.shutterstar.agenthub.environment.skills.sync.target.KiloSkillSyncTarget
+import com.shutterstar.agenthub.environment.skills.sync.target.JunieSkillSyncTarget
+import com.shutterstar.agenthub.environment.skills.sync.target.KimiSkillSyncTarget
+import com.shutterstar.agenthub.environment.skills.sync.target.MimoSkillSyncTarget
+import com.shutterstar.agenthub.environment.skills.sync.target.VibeSkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.target.KiroSkillSyncTarget
+import com.shutterstar.agenthub.environment.skills.sync.target.OmpSkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.target.OpenCodeSkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.target.QwenSkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -102,7 +108,7 @@ internal class SkillSyncApplicationService(
         } ?: checked()
     }
 
-    private val engine = SkillSyncService(
+    private val engine = SkillSyncEngine(
         ownershipStore = ownershipStore,
         auditTrail = auditTrail,
         sharedSkillDirectory = sharedSkillDirectory,
@@ -125,7 +131,7 @@ internal class SkillSyncApplicationService(
             if (hidden.isNotEmpty()) {
                 return noOpPlan(request, skill, operationId, scope, notInstalledMessage(hidden))
             }
-            return engine.plan(
+            return engine.planner.plan(
                 request,
                 skill,
                 operationId,
@@ -359,7 +365,7 @@ internal class SkillSyncApplicationService(
     )
 
     /**
-     * Re-plans a Share Everywhere scoped to only [failedAgentIds] — [SkillSyncService.plan] always
+     * Re-plans a Share Everywhere scoped to only [failedAgentIds] — [SkillSyncRequestPlanner.plan] always
      * observes live filesystem state, so this is inherently a fresh discovery, not a replay of the
      * stale plan that failed. Only meaningful for a Share Everywhere retry: single-target actions
      * (Share/Resync/Repair/Stop Sharing) already retry by simply invoking that same action again
@@ -491,7 +497,7 @@ internal class SkillSyncApplicationService(
         project,
     )
 
-    /** Repairs every agent [SkillSyncService.managedTargetIds] currently reports as managed, in one plan. */
+    /** Repairs every agent [SkillSyncOperationRunner.managedTargetIds] currently reports as managed, in one plan. */
     fun prepareWholeSkillRepair(
         skill: AgentSkill,
         scope: SkillScope,
@@ -504,32 +510,34 @@ internal class SkillSyncApplicationService(
         project,
     )
 
-    /** UI action-gating hint only — see [SkillSyncService.managedTargetIds]. */
+    /** UI action-gating hint only — see [SkillSyncOperationRunner.managedTargetIds]. */
     fun managedTargetIds(skill: AgentSkill, scope: SkillScope, project: DiscoveredProject?): Set<String> =
-        engine.managedTargetIds(skill, scope, project)
+        engine.runner.managedTargetIds(skill, scope, project)
 
     fun historyFor(skill: AgentSkill, scope: SkillScope, project: DiscoveredProject?): List<SyncAuditEntry> =
-        engine.historyFor(skill, scope, project)
+        engine.runner.historyFor(skill, scope, project)
 
     fun targetStatuses(skill: AgentSkill, scope: SkillScope, project: DiscoveredProject?): List<ObservedSkillTarget> {
         val installed = shareTargetIds().toSet()
-        return engine.targetStatuses(
+        return engine.runner.targetStatuses(
             skill,
             scope,
             project,
             targets.filterKeys { it in installed },
             settings.current().preferredSyncMode,
+            // An installed agent that reads the shared directory but has no sync target (e.g. Freebuff).
+            directReaderIds = AgentCapabilityRegistry.agentIdsSupportingSharedSkills().filterTo(mutableSetOf()) { it in installed },
         )
     }
 
     fun previewUndoOperation(operationId: String): UndoPreview? =
-        if (runtimeMutationAllowed()) engine.previewUndoOperation(operationId, backupRoot) else null
+        if (runtimeMutationAllowed()) engine.runner.previewUndoOperation(operationId, backupRoot) else null
 
-    /** See [SkillSyncService.undoOperation] — reverses a past operation purely from disk. */
+    /** See [SkillSyncOperationRunner.undoOperation] — reverses a past operation purely from disk. */
     @Synchronized
     fun undoOperation(operationId: String): UndoResult? =
         if (runtimeMutationAllowed()) {
-            mutate { engine.undoOperation(operationId, backupRoot) }
+            mutate { engine.runner.undoOperation(operationId, backupRoot) }
         } else {
             UndoResult(
                 operationId,
@@ -561,13 +569,13 @@ internal class SkillSyncApplicationService(
     fun backupDirectory(): Path = backupRoot
 
     fun restorableBackups(skill: AgentSkill, scope: SkillScope, project: DiscoveredProject?): List<StoredBackupRecord> =
-        if (runtimeMutationAllowed()) engine.restorableBackups(skill, scope, project, backupRoot) else emptyList()
+        if (runtimeMutationAllowed()) engine.runner.restorableBackups(skill, scope, project, backupRoot) else emptyList()
 
     fun skillIdsWithBackups(skills: List<AgentSkill>, scope: SkillScope, project: DiscoveredProject?): Set<String> =
-        if (runtimeMutationAllowed()) engine.skillIdsWithBackups(skills, scope, project, backupRoot) else emptySet()
+        if (runtimeMutationAllowed()) engine.runner.skillIdsWithBackups(skills, scope, project, backupRoot) else emptySet()
 
     fun undoAvailability(operationIds: Set<String>): UndoAvailability =
-        if (runtimeMutationAllowed()) engine.undoAvailability(operationIds, backupRoot) else UndoAvailability(emptySet(), emptySet())
+        if (runtimeMutationAllowed()) engine.runner.undoAvailability(operationIds, backupRoot) else UndoAvailability(emptySet(), emptySet())
 
     @Synchronized
     fun executeRestoreBackup(record: StoredBackupRecord): SkillSyncResult {
@@ -575,7 +583,7 @@ internal class SkillSyncApplicationService(
             return blockedResult(record.backup.operationId, record.instanceKey.skillId, record.backup.originalPath)
         }
         val result = mutate {
-            val restored = engine.restoreBackup(record, backupRoot, operationId())
+            val restored = engine.runner.restoreBackup(record, backupRoot, operationId())
             runCatching { BackupSweeper.sweep(backupRoot) }
             restored
         }
@@ -592,7 +600,7 @@ internal class SkillSyncApplicationService(
             )
         }
         val result = mutate {
-            val executed = engine.execute(
+            val executed = engine.runner.execute(
                 prepared.planResult,
                 targets,
                 prepared.scope,
@@ -658,9 +666,15 @@ internal class SkillSyncApplicationService(
                 CopilotSkillSyncTarget(),
                 CursorSkillSyncTarget(userHome),
                 GrokSkillSyncTarget(userHome),
+                JunieSkillSyncTarget(userHome),
+                KiloSkillSyncTarget(userHome),
+                KimiSkillSyncTarget(userHome),
                 KiroSkillSyncTarget(userHome),
+                MimoSkillSyncTarget(userHome),
+                OmpSkillSyncTarget(userHome),
                 OpenCodeSkillSyncTarget(userHome),
                 QwenSkillSyncTarget(userHome),
+                VibeSkillSyncTarget(userHome),
             ).associateBy(SkillSyncTarget::agentId)
     }
 }

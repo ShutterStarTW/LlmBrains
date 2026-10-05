@@ -66,6 +66,19 @@ class SkillProviderTest {
     }
 
     @Test
+    fun `should discover Claude project skills in nested monorepo packages`() {
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("monorepo"))
+        writeSkillMd(projectRoot.resolve(".claude/skills/root-review"), "---\nname: root-review\n---")
+        writeSkillMd(projectRoot.resolve("packages/web/.claude/skills/web-review"), "---\nname: web-review\n---")
+        writeSkillMd(projectRoot.resolve("node_modules/dep/.claude/skills/vendored"), "---\nname: vendored\n---")
+
+        val skills = ClaudeSkillProvider(temporaryDirectory).discoverProject(project(projectRoot))
+
+        assertEquals(setOf("root-review", "web-review"), skills.map { it.name }.toSet())
+        assertTrue(skills.all { it.agentId == "claude" && it.scope == SkillScope.PROJECT && !it.shared })
+    }
+
+    @Test
     fun `should discover Claude and legacy Codex skill locations`() {
         writeSkillMd(temporaryDirectory.resolve(".claude/skills/claude-review"), "---\nname: claude-review\n---")
         writeSkillMd(temporaryDirectory.resolve(".codex/skills/codex-review"), "---\nname: codex-review\n---")
