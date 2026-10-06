@@ -33,6 +33,27 @@ class RedundantCopyDetectorTest {
     }
 
     @Test
+    fun `an identical real copy of an agent that cannot read the shared folder is swapped for a link when links are possible`() {
+        val skill = skill(shared("fp"), agent("claude", "fp"), agent("codex", "fp"))
+
+        val candidate = RedundantCopyDetector(canLink = { true }).detect(listOf(skill)).single()
+
+        assertEquals(listOf("claude"), candidate.convertAgentIds)
+        assertEquals(listOf("codex"), candidate.agentIds)
+        // Without link support (copy mode, no adapter) there is nothing to swap.
+        assertEquals(emptyList<String>(), RedundantCopyDetector().detect(listOf(skill)).single().convertAgentIds)
+    }
+
+    @Test
+    fun `a link or a differing copy of an agent that cannot read the shared folder is left alone`() {
+        val linked = skill(shared("fp"), agent("claude", "fp"))
+        val differing = skill(shared("fp"), agent("claude", "other"))
+
+        assertTrue(RedundantCopyDetector(canLink = { true }, isLink = { true }).detect(listOf(linked)).isEmpty())
+        assertTrue(RedundantCopyDetector(canLink = { true }).detect(listOf(differing)).isEmpty())
+    }
+
+    @Test
     fun `a differing copy is a conflict, not clean-up`() {
         assertTrue(RedundantCopyDetector().detect(listOf(skill(shared("fp"), agent("codex", "other")))).isEmpty())
     }

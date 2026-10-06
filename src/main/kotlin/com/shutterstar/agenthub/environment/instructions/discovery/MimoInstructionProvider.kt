@@ -9,6 +9,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * MiMo Code CLI instructions (source `packages/cli/src/session/instruction.ts`): the first existing global file of
@@ -18,7 +19,7 @@ import java.nio.file.Path
  * deprecated `CONTEXT.md` and the `MIMOCODE_DISABLE_CLAUDE_CODE[_PROMPT]` switches are not modelled.)
  */
 class MimoInstructionProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
     private val globalFiles = listOfNotNull(

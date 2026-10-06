@@ -160,8 +160,8 @@ class EnvironmentUiModelTest {
             sources = listOf(
                 SkillSource(null, sharedPath, SkillScope.GLOBAL, true, "fp", realPath = sharedPath),
                 SkillSource(
-                    "qwen",
-                    "C:/Users/example/.qwen/skills/magyar-humanizer",
+                    "kiro",
+                    "C:/Users/example/.kiro/skills/magyar-humanizer",
                     SkillScope.GLOBAL,
                     false,
                     "fp",
@@ -169,12 +169,12 @@ class EnvironmentUiModelTest {
                 ),
             ),
         )
-        val agentEnvironment = AgentEnvironment("qwen", listOf(skill), emptyList(), emptyList())
+        val agentEnvironment = AgentEnvironment("kiro", listOf(skill), emptyList(), emptyList())
 
         assertEquals(1, EnvironmentUiModel.agentSummary(agentEnvironment).globalSkillCount)
-        val rows = EnvironmentUiModel.agentComparison(agentEnvironment, "qwen").rows
+        val rows = EnvironmentUiModel.agentComparison(agentEnvironment, "kiro").rows
         assertEquals(1, rows.size)
-        assertEquals("C:/Users/example/.qwen/skills/magyar-humanizer", rows.single().sourcePath)
+        assertEquals("C:/Users/example/.kiro/skills/magyar-humanizer", rows.single().sourcePath)
         assertFalse(rows.single().shared)
     }
 

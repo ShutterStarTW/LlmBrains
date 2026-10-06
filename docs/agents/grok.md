@@ -16,7 +16,7 @@ npm uninstall -g @xai-official/grok
 > The official shell installer remains available as an alternative:
 > `curl -fsSL https://x.ai/cli/install.sh | bash`
 >
-> via [x.ai/cli](https://x.ai/cli) &middot; [github.com/xai-org/grok-build](https://github.com/xai-org/grok-build)
+> via [x.ai/build](https://x.ai/build) &middot; [github.com/xai-org/grok-build](https://github.com/xai-org/grok-build)
 
 ## Get Version
 

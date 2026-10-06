@@ -7,6 +7,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Freebuff instructions (Codebuff source `common/src/constants/knowledge.ts`, `sdk/src/run-state.ts`): the knowledge
@@ -15,7 +16,7 @@ import java.nio.file.Path
  * file is the dot-prefixed `~/.AGENTS.md`, else `~/.CLAUDE.md`.
  */
 class FreebuffInstructionProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
 

@@ -4,7 +4,6 @@ import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.shutterstar.agenthub.AgentSettingsState
-import com.shutterstar.agenthub.WslSupport
 import com.shutterstar.agenthub.environment.capabilities.AgentCapabilityRegistry
 import com.shutterstar.agenthub.environment.skills.discovery.SharedSkillProvider
 import com.shutterstar.agenthub.environment.skills.discovery.SkillDiscoveryService
@@ -28,6 +27,7 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncResult
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTargetResult
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncError
+import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncMode
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncOperationStatus
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncTargetOutcome
 import com.shutterstar.agenthub.environment.skills.sync.model.SyncWarning
@@ -58,6 +58,7 @@ import java.nio.file.Path
 import java.util.UUID
 import com.shutterstar.agenthub.storage.AgentHubHome
 import com.shutterstar.agenthub.storage.AgentHubStorage
+import com.shutterstar.agenthub.AgentRuntime
 
 internal data class PreparedSkillSync(
     val planResult: SkillSyncPlanResult,
@@ -71,15 +72,16 @@ internal data class PreparedSkillSync(
 /** Application-scoped composition root and serialization boundary for skill mutations. */
 @Service(Service.Level.APP)
 internal class SkillSyncApplicationService(
-    private val targets: Map<String, SkillSyncTarget> = defaultTargets(),
+    /** Null: the targets of the current runtime (the host, or the WSL distro's home in WSL mode). */
+    targets: Map<String, SkillSyncTarget>? = null,
     private val backupRoot: Path = AgentHubStorage.home()?.backups()
         ?: Path.of(PathManager.getSystemPath()).resolve("agenthub/skill-backups"),
     private val ownershipStore: SkillOwnershipStateService = SkillOwnershipStateService.getInstance(),
     private val auditTrail: SkillSyncAuditStateService = SkillSyncAuditStateService.getInstance(),
     private val settings: SkillSyncSettingsStateService = SkillSyncSettingsStateService.getInstance(),
-    private val sharedSkillDirectory: SharedSkillProvider = SharedSkillProvider(),
+    sharedSkillDirectory: SharedSkillProvider? = null,
     private val operationId: () -> String = { UUID.randomUUID().toString() },
-    private val runtimeMutationAllowed: () -> Boolean = { !WslSupport.isActive() },
+    private val runtimeMutationAllowed: () -> Boolean = { true },
     private val mutationHome: AgentHubHome? = AgentHubStorage.home(),
     /** Null only when the settings service is unavailable; an unknown detection is an empty set, not "all". */
     private val detectedInstalledAgentIds: () -> Set<String>? = {
@@ -108,11 +110,32 @@ internal class SkillSyncApplicationService(
         } ?: checked()
     }
 
-    private val engine = SkillSyncEngine(
-        ownershipStore = ownershipStore,
-        auditTrail = auditTrail,
-        sharedSkillDirectory = sharedSkillDirectory,
+    /**
+     * What depends on where the agents run: the sync targets, the shared skill root and the engine built on it.
+     * Rebuilt when the runtime changes; fixed when a caller (a test) injects its own targets or shared root.
+     */
+    private class RuntimeParts(
+        val targets: Map<String, SkillSyncTarget>,
+        val sharedSkillDirectory: SharedSkillProvider,
+        val engine: SkillSyncEngine,
     )
+
+    private fun buildParts(targets: Map<String, SkillSyncTarget>, shared: SharedSkillProvider) = RuntimeParts(
+        targets,
+        shared,
+        SkillSyncEngine(ownershipStore = ownershipStore, auditTrail = auditTrail, sharedSkillDirectory = shared),
+    )
+
+    private val fixedParts: RuntimeParts? =
+        if (targets != null || sharedSkillDirectory != null) {
+            buildParts(targets ?: defaultTargets(), sharedSkillDirectory ?: SharedSkillProvider())
+        } else {
+            null
+        }
+    private val scopedParts = AgentRuntime.scoped { buildParts(defaultTargets(), SharedSkillProvider()) }
+    private val parts: RuntimeParts get() = fixedParts ?: scopedParts.get()
+    private val targetMap: Map<String, SkillSyncTarget> get() = parts.targets
+    private val engine: SkillSyncEngine get() = parts.engine
 
     private fun planForRuntime(
         request: SkillSyncRequest,
@@ -200,7 +223,7 @@ internal class SkillSyncApplicationService(
         )
     }
 
-    fun adapterTargetIds(): Set<String> = targets.keys
+    fun adapterTargetIds(): Set<String> = targetMap.keys
 
     /**
      * Which of [candidateAgentIds] a skill directory at [skillPath] really belongs to. Several
@@ -220,7 +243,7 @@ internal class SkillSyncApplicationService(
         fun Path?.matches() = this != null && runCatching { toAbsolutePath().normalize() == parent }.getOrDefault(false)
         // A folder below the root (e.g. skills/synced/<id>/name) still belongs to that root's agent.
         fun Path?.covers() = this != null && runCatching { parent.startsWith(toAbsolutePath().normalize()) }.getOrDefault(false)
-        val candidates = candidateAgentIds.mapNotNull { id -> targets[id]?.let { id to it } }
+        val candidates = candidateAgentIds.mapNotNull { id -> targetMap[id]?.let { id to it } }
         fun primary(target: SkillSyncTarget): Path? = when (scope) {
             SkillScope.GLOBAL -> target.globalSkillDirectory()
             SkillScope.PROJECT -> project?.let(target::projectSkillDirectory)
@@ -271,7 +294,7 @@ internal class SkillSyncApplicationService(
             request,
             skill,
             operationId(),
-            targets,
+            targetMap,
             agentIds,
             scope,
             project,
@@ -450,11 +473,29 @@ internal class SkillSyncApplicationService(
         alwaysBackup = true,
     )
 
+    /** True when an identical copy kept by [agentId] can be swapped for a link: it has a sync adapter that links, and links are the preferred mode. */
+    fun canReplaceCopyWithLink(agentId: String): Boolean =
+        targetMap[agentId]?.supportsLinkedSkills() == true && settings.current().preferredSyncMode == SkillSyncMode.SYMLINK
+
     /** Cleans up one candidate, agent by agent, each as its own operation (one failing agent does not stop the rest). */
     fun removeRedundantCopies(candidate: RedundantCopyCandidate, scope: SkillScope, project: DiscoveredProject?): RedundantCopyOutcome {
         val removed = mutableListOf<String>()
+        val converted = mutableListOf<String>()
         val skipped = mutableMapOf<String, String>()
         val failed = mutableMapOf<String, String>()
+        candidate.convertAgentIds.forEach { agentId ->
+            val prepared = runCatching { prepareShare(candidate.skill, agentId, scope, project) }
+                .getOrElse { error -> failed[agentId] = error.message ?: error.javaClass.simpleName; return@forEach }
+            val result = runCatching { execute(prepared) }
+                .getOrElse { error -> failed[agentId] = error.message ?: error.javaClass.simpleName; return@forEach }
+            when {
+                result.status == SyncOperationStatus.FAILED || result.status == SyncOperationStatus.ROLLED_BACK ->
+                    failed[agentId] = result.errors.joinToString { it.message }.ifBlank { "Could not replace the copy with a link." }
+                result.appliedSteps.isEmpty() ->
+                    skipped[agentId] = prepared.planResult.plan.warnings.joinToString { it.message }.ifBlank { "Nothing to replace." }
+                else -> converted += agentId
+            }
+        }
         candidate.agentIds.forEach { agentId ->
             val prepared = runCatching { prepareRemoveRedundantCopy(candidate.skill, agentId, scope, project) }
                 .getOrElse { error -> failed[agentId] = error.message ?: error.javaClass.simpleName; return@forEach }
@@ -468,7 +509,7 @@ internal class SkillSyncApplicationService(
                 else -> removed += agentId
             }
         }
-        return RedundantCopyOutcome(candidate.skill.identity.id, candidate.skill.name, removed, skipped, failed)
+        return RedundantCopyOutcome(candidate.skill.identity.id, candidate.skill.name, removed, skipped, failed, converted)
     }
 
     fun prepareResync(
@@ -505,7 +546,7 @@ internal class SkillSyncApplicationService(
     ): PreparedSkillSync = prepare(
         SkillSyncRequest.RepairSkill(skill.identity.id, targetAgentId = null),
         skill,
-        targets.keys,
+        targetMap.keys,
         scope,
         project,
     )
@@ -523,7 +564,7 @@ internal class SkillSyncApplicationService(
             skill,
             scope,
             project,
-            targets.filterKeys { it in installed },
+            targetMap.filterKeys { it in installed },
             settings.current().preferredSyncMode,
             // An installed agent that reads the shared directory but has no sync target (e.g. Freebuff).
             directReaderIds = AgentCapabilityRegistry.agentIdsSupportingSharedSkills().filterTo(mutableSetOf()) { it in installed },
@@ -562,8 +603,8 @@ internal class SkillSyncApplicationService(
 
     /** The shared skills folder for a scope (for plan previews); null for a project scope without a project. */
     fun sharedSkillsDirectory(scope: SkillScope, project: DiscoveredProject?): Path? =
-        if (scope == SkillScope.GLOBAL) sharedSkillDirectory.resolveGlobalDirectory()
-        else project?.let(sharedSkillDirectory::resolveProjectDirectory)
+        if (scope == SkillScope.GLOBAL) parts.sharedSkillDirectory.resolveGlobalDirectory()
+        else project?.let(parts.sharedSkillDirectory::resolveProjectDirectory)
 
     /** Where backups made by mutations are kept (for plan previews). */
     fun backupDirectory(): Path = backupRoot
@@ -602,7 +643,7 @@ internal class SkillSyncApplicationService(
         val result = mutate {
             val executed = engine.runner.execute(
                 prepared.planResult,
-                targets,
+                targetMap,
                 prepared.scope,
                 prepared.project,
                 backupRoot,
@@ -653,11 +694,11 @@ internal class SkillSyncApplicationService(
 
     companion object {
         private const val WSL_MUTATION_DISABLED_MESSAGE =
-            "Skill synchronization is disabled while AgentHub runs agents in WSL; switch to Windows (native) first."
+            "Skill synchronization is not available in this environment."
 
         fun getInstance(): SkillSyncApplicationService = service()
 
-        private fun defaultTargets(userHome: Path = Path.of(System.getProperty("user.home"))): Map<String, SkillSyncTarget> =
+        private fun defaultTargets(userHome: Path = AgentRuntime.userHome()): Map<String, SkillSyncTarget> =
             listOf(
                 AntigravitySkillSyncTarget(userHome),
                 ClaudeSkillSyncTarget(userHome),

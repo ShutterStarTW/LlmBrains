@@ -9,6 +9,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /** What differs between OpenCode and its forks (Kilo): ids, config file stems, directories and env overrides. */
 data class OpenCodeMcpFlavor(
@@ -25,6 +26,8 @@ data class OpenCodeMcpFlavor(
     val configFileEnv: String,
     /** Extra file names accepted in the global directory (Kilo also reads `config.json`). */
     val extraGlobalFileNames: List<String> = emptyList(),
+    /** Further `<stem>.json(c)` files read next to the main one in every directory (Kilo also loads `opencode.json(c)`). */
+    val additionalConfigStems: List<String> = emptyList(),
     /** Replaces the `$XDG_CONFIG_HOME/<appName>` default where the fork has its own home variable (MiMo's `MIMOCODE_HOME`). */
     val globalDirectoryResolver: ((Path) -> Path)? = null,
 ) {
@@ -34,7 +37,8 @@ data class OpenCodeMcpFlavor(
             appName = "opencode",
             configStem = "opencode",
             projectDirectories = listOf(".opencode"),
-            homeDirectories = emptyList(),
+            // The home-level `~/.opencode` is a config directory too (`config/paths.ts` searches `.opencode` from the home).
+            homeDirectories = listOf(".opencode"),
             configDirectoryEnv = "OPENCODE_CONFIG_DIR",
             configFileEnv = "OPENCODE_CONFIG",
         )
@@ -47,6 +51,8 @@ data class OpenCodeMcpFlavor(
             configDirectoryEnv = "KILO_CONFIG_DIR",
             configFileEnv = "KILO_CONFIG",
             extraGlobalFileNames = listOf("config.json"),
+            // Kilo's `ALL_CONFIG_FILES` is `kilo.jsonc`, `kilo.json`, `opencode.jsonc`, `opencode.json`.
+            additionalConfigStems = listOf("opencode"),
         )
         val MIMO = OpenCodeMcpFlavor(
             agentId = "mimo",
@@ -85,14 +91,14 @@ open class OpenCodeFamilyMcpProvider(
     override fun discoverGlobal(): List<RawMcpServer> =
         (listOf(globalDirectory) + homeDirectories + listOfNotNull(customDirectory)).flatMap { directory ->
             val extras = if (directory == globalDirectory) flavor.extraGlobalFileNames else emptyList()
-            discoverConfig(findConfig(directory, extras), McpScope.GLOBAL)
+            findConfigs(directory, extras).flatMap { discoverConfig(it, McpScope.GLOBAL) }
         } + discoverConfig(customFile, McpScope.GLOBAL)
 
     override fun discoverProject(project: DiscoveredProject): List<RawMcpServer> {
         val root = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()
         // The project root config and the project directories' configs are all loaded (the latter override).
-        return (listOf(root) + flavor.projectDirectories.map(root::resolve)).flatMap {
-            discoverConfig(findConfig(it), McpScope.PROJECT, project.name)
+        return (listOf(root) + flavor.projectDirectories.map(root::resolve)).flatMap { directory ->
+            findConfigs(directory).flatMap { discoverConfig(it, McpScope.PROJECT, project.name) }
         }
     }
 
@@ -114,10 +120,16 @@ open class OpenCodeFamilyMcpProvider(
         )
     }
 
-    private fun findConfig(directory: Path, extraFileNames: List<String> = emptyList()): Path? =
-        (listOf("${flavor.configStem}.json", "${flavor.configStem}.jsonc") + extraFileNames)
-            .map(directory::resolve)
-            .firstOrNull { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+    /** The first existing `<stem>.json` / `<stem>.jsonc` (and extra file names) of each stem; the main stem comes first. */
+    private fun findConfigs(directory: Path, extraFileNames: List<String> = emptyList()): List<Path> {
+        fun firstExisting(names: List<String>): Path? =
+            names.map(directory::resolve).firstOrNull { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+        val stems = listOf(flavor.configStem) + flavor.additionalConfigStems
+        return stems.mapIndexedNotNull { index, stem ->
+            val names = listOf("$stem.json", "$stem.jsonc") + if (index == 0) extraFileNames else emptyList()
+            firstExisting(names)
+        }
+    }
 
     private fun readRoot(configPath: Path): JsonObject? = McpConfigRootReader.read(
         configPath,
@@ -135,14 +147,14 @@ open class OpenCodeFamilyMcpProvider(
 }
 
 class OpenCodeMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : OpenCodeFamilyMcpProvider(OpenCodeMcpFlavor.OPENCODE, homeDirectory)
 
 class KiloMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : OpenCodeFamilyMcpProvider(OpenCodeMcpFlavor.KILO, homeDirectory)
 
 /** MiMo Code CLI (an OpenCode fork): `mimocode.json(c)` in its config directory, the project root and `.mimocode/`. */
 class MimoMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : OpenCodeFamilyMcpProvider(OpenCodeMcpFlavor.MIMO, homeDirectory)

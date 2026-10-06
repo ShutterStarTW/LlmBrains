@@ -6,13 +6,14 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Kimi Code CLI MCP servers (docs: `customization/mcp.md`): the `mcpServers` map of `mcp.json` in the data root
  * (`~/.kimi-code`, or `KIMI_CODE_HOME`) and of the project's `.kimi-code/mcp.json`. Plugin-provided servers are not modelled.
  */
 class KimiMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
     private val dataDirectory = EnvHomeDirectorySupport.resolveGuarded("KIMI_CODE_HOME", homeDirectory, DATA_DIRECTORY)

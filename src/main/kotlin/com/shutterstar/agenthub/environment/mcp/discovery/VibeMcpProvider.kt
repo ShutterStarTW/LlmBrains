@@ -7,6 +7,7 @@ import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Mistral Vibe MCP servers (`vibe/core/config/vibe_schema.py`, `models.py`): the `[[mcp_servers]]` entries of the user
@@ -14,7 +15,7 @@ import java.util.logging.Logger
  * applies once the folder is trusted). Connector-provided servers and plugin servers are not modelled.
  */
 class VibeMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
     private val vibeHome = EnvHomeDirectorySupport.resolveGuarded("VIBE_HOME", homeDirectory, VIBE_DIRECTORY)

@@ -70,7 +70,13 @@ class CopyStrategy : FileLinkStrategy {
                         throw IOException("Refusing to copy filesystem reparse point: $file")
                     }
                     val destination = target.resolve(source.relativize(file))
-                    Files.copy(file, destination, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS)
+                    try {
+                        Files.copy(file, destination, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS)
+                    } catch (_: NotImplementedError) {
+                        // The IDE's WSL file system does not implement every option; the walk above already
+                        // refused anything that is not a plain file or a link, so the plain copy is equivalent.
+                        Files.copy(file, destination, StandardCopyOption.COPY_ATTRIBUTES)
+                    }
                     preservePosixPermissions(file, destination)
                     return FileVisitResult.CONTINUE
                 }

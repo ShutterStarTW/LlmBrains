@@ -8,6 +8,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.time.Instant
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Freebuff chats (the Codebuff CLI; source `cli/src/utils/{config-dir,chat-history,chat-meta}.ts` and
@@ -132,6 +133,6 @@ class FreebuffProjectProvider(
         private val LOG: Logger = Logger.getLogger(FreebuffProjectProvider::class.java.name)
 
         private fun defaultConfigDirectory(): Path =
-            EnvHomeDirectorySupport.resolveGuarded("FREEBUFF_CONFIG_DIR", Path.of(System.getProperty("user.home")), ".config/manicode")
+            EnvHomeDirectorySupport.resolveGuarded("FREEBUFF_CONFIG_DIR", AgentRuntime.userHome(), ".config/manicode")
     }
 }

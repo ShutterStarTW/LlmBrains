@@ -6,6 +6,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * MiMo Code CLI skills (source `packages/cli/src/skill/index.ts`): every `SKILL.md` below `skill/` and `skills/` in each
@@ -16,7 +17,7 @@ import java.nio.file.Path
  * are not modelled.
  */
 class MimoSkillProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()

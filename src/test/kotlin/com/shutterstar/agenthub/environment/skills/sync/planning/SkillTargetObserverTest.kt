@@ -327,9 +327,9 @@ class SkillTargetObserverTest {
         val canonical = writeSkillMd(root.resolve("canonical"), "same content")
         val alternateRoot = root.resolve("alternate-root")
         writeSkillMd(alternateRoot.resolve("canonical"), "same content")
-        // "cline" (not a supportsSharedAgentSkills agent) so NATIVE doesn't short-circuit this
+        // "kiro" (not a supportsSharedAgentSkills agent) so NATIVE doesn't short-circuit this
         // alternate-compatibility-root check before it runs.
-        val target = FakeTarget("cline", global = root.resolve("native-root"), alternateGlobal = listOf(alternateRoot))
+        val target = FakeTarget("kiro", global = root.resolve("native-root"), alternateGlobal = listOf(alternateRoot))
 
         val observed = observe(target, canonical)
 
@@ -345,7 +345,7 @@ class SkillTargetObserverTest {
         val alternatePath = alternateRoot.resolve("canonical")
         val linked = runCatching { Files.createSymbolicLink(alternatePath, canonical) }.isSuccess
         assumeTrue(linked, "symlink creation requires elevated privilege on this machine")
-        val target = FakeTarget("cline", global = root.resolve("native-root"), alternateGlobal = listOf(alternateRoot))
+        val target = FakeTarget("kiro", global = root.resolve("native-root"), alternateGlobal = listOf(alternateRoot))
 
         val observed = observe(target, canonical)
 
@@ -358,7 +358,7 @@ class SkillTargetObserverTest {
         val canonical = writeSkillMd(root.resolve("canonical"), "canonical content")
         val alternateRoot = root.resolve("alternate-root")
         writeSkillMd(alternateRoot.resolve("canonical"), "different content")
-        val target = FakeTarget("cline", global = root.resolve("native-root"), alternateGlobal = listOf(alternateRoot))
+        val target = FakeTarget("kiro", global = root.resolve("native-root"), alternateGlobal = listOf(alternateRoot))
 
         val observed = observe(target, canonical)
 
@@ -372,7 +372,7 @@ class SkillTargetObserverTest {
         writeSkillMd(nativeRoot.resolve("canonical"), "different content")
         val alternateRoot = root.resolve("alternate-root")
         writeSkillMd(alternateRoot.resolve("canonical"), "same content")
-        val target = FakeTarget("cline", global = nativeRoot, alternateGlobal = listOf(alternateRoot))
+        val target = FakeTarget("kiro", global = nativeRoot, alternateGlobal = listOf(alternateRoot))
 
         val observed = observe(target, canonical)
 

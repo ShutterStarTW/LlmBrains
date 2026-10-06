@@ -141,7 +141,7 @@ object CompanionTools {
             uninstallHint = "npm uninstall -g tokentracker-cli",
             provider = "TokenTracker",
             url = "https://www.tokentracker.cc",
-            devUrl = "https://github.com/mm7894215/TokenTracker",
+            devUrl = "https://github.com/xiufengsun/TokenTracker",
         ),
         CodingAgent(
             id = "tokscale",

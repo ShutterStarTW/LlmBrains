@@ -33,6 +33,18 @@ class KiloConfigDiscoveryTest {
     }
 
     @Test
+    fun `should inventory opencode json next to the kilo settings in the global kilo directory`() {
+        write(".config/kilo/opencode.jsonc", "{}")
+        write(".config/kilo/opencode.json", "{}")
+        write(".config/opencode/opencode.json", "{}")
+
+        val names = KiloConfigProvider(home).discoverGlobal().map { Path.of(it.path).fileName.toString() }.toSet()
+
+        // Only the opencode.json(c) inside ~/.config/kilo - the OpenCode config directory itself is not Kilo's.
+        assertEquals(setOf("opencode.jsonc", "opencode.json"), names)
+    }
+
+    @Test
     fun `should inventory project kilo configs in nested directories only by exact name`() {
         val root = Files.createDirectories(home.resolve("project"))
         write("project/kilo.json", "{}")
@@ -44,8 +56,10 @@ class KiloConfigDiscoveryTest {
 
         val sources = KiloConfigProvider(home).discoverProject(project(root))
 
-        assertEquals(4, sources.size)
-        assertTrue(sources.none { it.path.contains("node_modules") || it.path.endsWith("opencode.json") })
+        // Kilo also loads opencode.json(c) next to kilo.json(c), so that file is inventoried too.
+        assertEquals(5, sources.size)
+        assertTrue(sources.any { it.path.endsWith("opencode.json") })
+        assertTrue(sources.none { it.path.contains("node_modules") })
         assertTrue(sources.all { it.projectName == "project" && it.scope == ConfigScope.PROJECT })
     }
 

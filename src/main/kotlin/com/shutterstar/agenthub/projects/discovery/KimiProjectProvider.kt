@@ -8,6 +8,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.time.Instant
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Kimi Code CLI sessions (the npm `@moonshot-ai/kimi-code`; the archived Python `kimi-cli` stored its data in `~/.kimi` and
@@ -106,6 +107,6 @@ class KimiProjectProvider(
         private val LOG: Logger = Logger.getLogger(KimiProjectProvider::class.java.name)
 
         private fun defaultDataDirectory(): Path =
-            EnvHomeDirectorySupport.resolveGuarded("KIMI_CODE_HOME", Path.of(System.getProperty("user.home")), ".kimi-code")
+            EnvHomeDirectorySupport.resolveGuarded("KIMI_CODE_HOME", AgentRuntime.userHome(), ".kimi-code")
     }
 }

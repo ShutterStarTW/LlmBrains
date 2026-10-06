@@ -13,6 +13,8 @@ session has been discovered for it. WSL launch mode does not switch this browser
 - **Filters ▾** (next to the scope selector) opens a popup with the state filter (**All**,
   **Shared**, **Conflicts**), the ownership filter and an agent filter. Choices apply immediately,
   and the button shows how many are active, for example **Filters (2) ▾**.
+- The agent icons of a skill, and the agent filter, show the agents the folder **belongs to** (Claude for
+  `.claude/skills`). In a project, only agents that have a session in that project are shown.
 - The **summary** counts shared, in-sync and conflicting skill groups separately from the number of
   occurrences. It also shows the totals of healthy, broken and unknown targets and the managed-agent
   coverage.
@@ -86,7 +88,16 @@ partial result names the candidates you can retry.
 
 **Clean up redundant copies…** removes links or copies that an agent no longer needs because it
 reads the shared folder directly. Only copies identical to the shared skill are removed, always after
-a backup.
+a backup. An agent that cannot read the shared folder and keeps an identical copy gets a link instead
+(when links are the preferred mode).
+
+For a single skill, the shared skill's **Overview** has a **Redundant links** / **Redundant copies** section
+(above *Additional sources*) with each agent, its path and a **Remove link** / **Remove copy** button; the
+**Agents** tab marks the same agents. An agent that cannot read the shared folder has **Remove copy** on its
+identical copy (under *Additional sources*, on the **Agents** tab before **Stop Sharing**, and on the copy's own
+row), which replaces the copy with a link. All of them show the plan first.
+
+A skill that is already shared has no *Move to Shared*. A copy that differs is resolved from the shared skill.
 
 ## History, Undo and backups
 

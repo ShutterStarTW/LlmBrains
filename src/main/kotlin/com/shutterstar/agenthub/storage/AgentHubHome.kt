@@ -21,6 +21,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /** A test-injectable user-level home. No filesystem mutation until [prepare] or a store update. */
 class AgentHubHome(
@@ -160,7 +161,7 @@ class AgentHubHome(
         private val disabledBackupRoot = Path.of(System.getProperty("java.io.tmpdir"), "agenthub-unavailable-${UUID.randomUUID()}")
 
         fun resolvePath(
-            userHome: Path = Path.of(System.getProperty("user.home")),
+            userHome: Path = AgentRuntime.userHome(),
             environmentValue: String? = System.getenv("AGENTHUB_HOME"),
             propertyValue: String? = System.getProperty("agenthub.home"),
         ): Path? = runCatching {

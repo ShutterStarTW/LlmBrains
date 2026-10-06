@@ -279,7 +279,7 @@ npm update --quiet --no-fund -g tokentracker-cli
 npm uninstall -g tokentracker-cli
 ```
 
-> via [tokentracker.cc](https://www.tokentracker.cc) · [github.com/mm7894215/TokenTracker](https://github.com/mm7894215/TokenTracker)
+> via [tokentracker.cc](https://www.tokentracker.cc) · [github.com/xiufengsun/TokenTracker](https://github.com/xiufengsun/TokenTracker)
 
 ```
 % tokentracker --version

@@ -6,6 +6,7 @@ import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Kimi Code CLI instructions (docs: `customization/agents.md`): the global `AGENTS.md` and `SYSTEM.md` (which replaces the
@@ -14,7 +15,7 @@ import java.nio.file.Path
  * files (`agents/`) are not instructions and not modelled.
  */
 class KimiInstructionProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
     private val dataDirectory = EnvHomeDirectorySupport.resolveGuarded("KIMI_CODE_HOME", homeDirectory, DATA_DIRECTORY)

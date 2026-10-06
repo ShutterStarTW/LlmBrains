@@ -1,5 +1,7 @@
 package com.shutterstar.agenthub.projects.resolve
 
+import com.shutterstar.agenthub.AgentRuntime
+import com.shutterstar.agenthub.WslSupport
 import java.io.IOException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -36,10 +38,12 @@ object ProjectStatsCollector {
         gitRoot: String?,
         commandRunner: (command: List<String>, timeoutMillis: Long) -> String? = ProcessCommandRunner::run,
     ): ProjectStats {
-        val (fileCount, truncated, totalSize) = walk(path)
+        // In WSL mode a distro project's files are reached over the share; its git runs inside the distro.
+        val (fileCount, truncated, totalSize) = walk(AgentRuntime.toHostPath(path) ?: path)
         val commitCount = gitRoot?.let { root ->
-            commandRunner(listOf("git", "-C", root, "rev-list", "--count", "HEAD"), COMMIT_COUNT_TIMEOUT_MILLIS)
-                ?.trim()?.toIntOrNull()
+            val command = listOf("git", "-C", root, "rev-list", "--count", "HEAD")
+            val argv = if (AgentRuntime.isWsl() && root.startsWith("/")) WslSupport.execArgv(command) else command
+            commandRunner(argv, COMMIT_COUNT_TIMEOUT_MILLIS)?.trim()?.toIntOrNull()
         }
         return ProjectStats(fileCount, truncated, totalSize, commitCount)
     }

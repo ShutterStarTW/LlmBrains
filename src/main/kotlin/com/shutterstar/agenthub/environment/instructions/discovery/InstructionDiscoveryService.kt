@@ -7,31 +7,14 @@ import com.shutterstar.agenthub.environment.instructions.model.InstructionType
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.util.Locale
 import com.shutterstar.agenthub.OsDetector
+import com.shutterstar.agenthub.AgentRuntime
 
 class InstructionDiscoveryService(
-    providers: List<InstructionProvider> = listOf(
-        AntigravityInstructionProvider(),
-        ClaudeInstructionProvider(),
-        ClineInstructionProvider(),
-        CodexInstructionProvider(),
-        CopilotInstructionProvider(),
-        CursorInstructionProvider(),
-        FreebuffInstructionProvider(),
-        GrokInstructionProvider(),
-        JunieInstructionProvider(),
-        KiloInstructionProvider(),
-        KimiInstructionProvider(),
-        KiroInstructionProvider(),
-        MimoInstructionProvider(),
-        OmpInstructionProvider(),
-        OpenCodeInstructionProvider(),
-        QwenInstructionProvider(),
-        VibeInstructionProvider(),
-    ),
+    providers: List<InstructionProvider>? = null,
     /** Only installed agents are discovered. */
     isAgentVisible: (String) -> Boolean = { true },
 ) : ProviderBackedDiscovery<InstructionProvider, InstructionSource>(
-    providers, isAgentVisible, "instruction", "InstructionDiscovery", InstructionProvider::agentId,
+    { providers ?: defaultProviders.get() }, isAgentVisible, "instruction", "InstructionDiscovery", InstructionProvider::agentId,
 ) {
     fun discoverGlobal(): List<InstructionSource> = normalize(discoverGlobalRecords())
 
@@ -65,4 +48,29 @@ class InstructionDiscoveryService(
         val scope: InstructionScope,
         val type: InstructionType,
     )
+
+    private companion object {
+        /** Rebuilt when the runtime (host or a WSL distro) changes: the providers hold resolved home directories. */
+        val defaultProviders = AgentRuntime.scoped<List<InstructionProvider>> {
+            listOf(
+                AntigravityInstructionProvider(),
+                ClaudeInstructionProvider(),
+                ClineInstructionProvider(),
+                CodexInstructionProvider(),
+                CopilotInstructionProvider(),
+                CursorInstructionProvider(),
+                FreebuffInstructionProvider(),
+                GrokInstructionProvider(),
+                JunieInstructionProvider(),
+                KiloInstructionProvider(),
+                KimiInstructionProvider(),
+                KiroInstructionProvider(),
+                MimoInstructionProvider(),
+                OmpInstructionProvider(),
+                OpenCodeInstructionProvider(),
+                QwenInstructionProvider(),
+                VibeInstructionProvider(),
+            )
+        }
+    }
 }

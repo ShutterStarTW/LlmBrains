@@ -11,9 +11,10 @@ import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.AgentRuntime
 
 class CopilotProjectProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : AgentProjectProvider {
     override val agentId: String = AGENT_ID
 

@@ -82,10 +82,17 @@ class KiloMcpProviderTest {
     }
 
     @Test
-    fun `should not read OpenCode configuration files`() {
+    fun `should also read opencode json next to kilo json as Kilo does`() {
+        // Source: Kilo's `KilocodeConfig.ALL_CONFIG_FILES` is kilo.jsonc, kilo.json, opencode.jsonc, opencode.json.
         val root = Files.createDirectories(temporaryDirectory.resolve("project"))
         Files.writeString(root.resolve("opencode.json"), """{"mcp":{"x":{"type":"local","command":["a"]}}}""")
+        Files.writeString(root.resolve("kilo.json"), """{"mcp":{"y":{"type":"local","command":["b"]}}}""")
+        val globalDirectory = Files.createDirectories(temporaryDirectory.resolve(".config/kilo"))
+        Files.writeString(globalDirectory.resolve("opencode.jsonc"), """{"mcp":{"g":{"type":"local","command":["c"]}}}""")
 
-        assertEquals(emptyList<RawMcpServer>(), KiloMcpProvider(temporaryDirectory).discoverProject(project(root)))
+        val provider = KiloMcpProvider(temporaryDirectory)
+
+        assertEquals(setOf("x", "y"), provider.discoverProject(project(root)).mapTo(mutableSetOf()) { it.name })
+        assertEquals(setOf("g"), provider.discoverGlobal().mapTo(mutableSetOf()) { it.name })
     }
 }

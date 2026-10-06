@@ -37,6 +37,8 @@ internal class SkillTargetObserver(
         requestedMode: SkillSyncMode = SkillSyncMode.SYMLINK,
         managedTarget: ManagedTarget? = null,
         nativeShortCircuit: Boolean = true,
+        /** The exact directory to observe instead of `<agent skills root>/<name>` (a vendor copy lives in a sub-folder). */
+        exactTargetPath: Path? = null,
     ): ObservedSkillTarget {
         val capabilities = AgentCapabilityRegistry.capabilitiesFor(target.agentId)
         if (!capabilities.supportsSkills) {
@@ -50,7 +52,7 @@ internal class SkillTargetObserver(
             return ObservedSkillTarget(target.agentId, canonicalPath, SkillTargetStatus.NATIVE, requestedMode)
         }
 
-        val targetPath = resolveTargetPath(target, canonicalPath, scope, project)
+        val targetPath = exactTargetPath ?: resolveTargetPath(target, canonicalPath, scope, project)
             ?: return ObservedSkillTarget(target.agentId, null, SkillTargetStatus.UNSUPPORTED, requestedMode)
         val verifiedRecord = managedTarget?.takeIf { managedPathMatches(it, targetPath) }
         val renameCandidate = renameCandidate(managedTarget, targetPath)

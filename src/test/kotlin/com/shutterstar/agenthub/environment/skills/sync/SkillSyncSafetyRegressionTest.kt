@@ -109,14 +109,14 @@ class SkillSyncSafetyRegressionTest {
 
     @Test
     fun `share everywhere reports a blocked conflict as partial success`() {
-        // "cline" (not a supportsSharedAgentSkills agent) so it gets a real per-agent
+        // "kiro" (not a supportsSharedAgentSkills agent) so it gets a real per-agent
         // copy/conflict here instead of short-circuiting to NATIVE.
         val canonical = writeSkillMd(root.resolve("canonical"), "content")
-        writeSkillMd(root.resolve("cline/canonical"), "different")
+        writeSkillMd(root.resolve("kiro/canonical"), "different")
         val service = SkillSyncEngine()
         val targets = mapOf(
             "claude" to Target("claude", root.resolve("claude")),
-            "cline" to Target("cline", root.resolve("cline")),
+            "kiro" to Target("kiro", root.resolve("kiro")),
         )
 
         val result = service.runner.execute(
@@ -129,7 +129,7 @@ class SkillSyncSafetyRegressionTest {
 
         assertEquals(SyncOperationStatus.PARTIAL_SUCCESS, result.status)
         assertEquals(SyncTargetOutcome.CHANGED, result.targetResults.single { it.agentId == "claude" }.outcome)
-        assertEquals(SyncTargetOutcome.BLOCKED, result.targetResults.single { it.agentId == "cline" }.outcome)
+        assertEquals(SyncTargetOutcome.BLOCKED, result.targetResults.single { it.agentId == "kiro" }.outcome)
     }
 
     @Test
@@ -139,7 +139,7 @@ class SkillSyncSafetyRegressionTest {
         val service = SkillSyncEngine(ownershipStore = store, sharedSkillDirectory = SharedSkillProvider(root))
         val targets = mapOf(
             "claude" to Target("claude", root.resolve("claude"), links = true),
-            "cline" to Target("cline", root.resolve("cline"), links = true),
+            "kiro" to Target("kiro", root.resolve("kiro"), links = true),
         )
         val promotion = plan(
             service,
@@ -151,7 +151,7 @@ class SkillSyncSafetyRegressionTest {
         val promoted = service.runner.execute(promotion, targets, SkillScope.GLOBAL, null, root.resolve("backups"))
         val canonical = promotion.plan.canonicalPath
         val shared = service.runner.execute(
-            plan(service, SkillSyncRequest.ShareSkill("review", "cline"), skill(canonical), targets, "share-later"),
+            plan(service, SkillSyncRequest.ShareSkill("review", "kiro"), skill(canonical), targets, "share-later"),
             targets,
             SkillScope.GLOBAL,
             null,
@@ -163,7 +163,7 @@ class SkillSyncSafetyRegressionTest {
         val undo = service.runner.undo(promoted)
         assertTrue(undo.errors.any { it.message.contains("newer managed target") })
         assertTrue(Files.exists(canonical))
-        assertTrue(Files.isSameFile(canonical, root.resolve("cline/review")))
+        assertTrue(Files.isSameFile(canonical, root.resolve("kiro/review")))
     }
 
     @Test

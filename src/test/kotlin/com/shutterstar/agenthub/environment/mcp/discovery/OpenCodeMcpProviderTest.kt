@@ -16,6 +16,17 @@ class OpenCodeMcpProviderTest {
     lateinit var temporaryDirectory: Path
 
     @Test
+    fun `should read opencode json of the home dot opencode config directory`() {
+        val directory = Files.createDirectories(temporaryDirectory.resolve(".opencode"))
+        Files.writeString(directory.resolve("opencode.json"), """{"mcp":{"home":{"type":"local","command":["a"]}}}""")
+
+        val servers = OpenCodeMcpProvider(temporaryDirectory).discoverGlobal()
+
+        assertEquals(listOf("home"), servers.map { it.name })
+        assertEquals(McpScope.GLOBAL, servers.single().scope)
+    }
+
+    @Test
     fun `should parse global JSONC and current direct MCP format`() {
         val configDirectory = Files.createDirectories(temporaryDirectory.resolve(".config/opencode"))
         Files.writeString(

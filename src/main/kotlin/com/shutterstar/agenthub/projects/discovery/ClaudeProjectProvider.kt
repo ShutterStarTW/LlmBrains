@@ -11,9 +11,10 @@ import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.AgentRuntime
 
 class ClaudeProjectProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
     private val maxProjectDirectoryEntries: Int = MAX_PROJECT_DIRECTORY_ENTRIES,
     private val maxSessionEntries: Int = MAX_SESSION_ENTRIES,
 ) : AgentProjectProvider {

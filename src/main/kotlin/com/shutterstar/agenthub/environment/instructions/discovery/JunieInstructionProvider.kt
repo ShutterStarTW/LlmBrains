@@ -8,6 +8,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Junie CLI guidelines (docs: junie.jetbrains.com/docs/guidelines-and-memory.html): `.junie/AGENTS.md`, the project-root
@@ -16,7 +17,7 @@ import java.nio.file.Path
  * project files wins when several exist is Junie's rule and is not asserted here: every file found is listed.
  */
 class JunieInstructionProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
     private val junieHome = EnvHomeDirectorySupport.resolveGuarded("JUNIE_HOME", homeDirectory, JUNIE_DIRECTORY)

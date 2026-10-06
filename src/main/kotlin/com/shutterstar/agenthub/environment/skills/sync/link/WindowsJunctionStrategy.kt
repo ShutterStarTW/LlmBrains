@@ -1,6 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.sync.link
 
-import com.shutterstar.agenthub.OsDetector
+import com.shutterstar.agenthub.AgentRuntime
 import com.shutterstar.agenthub.environment.skills.sync.model.EffectiveSyncMode
 import java.io.IOException
 import java.nio.file.Files
@@ -17,7 +17,7 @@ class WindowsJunctionStrategy(
     },
 ) : FileLinkStrategy {
     override fun canLink(source: Path, target: Path): Boolean =
-        OsDetector.isWindows() &&
+        AgentRuntime.isWindowsRuntime() &&
             Files.isDirectory(source) &&
             !source.toAbsolutePath().toString().startsWith("\\\\") &&
             !target.toAbsolutePath().toString().startsWith("\\\\") &&

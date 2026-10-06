@@ -13,7 +13,7 @@ pip install --upgrade --upgrade-strategy eager openhands-ai
 pip uninstall -y openhands-ai
 ```
 
-> via [openhands.dev](https://openhands.dev/)
+> via [openhands.dev](https://www.openhands.dev/)
 
 
 ## Get Version

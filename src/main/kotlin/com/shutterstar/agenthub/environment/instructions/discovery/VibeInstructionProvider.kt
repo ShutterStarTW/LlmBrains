@@ -6,6 +6,7 @@ import com.shutterstar.agenthub.environment.instructions.model.InstructionSource
 import com.shutterstar.agenthub.environment.instructions.model.InstructionType
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Mistral Vibe instructions (`vibe/core/config/harness_files/_harness_manager.py`): the global `AGENTS.md` of the vibe
@@ -14,7 +15,7 @@ import java.nio.file.Path
  * instruction files and not modelled.
  */
 class VibeInstructionProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
     private val vibeHome = EnvHomeDirectorySupport.resolveGuarded("VIBE_HOME", homeDirectory, VIBE_DIRECTORY)

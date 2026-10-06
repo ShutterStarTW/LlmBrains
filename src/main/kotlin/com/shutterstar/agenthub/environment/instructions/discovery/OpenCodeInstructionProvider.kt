@@ -10,9 +10,10 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import com.shutterstar.agenthub.AgentRuntime
 
 class OpenCodeInstructionProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
     private val majorVersion: () -> Int? = ::detectMajorVersion,
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID

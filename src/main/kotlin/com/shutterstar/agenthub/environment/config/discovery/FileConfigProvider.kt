@@ -72,7 +72,7 @@ abstract class FileConfigProvider(
         val highlights = if (attrs.size() <= MAX_CONTENT_BYTES) {
             // Bounded even if the file grows between stat and read. No content or exceptions are logged.
             try {
-                Files.newInputStream(normalized, NOFOLLOW_LINKS).use { input ->
+                Files.newInputStream(normalized).use { input ->
                     val bytes = input.readNBytes(MAX_CONTENT_BYTES + 1)
                     if (bytes.size > MAX_CONTENT_BYTES) emptyList()
                     else ConfigHighlightReader.read(
@@ -96,8 +96,13 @@ abstract class FileConfigProvider(
         )
     }
 
+    // An ancestor that cannot be inspected at all (the root of the WSL distro share) is not evidence of a link.
     private fun safePath(path: Path): Boolean = generateSequence(path.toAbsolutePath().normalize()) { it.parent }
-        .none { Files.isSymbolicLink(it) || Files.readAttributes(it, BasicFileAttributes::class.java, NOFOLLOW_LINKS).isOther }
+        .none {
+            runCatching {
+                Files.isSymbolicLink(it) || Files.readAttributes(it, BasicFileAttributes::class.java, NOFOLLOW_LINKS).isOther
+            }.getOrDefault(false)
+        }
 
     companion object {
         const val MAX_CONTENT_BYTES = 1024 * 1024

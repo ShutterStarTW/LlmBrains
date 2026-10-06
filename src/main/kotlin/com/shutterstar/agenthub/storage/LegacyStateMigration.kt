@@ -22,13 +22,14 @@ import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.UUID
+import com.shutterstar.agenthub.AgentRuntime
 
 /** Idempotent, per-IDE import. Old state and backup directories are never removed or changed. */
 class LegacyStateMigration(
     private val home: AgentHubHome,
     private val configRoot: Path,
     private val systemRoot: Path,
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) {
     fun migrate(): Boolean {
         if (!home.prepare()) return false

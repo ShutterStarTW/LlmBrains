@@ -171,6 +171,24 @@ class SkillProviderTest {
     }
 
     @Test
+    fun `should discover OpenCode skills of the home dot opencode directory and the singular skill folders`() {
+        writeSkillMd(temporaryDirectory.resolve(".opencode/skills/home-skills"), validSkill("home-skills", "Home config skill"))
+        writeSkillMd(temporaryDirectory.resolve(".opencode/skill/home-singular"), validSkill("home-singular", "Home singular skill"))
+        writeSkillMd(temporaryDirectory.resolve(".config/opencode/skill/config-singular"), validSkill("config-singular", "Config singular skill"))
+        val projectRoot = Files.createDirectories(temporaryDirectory.resolve("opencode-singular-project"))
+        writeSkillMd(projectRoot.resolve(".opencode/skill/project-singular"), validSkill("project-singular", "Project singular skill"))
+        writeSkillMd(projectRoot.resolve(".claude/skill/not-read"), validSkill("not-read", "The Claude root has no singular folder"))
+
+        val provider = OpenCodeSkillProvider(temporaryDirectory)
+
+        assertEquals(
+            setOf("home-skills", "home-singular", "config-singular"),
+            provider.discoverGlobal().mapTo(mutableSetOf()) { it.name },
+        )
+        assertEquals(setOf("project-singular"), provider.discoverProject(project(projectRoot)).mapTo(mutableSetOf()) { it.name })
+    }
+
+    @Test
     fun `should discover Cursor native managed and compatibility global skills`() {
         writeSkillMd(
             temporaryDirectory.resolve(".cursor/skills/native-review"),

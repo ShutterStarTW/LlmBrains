@@ -6,6 +6,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Junie CLI MCP servers (docs: junie.jetbrains.com/docs/junie-cli-mcp-configuration.html): the `mcpServers` map of
@@ -13,7 +14,7 @@ import java.util.logging.Logger
  * `JUNIE_MCP_LOCATIONS`, the `mcp-locations` key of `config.json` and extension-provided servers are not modelled.
  */
 class JunieMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
     private val junieHome = EnvHomeDirectorySupport.resolveGuarded("JUNIE_HOME", homeDirectory, JUNIE_DIRECTORY)

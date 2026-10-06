@@ -6,9 +6,10 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 class GrokSkillProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
     private val grokDirectory: Path = defaultGrokDirectory(homeDirectory),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID

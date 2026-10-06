@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g droid
 npm uninstall -g droid
 ```
 
-> via [factory.ai/product/ide](https://factory.ai/product/ide)
+> via [factory.com/product/ide](https://factory.com/product/ide)
 
 
 ## Get Version
@@ -44,5 +44,5 @@ Examples:
   droid exec - < prompt.txt           Execute from stdin (non-interactive)
   droid exec --help                   Show exec command options
 
-For more details, see: https://docs.factory.ai/factory-cli/getting-started/overview
+For more details, see: https://docs.factory.com/droid-cli/overview
 ```

@@ -53,8 +53,8 @@
                 GitHub Copilot CLI, Cursor CLI, Freebuff, Grok Build, Junie CLI, Kilo Code, Kimi Code, Kiro CLI, MiMo Code,
                 Mistral Vibe, Oh My Pi, OpenCode and Qwen Code, grouped by project or by agent. Sessions from several agents in the same repository appear as one project.</li>
             <li><b>Sessions</b> &mdash; each session shows the agent's title (or your first prompt), how many
-                prompts you sent and when it ran. <b>Resume</b> reopens a Claude Code, Codex CLI or OpenCode
-                session in a terminal; <b>Transcript</b> opens the session file.</li>
+                prompts you sent and when it ran. <b>Resume</b> reopens a session of any of these agents in its
+                own CLI in a terminal; <b>Transcript</b> opens the session file.</li>
             <li><b>Environment</b> &mdash; skills, MCP servers, instruction files (<code>AGENTS.md</code>,
                 <code>CLAUDE.md</code>, <code>.cursor/rules</code>, &hellip;) and configuration files per project
                 or agent. Skills and MCP servers that exist under several agents are marked as identical or
@@ -72,23 +72,23 @@
             <li><a href="https://aider.chat">Aider</a> &mdash; Aider AI</li>
             <li><a href="https://ampcode.com">Amp</a> &mdash; Sourcegraph</li>
             <li><a href="https://antigravity.google/product/antigravity-cli">Antigravity CLI</a> &mdash; Google</li>
-            <li><a href="https://www.augmentcode.com/product/CLI">Auggie</a> &mdash; Augment</li>
+            <li><a href="https://www.augmentcode.com/product/cli">Auggie</a> &mdash; Augment</li>
             <li><a href="https://claude.com/product/claude-code">Claude Code</a> &mdash; Anthropic</li>
             <li><a href="https://cline.bot/cli">Cline</a> &mdash; Cline</li>
             <li><a href="https://www.codebuddy.ai">CodeBuddy</a> &mdash; Tencent</li>
             <li><a href="https://openai.com/codex">Codex CLI</a> &mdash; OpenAI</li>
-            <li><a href="https://sourcegraph.com/cody">Cody CLI</a> &mdash; Sourcegraph</li>
+            <li><a href="https://sourcegraph.com/docs/cody">Cody CLI</a> &mdash; Sourcegraph</li>
             <li><a href="https://commandcode.ai">Command Code</a> &mdash; Command Code</li>
             <li><a href="https://continue.dev">Continue CLI</a> &mdash; Continue</li>
             <li><a href="https://github.com/features/copilot/cli">Copilot CLI</a> &mdash; GitHub</li>
             <li><a href="https://charm.land/">Crush</a> &mdash; Charm</li>
             <li><a href="https://cursor.com/cli">Cursor CLI</a> &mdash; Cursor</li>
             <li><a href="https://devin.ai/cli">Devin</a> &mdash; Cognition</li>
-            <li><a href="https://factory.ai/product/ide">Droid</a> &mdash; Factory AI</li>
+            <li><a href="https://factory.com/product/ide">Droid</a> &mdash; Factory AI</li>
             <li><a href="https://forgecode.dev">ForgeCode</a> &mdash; Antinomy</li>
             <li><a href="https://freebuff.com/cli">Freebuff</a> &mdash; Codebuff</li>
             <li><a href="https://goose-docs.ai">Goose CLI</a> &mdash; Block</li>
-            <li><a href="https://x.ai/cli">Grok Build</a> &mdash; xAI</li>
+            <li><a href="https://x.ai/build">Grok Build</a> &mdash; xAI</li>
             <li><a href="https://iflow.cn">iFlow CLI</a> &mdash; iFlow</li>
             <li><a href="https://junie.jetbrains.com">Junie CLI</a> &mdash; JetBrains</li>
             <li><a href="https://kilo.ai">Kilo Code</a> &mdash; Kilo</li>
@@ -98,21 +98,20 @@
             <li><a href="https://leanctl.com">LeanCTL</a> &mdash; LeanCTL</li>
             <li><a href="https://mimo.xiaomi.com/mimocode">MiMo Code</a> &mdash; Xiaomi</li>
             <li><a href="https://mistral.ai/products/vibe">Mistral Vibe</a> &mdash; Mistral AI</li>
-            <li><a href="https://developer.meta.com/ai/products/muse-code/">Muse Code</a> &mdash; Meta</li>
+            <li><a href="https://dev.meta.ai/products/muse-code">Muse Code</a> &mdash; Meta</li>
             <li><a href="https://omp.sh">Oh My Pi</a> &mdash; can1357</li>
             <li><a href="https://openclaw.ai">OpenClaw</a> &mdash; OpenClaw</li>
             <li><a href="https://opencode.ai">OpenCode</a> &mdash; SST</li>
-            <li><a href="https://openhands.dev/">OpenHands</a> &mdash; All Hands</li>
+            <li><a href="https://www.openhands.dev/">OpenHands</a> &mdash; All Hands</li>
             <li><a href="https://pi.dev">Pi</a> &mdash; Mario Zechner</li>
-            <li><a href="https://plandex.ai">Plandex</a> &mdash; Plandex</li>
-            <li><a href="https://qodo.ai">Qodo</a> &mdash; Qodo</li>
+            <li><a href="https://www.qodo.ai">Qodo</a> &mdash; Qodo</li>
             <li><a href="https://qoder.com">Qoder CLI</a> &mdash; Qoder AI</li>
             <li><a href="https://qwen.ai/qwencode">Qwen Code</a> &mdash; Alibaba</li>
             <li><a href="https://swe-agent.com">SWE-agent</a> &mdash; SWE-agent</li>
             <li><a href="https://vinhnx.github.io/">VT Code</a> &mdash; vinhnx</li>
         </ul>
 
-        <p><i>Command Code, ForgeCode, LeanCTL, Muse Code and Plandex are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
+        <p><i>Command Code, ForgeCode, LeanCTL and Muse Code are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
 
         <p><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents (off by default):</p>
         <ul>
@@ -131,6 +130,14 @@
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.3.2</b></p>
+        <ul>
+            <li><b>WSL mode covers the tool window.</b> Projects, sessions, skills, MCP servers, instruction files and configuration are read from the distribution's home directory. <b>Resume</b> and <b>Launch</b> start inside the distro, and skill sync works on the distro's skill folders.</li>
+            <li>Windows (native) and every WSL distribution keep <b>their own settings</b>: enabled agents and tools, detection results and update status. <b>Check installed agents</b> / <b>Check installed tools</b> ticks what the last detection found.</li>
+            <li>Skills: a <b>Redundant links / copies</b> section with <b>Remove link</b> / <b>Remove copy</b> on the Overview and the Agents tab. <b>Remove copy</b> also swaps an identical copy of an agent that cannot read the shared folder for a link. <b>Clean up redundant copies&#8230;</b> covers both.</li>
+            <li>An already shared skill no longer offers <i>Move to Shared</i>. Skill icons and the agent filter show the agents a folder belongs to; system skills are grouped by agent.</li>
+            <li>Plandex was removed. The links of Auggie, Cody CLI, Droid, Grok Build, Muse Code, OpenHands and Qodo were updated.</li>
+        </ul>
         <p><b>1.3.1</b></p>
         <ul>
             <li>The tool window discovers <b>seven more agents</b>: Kilo Code, Kimi Code, Oh My Pi, Junie CLI, Mistral Vibe, Freebuff and MiMo Code (17 in total) &mdash; projects and sessions, Skills, MCP servers, instruction files and Config.</li>

@@ -41,4 +41,19 @@ class KiloSkillProviderTest {
         assertEquals(setOf("project-skill", "legacy-skill", "claude-skill"), records.map { it.name }.toSet())
         assertTrue(records.all { it.scope == SkillScope.PROJECT && it.projectName == "project" })
     }
+
+    @Test
+    fun `should also accept the singular skill folder in the Kilo config directories but not in the Claude root`() {
+        writeSkill(temporaryDirectory.resolve(".kilo/skill/singular-kilo"), "singular-kilo")
+        writeSkill(temporaryDirectory.resolve(".config/kilo/skill/singular-config"), "singular-config")
+        writeSkill(temporaryDirectory.resolve(".claude/skill/singular-claude"), "singular-claude")
+        val root = Files.createDirectories(temporaryDirectory.resolve("project"))
+        writeSkill(root.resolve(".kilocode/skill/singular-project"), "singular-project")
+        writeSkill(root.resolve(".claude/skill/singular-project-claude"), "singular-project-claude")
+
+        val provider = KiloSkillProvider(temporaryDirectory)
+
+        assertEquals(setOf("singular-kilo", "singular-config"), provider.discoverGlobal().map { it.name }.toSet())
+        assertEquals(setOf("singular-project"), provider.discoverProject(project(root)).map { it.name }.toSet())
+    }
 }

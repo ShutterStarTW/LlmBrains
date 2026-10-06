@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @anthropic-ai/claude-code
 npm uninstall -g @anthropic-ai/claude-code
 ```
 
-> via [docs.claude.com/en/docs/claude-code/setup](https://docs.claude.com/en/docs/claude-code/setup)
+> via [code.claude.com/docs/en/setup](https://code.claude.com/docs/en/setup)
 
 
 ## Get Version

@@ -245,6 +245,7 @@ internal class SkillSyncExecutor(
             requestedMode = original.requestedMode,
             managedTarget = ownershipStore.managedTarget(request.instanceKey, target.agentId),
             nativeShortCircuit = request.nativeShortCircuit,
+            exactTargetPath = original.targetPath.takeIf { request.observedAtExactPath },
         )
         return fresh != original
     }

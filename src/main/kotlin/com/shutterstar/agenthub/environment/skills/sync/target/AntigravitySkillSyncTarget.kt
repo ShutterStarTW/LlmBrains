@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Bespoke, like [CopilotSkillSyncTarget]/[CursorSkillSyncTarget]/[OpenCodeSkillSyncTarget]:
@@ -16,7 +17,7 @@ import java.nio.file.Path
  * a project.
  */
 class AntigravitySkillSyncTarget(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : SkillSyncTarget {
     override val agentId: String = "antigravity"
 

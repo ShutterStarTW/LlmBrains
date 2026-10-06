@@ -11,6 +11,7 @@ import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.SafeFileTree
 
 class CodexProjectProvider(
     private val codexDirectory: Path = defaultCodexDirectory(),
@@ -39,7 +40,7 @@ class CodexProjectProvider(
             .forEach { sessionDirectory ->
                 if (remainingScanEntries == 0) return@forEach
                 var scannedEntries = 0
-                Files.walk(sessionDirectory, MAX_SCAN_DEPTH).use { paths ->
+                SafeFileTree.walk(sessionDirectory, MAX_SCAN_DEPTH).use { paths ->
                     paths
                         .skip(1)
                         .limit(remainingScanEntries.toLong())

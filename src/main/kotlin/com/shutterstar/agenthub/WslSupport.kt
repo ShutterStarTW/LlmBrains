@@ -40,14 +40,38 @@ object WslSupport {
     }
 
     /**
+     * Argv that runs [args] directly in the distro (no shell, so nothing is re-parsed): `wsl.exe [-d distro]
+     * [--cd dir] --exec <args>`. [linuxWorkingDirectory] is a Linux path (`/home/me/project`).
+     */
+    fun execArgv(
+        args: List<String>,
+        executionSettings: Settings = settings,
+        linuxWorkingDirectory: String? = null,
+    ): List<String> = buildList {
+        add("wsl.exe")
+        executionSettings.distro.trim().takeIf { it.isNotEmpty() }?.let { add("-d"); add(it) }
+        linuxWorkingDirectory?.takeIf { it.isNotBlank() }?.let { add("--cd"); add(it) }
+        add("--exec")
+        addAll(args)
+    }
+
+    /**
      * One-line form typed into the IDE terminal (PowerShell on Windows). The inner command is
      * single-quoted for PowerShell (`'` → `''`); wsl.exe --exec hands it to `bash -lic` as a
      * single argument, so bash is the only layer that interprets `$`, `|` and quotes in it.
+     *
+     * [linuxWorkingDirectory] starts the command in that directory of the distro (`wsl.exe --cd`); without
+     * it wsl.exe maps the terminal's Windows working directory to the matching `/mnt/<drive>` path.
      */
-    fun wrapForTerminal(command: String, executionSettings: Settings = settings): String {
+    fun wrapForTerminal(
+        command: String,
+        executionSettings: Settings = settings,
+        linuxWorkingDirectory: String? = null,
+    ): String {
         val distro = executionSettings.distro.trim()
         val distroPart = if (distro.isEmpty()) "" else "-d '${distro.replace("'", "''")}' "
-        return "wsl.exe $distroPart--exec $BASH $BASH_FLAGS '${withToolchainGuard(command).replace("'", "''")}'"
+        val cdPart = linuxWorkingDirectory?.takeIf { it.isNotBlank() }?.let { "--cd '${it.replace("'", "''")}' " }.orEmpty()
+        return "wsl.exe $distroPart$cdPart--exec $BASH $BASH_FLAGS '${withToolchainGuard(command).replace("'", "''")}'"
     }
 
     // -- Native command check / toolchain guard ----------------------------------------------
@@ -145,7 +169,8 @@ object WslSupport {
         emptyList()
     }
 
-    private fun decodeWslOutput(bytes: ByteArray): String =
+    /** UTF-8, or UTF-16LE from older inbox wsl.exe versions that ignore `WSL_UTF8`. */
+    internal fun decodeWslOutput(bytes: ByteArray): String =
         if (bytes.any { it == 0.toByte() }) String(bytes, StandardCharsets.UTF_16LE)
         else String(bytes, StandardCharsets.UTF_8)
 }

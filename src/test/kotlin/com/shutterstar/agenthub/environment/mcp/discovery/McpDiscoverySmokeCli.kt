@@ -23,10 +23,17 @@ fun main() {
         CodexMcpProvider(),
         CopilotMcpProvider(),
         CursorMcpProvider(),
+        FreebuffMcpProvider(),
         GrokMcpProvider(),
+        JunieMcpProvider(),
+        KiloMcpProvider(),
+        KimiMcpProvider(),
         KiroMcpProvider(),
+        MimoMcpProvider(),
+        OmpMcpProvider(),
         OpenCodeMcpProvider(),
         QwenMcpProvider(),
+        VibeMcpProvider(),
     )
     val records = mutableListOf<RawMcpServer>()
 

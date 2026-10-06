@@ -6,6 +6,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 class GrokMcpProvider(
     private val grokDirectory: Path = defaultGrokDirectory(),
@@ -49,7 +50,7 @@ class GrokMcpProvider(
         fun defaultGrokDirectory(): Path = EnvHomeDirectorySupport.resolve("GROK_HOME", GROK_DIRECTORY)
 
         fun defaultCompatibilityHome(grokDirectory: Path): Path {
-            val userHome = Path.of(System.getProperty("user.home"))
+            val userHome = AgentRuntime.userHome()
             return if (grokDirectory == defaultGrokDirectory()) userHome else grokDirectory.parent ?: userHome
         }
     }

@@ -8,6 +8,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Kilo Code CLI instructions (source: `session/instruction.ts`): the global `AGENTS.md` of
@@ -17,7 +18,7 @@ import java.nio.file.Path
  * (The deprecated `CONTEXT.md` and the `KILO_DISABLE_CLAUDE_CODE[_PROMPT]` switches are not modelled.)
  */
 class KiloInstructionProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
     private val globalFiles = listOfNotNull(

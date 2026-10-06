@@ -7,9 +7,10 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Files
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 class CursorSkillProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()

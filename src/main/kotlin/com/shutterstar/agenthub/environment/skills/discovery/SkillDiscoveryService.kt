@@ -12,32 +12,14 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.Locale
+import com.shutterstar.agenthub.AgentRuntime
 
 class SkillDiscoveryService(
-    providers: List<SkillProvider> = listOf(
-        SharedSkillProvider(),
-        AntigravitySkillProvider(),
-        ClaudeSkillProvider(),
-        ClineSkillProvider(),
-        CodexSkillProvider(),
-        CopilotSkillProvider(),
-        CursorSkillProvider(),
-        FreebuffSkillProvider(),
-        GrokSkillProvider(),
-        JunieSkillProvider(),
-        KiloSkillProvider(),
-        KimiSkillProvider(),
-        KiroSkillProvider(),
-        MimoSkillProvider(),
-        OmpSkillProvider(),
-        OpenCodeSkillProvider(),
-        QwenSkillProvider(),
-        VibeSkillProvider(),
-    ),
+    providers: List<SkillProvider>? = null,
     /** Only installed agents are discovered; the shared `.agents/skills` root needs one compatible installed agent. */
     private val isAgentVisible: (String) -> Boolean = { true },
 ) : ProviderBackedDiscovery<SkillProvider, SkillSourceRecord>(
-    providers, isAgentVisible, "skill", "SkillDiscovery", SkillProvider::agentId, "shared",
+    { providers ?: defaultProviders.get() }, isAgentVisible, "skill", "SkillDiscovery", SkillProvider::agentId, "shared",
 ) {
     fun discoverGlobal(): List<AgentSkill> = normalize(discoverGlobalRecords())
 
@@ -134,4 +116,30 @@ class SkillDiscoveryService(
         val normalizedName: String,
         val scope: SkillScope,
     )
+
+    private companion object {
+        /** Rebuilt when the runtime (host or a WSL distro) changes: the providers hold resolved home directories. */
+        val defaultProviders = AgentRuntime.scoped<List<SkillProvider>> {
+            listOf(
+                SharedSkillProvider(),
+                AntigravitySkillProvider(),
+                ClaudeSkillProvider(),
+                ClineSkillProvider(),
+                CodexSkillProvider(),
+                CopilotSkillProvider(),
+                CursorSkillProvider(),
+                FreebuffSkillProvider(),
+                GrokSkillProvider(),
+                JunieSkillProvider(),
+                KiloSkillProvider(),
+                KimiSkillProvider(),
+                KiroSkillProvider(),
+                MimoSkillProvider(),
+                OmpSkillProvider(),
+                OpenCodeSkillProvider(),
+                QwenSkillProvider(),
+                VibeSkillProvider(),
+            )
+        }
+    }
 }

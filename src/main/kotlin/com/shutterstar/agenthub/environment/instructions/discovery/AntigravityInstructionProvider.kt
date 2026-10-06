@@ -9,9 +9,10 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.io.path.extension
+import com.shutterstar.agenthub.AgentRuntime
 
 class AntigravityInstructionProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
 
@@ -67,7 +68,7 @@ class AntigravityInstructionProvider(
     override fun discoverProject(project: DiscoveredProject): List<InstructionSource> {
         val projectRoot = InstructionFileSupport.projectRoot(project) ?: return emptyList()
         return InstructionFileSupport.scan(projectRoot) { root, file ->
-            val fileName = file.fileName.toString()
+            val fileName = file.fileName?.toString().orEmpty()
             fileName == AGENTS_FILE ||
                 fileName == GEMINI_FILE ||
                 (
@@ -94,12 +95,12 @@ class AntigravityInstructionProvider(
 
     private fun isPluginRuleFile(file: Path): Boolean {
         val parent = file.parent ?: return false
-        if (!parent.fileName.toString().equals(RULES_DIRECTORY, ignoreCase = true)) return false
+        if (!parent.fileName?.toString().equals(RULES_DIRECTORY, ignoreCase = true)) return false
         val pluginDir = parent.parent ?: return false
         val pluginsDir = pluginDir.parent ?: return false
-        if (!pluginsDir.fileName.toString().equals(PLUGINS_DIRECTORY, ignoreCase = true)) return false
+        if (!pluginsDir.fileName?.toString().equals(PLUGINS_DIRECTORY, ignoreCase = true)) return false
         val rootDir = pluginsDir.parent ?: return false
-        val rootName = rootDir.fileName.toString()
+        val rootName = rootDir.fileName?.toString().orEmpty()
         return rootName.equals(AGENTS_DIRECTORY, ignoreCase = true) ||
             rootName.equals(LEGACY_AGENT_DIRECTORY, ignoreCase = true) ||
             rootName.equals(ALT_AGENTS_DIRECTORY, ignoreCase = true) ||

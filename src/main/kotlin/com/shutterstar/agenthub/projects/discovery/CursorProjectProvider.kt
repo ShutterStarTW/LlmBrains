@@ -7,6 +7,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.name
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Discovers Cursor CLI sessions from `meta.json`, plus the user's own prompts from
@@ -109,6 +110,6 @@ class CursorProjectProvider(
         private val LOG = Logger.getLogger(CursorProjectProvider::class.java.name)
 
         private fun defaultCursorDirectory(): Path =
-            Path.of(System.getProperty("user.home"), ".cursor")
+            AgentRuntime.userHome().resolve(".cursor")
     }
 }

@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * MiMo Code CLI: skills live in `skills/` of its config directory (`MIMOCODE_HOME/config`, or
@@ -12,7 +13,7 @@ import java.nio.file.Path
  * reported as alternates (see [com.shutterstar.agenthub.environment.skills.discovery.MimoSkillProvider]).
  */
 class MimoSkillSyncTarget(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillSyncTarget {
     override val agentId: String = "mimo"
 

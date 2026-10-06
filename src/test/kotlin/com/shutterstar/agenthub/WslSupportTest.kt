@@ -120,4 +120,26 @@ class WslSupportTest {
         assertTrue("''[x] pip is not installed" in terminal)
         assertTrue(terminal.endsWith(" pip install mistral-vibe'"))
     }
+
+    @Test
+    fun `execArgv runs the arguments directly in the distro`() {
+        assertEquals(
+            listOf("wsl.exe", "-d", "Ubuntu", "--exec", "printenv", "HOME", "WSL_DISTRO_NAME"),
+            WslSupport.execArgv(listOf("printenv", "HOME", "WSL_DISTRO_NAME"), WslSupport.Settings(true, "Ubuntu")),
+        )
+        assertEquals(
+            listOf("wsl.exe", "--cd", "/home/me/proj dir", "--exec", "git", "status"),
+            WslSupport.execArgv(listOf("git", "status"), WslSupport.Settings(true, ""), "/home/me/proj dir"),
+        )
+    }
+
+    @Test
+    fun `wrapForTerminal changes into the project directory of the distro`() {
+        val settings = WslSupport.Settings(true, "Ubuntu")
+
+        val line = WslSupport.wrapForTerminal("claude --resume abc", settings, "/home/me/it's a project")
+
+        assertEquals("wsl.exe -d 'Ubuntu' --cd '/home/me/it''s a project' --exec bash -lic 'claude --resume abc'", line)
+        assertEquals("wsl.exe -d 'Ubuntu' --exec bash -lic 'claude'", WslSupport.wrapForTerminal("claude", settings))
+    }
 }

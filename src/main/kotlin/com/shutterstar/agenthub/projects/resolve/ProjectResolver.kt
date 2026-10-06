@@ -1,5 +1,6 @@
 package com.shutterstar.agenthub.projects.resolve
 
+import com.shutterstar.agenthub.AgentRuntime
 import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import com.shutterstar.agenthub.projects.model.RawAgentProject
 import java.io.File
@@ -144,10 +145,14 @@ class ProjectResolver(
                 null
             }
 
-        private fun expandHome(value: String): String = when {
-            value == "~" -> System.getProperty("user.home")
-            value.startsWith("~/") -> System.getProperty("user.home") + value.drop(1)
-            else -> value
+        private fun expandHome(value: String): String {
+            // In WSL mode `~` is the distro's home (a Linux path), not the Windows user's.
+            val home = (if (AgentRuntime.isWsl()) AgentRuntime.linuxHome() else System.getProperty("user.home")) ?: return value
+            return when {
+                value == "~" -> home
+                value.startsWith("~/") -> home + value.drop(1)
+                else -> value
+            }
         }
 
         private fun normalizePortablePath(value: String): String {

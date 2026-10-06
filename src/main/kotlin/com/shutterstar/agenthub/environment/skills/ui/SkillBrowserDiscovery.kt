@@ -10,6 +10,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.concurrent.atomic.AtomicBoolean
+import com.shutterstar.agenthub.SafeFileTree
 
 /** Skills-only discovery: does not require sessions or scan unrelated MCP/instruction configs. */
 internal class SkillBrowserDiscovery(
@@ -73,7 +74,7 @@ internal class SkillBrowserDiscovery(
         return runCatching {
             // A symlinked skill folder must be walked through its real path: Files.walk does not follow a link root.
             val walkRoot = runCatching { root.toRealPath() }.getOrDefault(root)
-            Files.walk(walkRoot, 4).use { paths ->
+            SafeFileTree.walk(walkRoot, 4).use { paths ->
                 paths.filter(Files::isRegularFile).limit(200)
                     .map { walkRoot.relativize(it).toString() }
                     .sorted().toList()
@@ -100,7 +101,7 @@ internal class SkillBrowserDiscovery(
         return runCatching {
             // Same as findFiles: a symlink root is walked through its real path (a Windows junction resolves itself).
             val walkRoot = runCatching { root.toRealPath() }.getOrDefault(root)
-            Files.walk(walkRoot, MAX_STAT_DEPTH + 1).use { paths ->
+            SafeFileTree.walk(walkRoot, MAX_STAT_DEPTH + 1).use { paths ->
                 val depthLimited = AtomicBoolean(false)
                 val files = paths.filter { path ->
                     if (walkRoot.relativize(path).nameCount > MAX_STAT_DEPTH) {

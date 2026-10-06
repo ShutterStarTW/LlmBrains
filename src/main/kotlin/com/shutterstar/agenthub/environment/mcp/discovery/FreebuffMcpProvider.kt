@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Freebuff MCP servers (Codebuff source `sdk/src/agents/load-mcp-config.ts`, `cli/src/utils/agent-dir-trust.ts`): the
@@ -13,7 +14,7 @@ import java.util.logging.Logger
  * declare, not what is currently trusted. Servers are `stdio` (`command`, `args`, `env`) or `http`/`sse` (`url`, `headers`).
  */
 class FreebuffMcpProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
 

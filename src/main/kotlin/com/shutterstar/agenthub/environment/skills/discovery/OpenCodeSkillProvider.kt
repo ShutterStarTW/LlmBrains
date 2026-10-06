@@ -5,9 +5,10 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 class OpenCodeSkillProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()
@@ -23,11 +24,13 @@ class OpenCodeSkillProvider(
 
     override fun discoverGlobal(): List<SkillSourceRecord> {
         val budget = scanner.newBudget()
-        return listOfNotNull(
-            configRoot.resolve(SKILLS_DIRECTORY),
-            userHome.resolve(CLAUDE_SKILLS),
-            customConfigRoot?.resolve(SKILLS_DIRECTORY),
-        ).flatMap { root ->
+        // Every config directory is scanned for `{skill,skills}/**/SKILL.md` (source: `skill/index.ts`); the home-level
+        // `~/.opencode` counts as a config directory too (`config/paths.ts` looks for `.opencode` from the home directory).
+        val configDirectories = listOfNotNull(configRoot, userHome.resolve(OPENCODE_DIRECTORY), customConfigRoot)
+        return (
+            configDirectories.flatMap { directory -> SKILL_DIRECTORIES.map(directory::resolve) } +
+                listOf(userHome.resolve(CLAUDE_SKILLS)) // a list: a bare Path would be added as its segments
+            ).flatMap { root ->
             scanner.discover(
                 root = root,
                 agentId = agentId,
@@ -43,7 +46,7 @@ class OpenCodeSkillProvider(
     override fun discoverProject(project: DiscoveredProject): List<SkillSourceRecord> {
         val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()
         val budget = scanner.newBudget()
-        return listOf(OPENCODE_DIRECTORY, CLAUDE_DIRECTORY).flatMap { ownerDirectory ->
+        val nested = listOf(OPENCODE_DIRECTORY, CLAUDE_DIRECTORY).flatMap { ownerDirectory ->
             scanner.discoverNestedProjectSkills(
                 projectRoot = projectRoot,
                 ownerDirectoryName = ownerDirectory,
@@ -53,7 +56,18 @@ class OpenCodeSkillProvider(
                 requireValidMetadata = true,
                 budget = budget,
             )
-        }.distinctBy { it.path }
+        }
+        // The singular `skill/` folder is accepted next to `skills/` in `.opencode` (the nested scan reads `skills/` only).
+        val singular = scanner.discover(
+            root = projectRoot.resolve(OPENCODE_DIRECTORY).resolve(SINGULAR_DIRECTORY),
+            agentId = agentId,
+            scope = SkillScope.PROJECT,
+            shared = false,
+            projectName = project.name,
+            requireValidMetadata = true,
+            budget = budget,
+        )
+        return (nested + singular).distinctBy { it.path }
     }
 
     private companion object {
@@ -62,6 +76,8 @@ class OpenCodeSkillProvider(
         const val OPENCODE_CONFIG_APP_NAME = "opencode"
         const val CLAUDE_DIRECTORY = ".claude"
         const val SKILLS_DIRECTORY = "skills"
+        const val SINGULAR_DIRECTORY = "skill"
+        val SKILL_DIRECTORIES = listOf(SKILLS_DIRECTORY, SINGULAR_DIRECTORY)
         val CLAUDE_SKILLS: Path = Path.of(CLAUDE_DIRECTORY, SKILLS_DIRECTORY)
     }
 }

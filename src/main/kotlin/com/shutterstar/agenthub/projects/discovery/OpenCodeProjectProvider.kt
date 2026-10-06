@@ -14,6 +14,8 @@ import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.AgentRuntime
+import com.shutterstar.agenthub.SafeFileTree
 
 data class OpenCodeSessionRecord(
     val id: String,
@@ -113,7 +115,7 @@ open class OpenCodeFamilyProjectProvider(
             if (remainingEntries == 0 || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) return@forEach
             val visited = mutableListOf<Path>()
             runCatching {
-                Files.walk(directory, MAX_LEGACY_SCAN_DEPTH).use { paths ->
+                SafeFileTree.walk(directory, MAX_LEGACY_SCAN_DEPTH).use { paths ->
                     paths.skip(1).limit(remainingEntries.toLong()).forEach(visited::add)
                 }
             }
@@ -265,7 +267,7 @@ open class OpenCodeFamilyProjectProvider(
         internal const val MAX_LEGACY_SCAN_ENTRIES_DEFAULT = MAX_LEGACY_SCAN_ENTRIES
 
         internal fun defaultDataDirectory(flavor: OpenCodeStorageFlavor): Path = EnvHomeDirectorySupport.resolveXdgGuarded(
-            "XDG_DATA_HOME", Path.of(System.getProperty("user.home")), ".local/share", flavor.appName,
+            "XDG_DATA_HOME", AgentRuntime.userHome(), ".local/share", flavor.appName,
         )
     }
 }
@@ -284,7 +286,7 @@ class KiloProjectProvider(
 
 /** MiMo Code CLI (Xiaomi): an OpenCode fork with the same SQLite schema in `mimocode.db` of its data directory (`MIMOCODE_HOME/data`, or `$XDG_DATA_HOME/mimocode`). */
 class MimoProjectProvider(
-    dataDirectory: Path = MimoHomeSupport.dataDirectory(Path.of(System.getProperty("user.home"))),
+    dataDirectory: Path = MimoHomeSupport.dataDirectory(AgentRuntime.userHome()),
     databaseReader: (Path) -> List<OpenCodeSessionRecord> = OpenCodeSqliteReader(OpenCodeStorageFlavor.MIMO.agentId)::readSessions,
 ) : OpenCodeFamilyProjectProvider(OpenCodeStorageFlavor.MIMO, dataDirectory, OpenCodeFamilyProjectProvider.MAX_LEGACY_SCAN_ENTRIES_DEFAULT, databaseReader)
 

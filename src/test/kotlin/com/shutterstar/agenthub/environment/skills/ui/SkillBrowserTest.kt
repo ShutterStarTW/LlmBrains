@@ -9,6 +9,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillConsistency
 import com.shutterstar.agenthub.environment.skills.model.SkillIdentity
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.environment.skills.model.SkillSource
+import com.shutterstar.agenthub.projects.model.AgentProject
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectIdentity
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -155,7 +156,7 @@ class SkillBrowserTest {
         assertEquals(setOf("claude", "codex", "cursor"), merged.single().agentIds)
     }
 
-    @Test fun `a genuinely independent copy keeps its own row and its agent id is not duplicated onto the shared row`() {
+    @Test fun `a copy keeps its own row and its agent is also shown on the shared row next to the linked ones`() {
         val shared = SkillSource(null, "/home/user/.agents/skills/humanizer", SkillScope.GLOBAL, shared = true, fingerprint = "fp")
         val independentCopy = SkillSource("claude", "/home/user/.claude/skills/humanizer", SkillScope.GLOBAL, shared = false, fingerprint = "fp2")
         val linked = SkillSource("codex", "/home/user/.codex/skills/humanizer", SkillScope.GLOBAL, shared = false, fingerprint = "fp")
@@ -165,8 +166,25 @@ class SkillBrowserTest {
         val merged = SkillBrowserModel.mergeLinkedOccurrences(rows) { path -> path == linked.path }
 
         assertEquals(2, merged.size)
-        assertEquals(setOf("codex"), merged.first { it.source.path == shared.path }.agentIds)
+        assertEquals(setOf("claude", "codex"), merged.first { it.source.path == shared.path }.agentIds)
         assertEquals(setOf("claude"), merged.first { it.source.path == independentCopy.path }.agentIds)
+    }
+
+    @Test fun `user skills are listed by name, then the system skills by agent and name`() {
+        fun source(agent: String, path: String, system: Boolean = false) = SkillSource(agent, path, SkillScope.GLOBAL, false, "fp", system = system)
+        fun skill(name: String, source: SkillSource) =
+            AgentSkill(SkillIdentity(name), name, null, SkillScope.GLOBAL, listOf(source), setOf(source.agentId!!), SkillConsistency.SINGLE_SOURCE)
+        val skills = listOf(
+            skill("zeta", source("claude", "/h/.claude/skills/zeta")),
+            skill("alpha-sys", source("codex", "/h/.codex/skills/.system/alpha-sys", system = true)),
+            skill("beta-sys", source("claude", "/h/.claude/skills/synced/b/beta-sys", system = true)),
+            skill("alpha", source("claude", "/h/.claude/skills/alpha")),
+            skill("aaa-sys", source("codex", "/h/.codex/skills/.system/aaa-sys", system = true)),
+        )
+
+        val titles = SkillBrowserModel.rows(SkillBrowserContext(SkillScope.GLOBAL), skills).map { it.title }
+
+        assertEquals(listOf("alpha", "zeta", "beta-sys", "aaa-sys", "alpha-sys"), titles)
     }
 
     @Test fun `should preserve source occurrences and use H1 without metadata in the title`() {
@@ -234,13 +252,67 @@ class SkillBrowserTest {
         assertNotEquals(a.key, b.key)
     }
 
-    @Test fun `should combine discovering agent icons only for the same physical source`() {
+    @Test fun `an agent that only reads another agent's folder is a reader, not an owner`() {
         val snapshot = sampleSnapshot()
         val skill = snapshot.skills.single()
         val source = skill.sources.last()
         val rows = SkillBrowserModel.rows(snapshot.copy(skills = listOf(skill.copy(sources = skill.sources + source.copy(agentId = "cursor")))))
-        assertEquals(2, rows.size)
-        assertEquals(setOf("claude", "cursor"), rows.first { !it.source.shared }.agentIds)
+        assertEquals(2, rows.size, "one physical source is one row")
+        val row = rows.first { !it.source.shared }
+        assertEquals(setOf("claude"), row.agentIds)
+        assertEquals(setOf("cursor"), row.readerAgentIds)
+        assertEquals(emptyList<SkillOccurrenceRow>(), SkillBrowserModel.filter(rows, "", SkillBrowserFilter.ALL, "cursor"))
+        assertEquals(listOf(row), SkillBrowserModel.filter(rows, "", SkillBrowserFilter.ALL, "claude"))
+    }
+
+    @Test fun `readers stand in as owners when the owner is not among the discovered agents`() {
+        val source = SkillSource("cline", "C:/Users/example/.claude/skills/x", SkillScope.GLOBAL, false, "B")
+        val skill = AgentSkill(SkillIdentity("x"), "x", null, SkillScope.GLOBAL, listOf(source), setOf("cline"), SkillConsistency.SINGLE_SOURCE)
+
+        val row = SkillBrowserModel.rows(SkillBrowserContext(SkillScope.GLOBAL), listOf(skill)).single()
+
+        assertEquals(setOf("cline"), row.agentIds)
+        assertEquals(emptySet<String>(), row.readerAgentIds)
+    }
+
+    @Test fun `the shared folder of a project is shown with the project's agents that read it`() {
+        val project = project(root.resolve("shared-sessions")).copy(
+            agents = listOf(AgentProject("codex", "p", 1, null, emptyList()), AgentProject("cline", "p", 1, null, emptyList())),
+        )
+        val shared = SkillSource(null, "/work/proj/.agents/skills/x", SkillScope.PROJECT, true, "A")
+        val skill = AgentSkill(SkillIdentity("x"), "x", null, SkillScope.PROJECT, listOf(shared), setOf("codex", "claude", "cline"), SkillConsistency.SINGLE_SOURCE)
+
+        val row = SkillBrowserModel.rows(SkillBrowserContext(SkillScope.PROJECT, project), listOf(skill)).single()
+
+        assertTrue("codex" in row.agentIds, row.agentIds.toString())
+        assertFalse("claude" in row.agentIds, "no session in this project")
+    }
+
+    @Test fun `in a project only agents with a session there are shown`() {
+        val withSessions = project(root.resolve("sessions")).copy(
+            agents = listOf(AgentProject("claude", "p", 3, null, emptyList()), AgentProject("cline", "p", 1, null, emptyList())),
+        )
+        val sources = listOf(
+            SkillSource("claude", "/work/proj/.claude/skills/x", SkillScope.PROJECT, false, "B"),
+            SkillSource("cline", "/work/proj/.claude/skills/x", SkillScope.PROJECT, false, "B"),
+            SkillSource("cursor", "/work/proj/.claude/skills/x", SkillScope.PROJECT, false, "B"),
+            SkillSource("opencode", "/work/proj/.claude/skills/x", SkillScope.PROJECT, false, "B"),
+        )
+        val skill = AgentSkill(SkillIdentity("x"), "x", null, SkillScope.PROJECT, sources, emptySet(), SkillConsistency.IDENTICAL)
+
+        val row = SkillBrowserModel.rows(SkillBrowserContext(SkillScope.PROJECT, withSessions), listOf(skill)).single()
+
+        assertEquals(setOf("claude"), row.agentIds, "the owner has a session; cursor and opencode have none")
+        assertEquals(setOf("cline", "cursor", "opencode"), row.readerAgentIds)
+
+        val noClaudeSession = withSessions.copy(agents = listOf(AgentProject("cursor", "p", 1, null, emptyList())))
+        val other = SkillBrowserModel.rows(SkillBrowserContext(SkillScope.PROJECT, noClaudeSession), listOf(skill)).single()
+        assertEquals(setOf("claude"), other.agentIds, "the owner of the folder is shown even without a session")
+        assertEquals(setOf("cline", "cursor", "opencode"), other.readerAgentIds)
+
+        val noOwnerSkill = skill.copy(sources = skill.sources.filterNot { it.agentId == "claude" })
+        val readersOnly = SkillBrowserModel.rows(SkillBrowserContext(SkillScope.PROJECT, noClaudeSession), listOf(noOwnerSkill)).single()
+        assertEquals(setOf("cursor"), readersOnly.agentIds, "without a known owner only readers with a session stand in")
     }
 
     @Test fun `should reject late results after switching scope`() {

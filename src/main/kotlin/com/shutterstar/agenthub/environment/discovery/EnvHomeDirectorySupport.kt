@@ -1,24 +1,31 @@
 package com.shutterstar.agenthub.environment.discovery
 
+import com.shutterstar.agenthub.AgentRuntime
 import java.nio.file.Path
 
 /**
  * Resolves an agent's home directory from an env var override, falling back to a directory
  * relative to the user's home. Shared by every agent whose CLI honors a single "home" env var
  * (Copilot's `COPILOT_HOME`, Codex's `CODEX_HOME`, Grok's `GROK_HOME`, ...).
+ *
+ * In WSL mode the agents run in a distro whose environment is not the IDE's: the IDE process's variables
+ * (and `~`) do not apply, so the overrides are ignored and everything resolves below the distro's home.
  */
 internal object EnvHomeDirectorySupport {
     fun resolve(envVar: String, relativeDirName: String): Path {
+        if (AgentRuntime.isWsl()) return AgentRuntime.userHome().resolve(relativeDirName)
         val configured = System.getenv(envVar)?.trim()?.takeIf(String::isNotEmpty)
         return configured?.let(::configuredPath)
-            ?: Path.of(System.getProperty("user.home"), relativeDirName)
+            ?: AgentRuntime.userHome().resolve(relativeDirName)
     }
 
     /** Resolves the first set env var in [envVars] (in order), else [default]. */
-    fun resolveFirst(vararg envVars: String, default: () -> Path): Path =
-        envVars.firstNotNullOfOrNull { name ->
+    fun resolveFirst(vararg envVars: String, default: () -> Path): Path {
+        if (AgentRuntime.isWsl()) return default()
+        return envVars.firstNotNullOfOrNull { name ->
             System.getenv(name)?.trim()?.takeIf(String::isNotEmpty)?.let(::configuredPath)
         } ?: default()
+    }
 
     /**
      * Same as [resolve], but only honors the env var when [homeDirectory] is still the system

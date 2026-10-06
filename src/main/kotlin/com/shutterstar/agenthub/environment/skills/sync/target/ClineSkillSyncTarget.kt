@@ -4,13 +4,14 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Discovery also reads `.clinerules/skills` and a `.claude/skills` compatibility root at project
  * scope; synchronization writes only the native `.cline/skills` root (global and project).
  */
 class ClineSkillSyncTarget(
-    userHome: Path = Path.of(System.getProperty("user.home")),
+    userHome: Path = AgentRuntime.userHome(),
 ) : SkillSyncTarget by DirectorySkillSyncTarget(
     agentId = "cline",
     provider = NativeSkillDirectoryProvider("cline", userHome, Path.of(".cline", "skills")),

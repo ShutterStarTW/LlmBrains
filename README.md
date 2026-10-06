@@ -139,7 +139,8 @@ you review a plan and confirm it.
   Sessions from several agents in the same repository appear as one project (local path and Git
   remote are matched).
 - **Sessions** — each session shows the agent's title (or your first prompt), how many prompts you
-  sent and when it ran. **Resume** reopens a Claude Code, Codex CLI or OpenCode session in a
+  sent and when it ran. **Resume** reopens a session of Antigravity, Claude Code, Cline, Codex CLI, Copilot CLI, Cursor CLI, Freebuff, Grok Build, Junie CLI,
+  Kilo Code, Kimi Code, Kiro CLI, MiMo Code, Mistral Vibe, Oh My Pi, OpenCode or Qwen Code in a
   terminal; **Transcript** opens the session file. See [session statistics](docs/session-statistics.md) for the per-session usage details.
 - **Environment** — skills, MCP servers, instruction files (`AGENTS.md`, `CLAUDE.md`,
   `.cursor/rules`, …) and configuration files per project or agent. Skills and MCP servers that
@@ -178,23 +179,23 @@ folders, with backups and rollback.
 | [Aider](https://aider.chat)                                                    | `aider`      | Aider AI    | `pip install aider-install && aider-install`                                    |
 | [Amp](https://ampcode.com)                                                     | `amp`        | Sourcegraph | `npm install -g @ampcode/cli`                                                   |
 | [Antigravity CLI](https://antigravity.google/product/antigravity-cli)         | `agy`        | Google      | `curl -fsSL https://antigravity.google/cli/install.sh \| bash`                  |
-| [Auggie](https://www.augmentcode.com/product/CLI)                              | `auggie`     | Augment     | `npm install -g @augmentcode/auggie`                                            |
+| [Auggie](https://www.augmentcode.com/product/cli)                              | `auggie`     | Augment     | `npm install -g @augmentcode/auggie`                                            |
 | [Claude Code](https://claude.com/product/claude-code)                          | `claude`     | Anthropic   | `npm install -g @anthropic-ai/claude-code`                                      |
 | [Cline](https://cline.bot/cli)                                                 | `cline`      | Cline       | `npm install -g cline`                                                          |
 | [CodeBuddy](https://www.codebuddy.ai)                                          | `codebuddy`  | Tencent      | `npm install -g @tencent-ai/codebuddy-code`                                     |
 | [Codex CLI](https://openai.com/codex)                                          | `codex`      | OpenAI      | `npm install -g @openai/codex`                                                  |
-| [Cody CLI](https://sourcegraph.com/cody)                                       | `cody`       | Sourcegraph | `npm install -g @sourcegraph/cody`                                              |
+| [Cody CLI](https://sourcegraph.com/docs/cody)                                       | `cody`       | Sourcegraph | `npm install -g @sourcegraph/cody`                                              |
 | [Command Code](https://commandcode.ai)                                         | `cmd`        | Command Code | `npm install -g command-code`                                                   |
 | [Continue CLI](https://continue.dev)                                           | `cn`         | Continue    | `npm install -g @continuedev/cli`                                               |
 | [Copilot CLI](https://github.com/features/copilot/cli)                         | `copilot`    | GitHub      | `npm install -g @github/copilot`                                                |
 | [Crush](https://charm.land/)                                                   | `crush`      | Charm       | `npm install -g @charmland/crush`                                               |
 | [Cursor CLI](https://cursor.com/cli)                                           | `cursor-agent` | Cursor    | `curl https://cursor.com/install -fsS \| bash`                                  |
 | [Devin](https://devin.ai/cli)                                                  | `devin`      | Cognition   | `curl -fsSL https://cli.devin.ai/install.sh \| bash`                            |
-| [Droid](https://factory.ai/product/ide)                                        | `droid`      | Factory AI  | `npm install -g droid`                                                          |
+| [Droid](https://factory.com/product/ide)                                        | `droid`      | Factory AI  | `npm install -g droid`                                                          |
 | [ForgeCode](https://forgecode.dev)                                             | `forge`      | Antinomy    | `curl -fsSL https://forgecode.dev/cli \| sh`                                    |
 | [Freebuff](https://freebuff.com/cli)                                           | `freebuff`   | Codebuff    | `npm install -g freebuff`                                                       |
 | [Goose CLI](https://goose-docs.ai)                                             | `goose`      | Block       | `curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh \| bash` |
-| [Grok Build](https://x.ai/cli)                                                 | `grok`       | xAI         | `npm install -g @xai-official/grok`                                             |
+| [Grok Build](https://x.ai/build)                                                 | `grok`       | xAI         | `npm install -g @xai-official/grok`                                             |
 | [iFlow CLI](https://iflow.cn)                                                  | `iflow`      | iFlow       | `npm install -g @iflow-ai/iflow-cli`                                            |
 | [Junie CLI](https://junie.jetbrains.com)                                       | `junie`      | JetBrains   | `npm install -g @jetbrains/junie-cli`                                           |
 | [Kilo Code](https://kilo.ai)                                                   | `kilo`       | Kilo        | `npm install -g @kilocode/cli`                                                  |
@@ -204,20 +205,19 @@ folders, with backups and rollback.
 | [LeanCTL](https://leanctl.com)                                                 | `leanctl`    | LeanCTL     | `npm install -g leanctl-bin`                                                    |
 | [MiMo Code](https://mimo.xiaomi.com/mimocode)                                  | `mimo`       | Xiaomi      | `npm install -g @mimo-ai/cli`                                                   |
 | [Mistral Vibe](https://mistral.ai/products/vibe)                               | `vibe`       | Mistral AI  | `pip install mistral-vibe`                                                      |
-| [Muse Code](https://developer.meta.com/ai/products/muse-code/)                 | `muse`       | Meta        | `curl -fsSL https://dev.meta.ai/install.sh \| bash`                             |
+| [Muse Code](https://dev.meta.ai/products/muse-code)                 | `muse`       | Meta        | `curl -fsSL https://dev.meta.ai/install.sh \| bash`                             |
 | [Oh My Pi](https://omp.sh)                                                     | `omp`        | can1357     | `npm install -g @oh-my-pi/pi-coding-agent`                                      |
 | [OpenClaw](https://openclaw.ai)                                                | `openclaw`   | OpenClaw    | `npm install -g openclaw`                                                       |
 | [OpenCode](https://opencode.ai)                                                | `opencode`   | SST         | `npm install -g opencode-ai`                                                    |
-| [OpenHands](https://openhands.dev/)                                            | `openhands`  | All Hands   | `pip install openhands-ai`                                                      |
+| [OpenHands](https://www.openhands.dev/)                                            | `openhands`  | All Hands   | `pip install openhands-ai`                                                      |
 | [Pi](https://pi.dev)                                                           | `pi`         | Mario Zechner | `npm install -g @mariozechner/pi-coding-agent`                                |
-| [Plandex](https://plandex.ai)                                                  | `plandex`    | Plandex     | `curl -sL https://plandex.ai/install.sh \| bash`                                |
-| [Qodo](https://qodo.ai/)                                                       | `qodo`       | Qodo        | `npm install -g @qodo/command`                                                  |
+| [Qodo](https://www.qodo.ai/)                                                       | `qodo`       | Qodo        | `npm install -g @qodo/command`                                                  |
 | [Qoder CLI](https://qoder.com)                                                 | `qodercli`   | Qoder AI    | `npm install -g @qoder-ai/qodercli`                                             |
 | [Qwen Code](https://qwen.ai/qwencode)                                          | `qwen`       | Alibaba     | `npm install -g @qwen-code/qwen-code@latest`                                    |
 | [SWE-agent](https://swe-agent.com)                                             | `sweagent`   | SWE-agent   | `pip install sweagent`                                                          |
 | [VT Code](https://vinhnx.github.io/)                                           | `vtcode`     | vinhnx      | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com`           |
 
-> **Note:** Command Code, ForgeCode, LeanCTL, Muse Code, and Plandex are hidden on Windows (they have no native Windows build, or their launch command collides with a built-in Windows command).
+> **Note:** Command Code, ForgeCode, LeanCTL, and Muse Code are hidden on Windows (they have no native Windows build, or their launch command collides with a built-in Windows command).
 
 ## Companion Tools
 
@@ -268,14 +268,14 @@ In WSL mode:
 - Detection uses the distro's own `command -v` and ignores Windows binaries exposed through WSL
   interop, so an agent installed only on the Windows side is reported as not installed in the distro.
 - A few agents that are hidden on native Windows because they have no native Windows build
-  (ForgeCode, LeanCTL, Muse Code, Plandex, Command Code) become available, since they run as Linux
+  (ForgeCode, LeanCTL, Muse Code, Command Code) become available, since they run as Linux
   binaries inside the distro.
 - If `pip` or `npm` is missing in the distro, install and update commands print a hint
   (e.g. `sudo apt install python3-pip`) instead of failing silently.
 
 Switching between native and WSL mode (or changing the distro) re-runs detection automatically,
 because each environment has its own set of installed agents. See
-[WSL Mode](https://ShutterStarTW.github.io/LlmBrains/wsl-mode/) in the docs for details.
+[WSL Mode](https://shutterstartw.github.io/LlmBrains/wsl-mode/) in the docs for details.
 
 ## Usage
 

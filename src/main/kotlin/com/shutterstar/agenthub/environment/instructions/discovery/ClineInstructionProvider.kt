@@ -6,13 +6,22 @@ import com.shutterstar.agenthub.environment.instructions.model.InstructionType
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Path
 import kotlin.io.path.extension
+import com.shutterstar.agenthub.AgentRuntime
 
 class ClineInstructionProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = "cline"
 
-    override fun discoverGlobal(): List<InstructionSource> = listOf(
+    // Cline's SDK also reads the vendor-neutral `~/.agents/AGENTS.md` as a global rule (`resolveGlobalAgentsRulesPath`).
+    override fun discoverGlobal(): List<InstructionSource> = listOfNotNull(
+        InstructionFileSupport.source(
+            homeDirectory.resolve(".agents/AGENTS.md"),
+            InstructionScope.GLOBAL,
+            agentId,
+            InstructionType.AGENTS_MD,
+        ),
+    ) + listOf(
         homeDirectory.resolve(".cline/rules"),
         homeDirectory.resolve("Documents/Cline/Rules"),
         homeDirectory.resolve("Cline/Rules"),

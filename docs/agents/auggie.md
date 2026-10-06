@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @augmentcode/auggie
 npm uninstall -g @augmentcode/auggie
 ```
 
-> via [augmentcode.com/product/CLI](https://www.augmentcode.com/product/CLI)
+> via [augmentcode.com/product/cli](https://www.augmentcode.com/product/cli)
 
 
 ## Get Version

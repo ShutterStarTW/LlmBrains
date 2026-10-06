@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @sourcegraph/cody
 npm uninstall -g @sourcegraph/cody
 ```
 
-> via [sourcegraph.com/cody](https://sourcegraph.com/cody)
+> via [sourcegraph.com/docs/cody](https://sourcegraph.com/docs/cody)
 
 
 ## Get Version

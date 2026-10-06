@@ -13,6 +13,8 @@ import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.AgentRuntime
+import com.shutterstar.agenthub.SafeFileTree
 
 class AntigravityProjectProvider(
     private val dataDirectory: Path = defaultDataDirectory(),
@@ -59,7 +61,7 @@ class AntigravityProjectProvider(
         val sessions = mutableListOf<RawAgentProject>()
         var skippedSessions = 0
 
-        Files.walk(directory, MAX_SCAN_DEPTH).use { paths ->
+        SafeFileTree.walk(directory, MAX_SCAN_DEPTH).use { paths ->
             // The limit is a traversal budget, applied before sorting on purpose: sorting first would mean
             // walking (and holding) the whole tree, which is exactly what the budget prevents. Below the budget
             // the result is deterministic (sorted); above it, which files are reached follows the walk order.
@@ -634,7 +636,7 @@ class AntigravityProjectProvider(
 
         private fun defaultDataDirectory(): Path =
             EnvHomeDirectorySupport.resolveFirst("ANTIGRAVITY_DATA_DIR", "ANTIGRAVITY_HOME", "GEMINI_HOME") {
-                Path.of(System.getProperty("user.home"), ".gemini", "antigravity-cli")
+                AgentRuntime.userHome().resolve(".gemini").resolve("antigravity-cli")
             }
     }
 }

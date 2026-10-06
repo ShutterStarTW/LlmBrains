@@ -9,9 +9,10 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.extension
+import com.shutterstar.agenthub.AgentRuntime
 
 class CursorInstructionProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = AGENT_ID
 

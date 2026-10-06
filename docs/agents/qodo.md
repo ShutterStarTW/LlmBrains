@@ -13,7 +13,7 @@ npm update --quiet --no-fund -g @qodo/command
 npm uninstall -g @qodo/command
 ```
 
-> via [qodo.ai](https://qodo.ai)
+> via [qodo.ai](https://www.qodo.ai)
 
 
 ## Usage

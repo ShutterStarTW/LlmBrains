@@ -522,10 +522,9 @@ internal class SkillRedundantCopyDialog(
         val top = JPanel(BorderLayout(0, JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
         top.add(
             JBLabel(
-                "<html><body style='width: ${JBUI.scale(DIALOG_ROW_WIDTH)}px'>These skills are already shared, and the agents " +
-                    "below read the shared folder directly, yet they also keep their own link or identical copy. A link is " +
-                    "only unlinked (what it points to, the shared skill, is never touched); a copy is a real folder, removed " +
-                    "after a backup. Copies that differ from the shared skill are never touched.</body></html>",
+                "<html><body style='width: ${JBUI.scale(DIALOG_ROW_WIDTH)}px'>These skills are already shared. A link is only unlinked (the shared skill is never touched), a copy is " +
+                    "removed after a backup, and an identical copy of an agent that cannot read the shared folder is replaced by a link. " +
+                    "Copies that differ are never touched.</body></html>",
             ),
             BorderLayout.NORTH,
         )
@@ -576,7 +575,11 @@ internal class SkillRedundantCopyDialog(
                 border = JBUI.Borders.emptyLeft(INDENT)
                 // Said exactly: a link is only unlinked, a copy is a real folder that is removed (after a backup).
                 val (linked, copies) = entry.work.candidate.agentIds.partition { it in entry.work.candidate.linkedAgentIds }
-                listOf("Removes the link in" to linked, "Removes the copy in" to copies).forEach { (caption, ids) ->
+                listOf(
+                    "Removes the link in" to linked,
+                    "Removes the copy in" to copies,
+                    "Replaces the copy with a link in" to entry.work.candidate.convertAgentIds,
+                ).forEach { (caption, ids) ->
                     if (ids.isEmpty()) return@forEach
                     add(JBLabel(caption).apply { foreground = JBColor.GRAY })
                     ids.forEach { id ->

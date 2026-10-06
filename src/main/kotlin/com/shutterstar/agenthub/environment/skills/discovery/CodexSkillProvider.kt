@@ -3,6 +3,7 @@ package com.shutterstar.agenthub.environment.skills.discovery
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Discovers the legacy Codex-specific skill location; shared `.agents/skills` uses [SharedSkillProvider].
@@ -13,7 +14,7 @@ import java.nio.file.Path
  * discovered at all, flagged [system][SkillSourceRecord.system].
  */
 class CodexSkillProvider(
-    userHome: Path = Path.of(System.getProperty("user.home")),
+    userHome: Path = AgentRuntime.userHome(),
 ) : DirectorySkillProvider(
     agentId = "codex",
     userHome = userHome,

@@ -16,7 +16,7 @@ npm update --quiet --no-fund -g @openai/codex
 npm uninstall -g @openai/codex
 ```
 
-> via [developers.openai.com/codex/cli/](https://developers.openai.com/codex/cli/)
+> via [learn.chatgpt.com/docs/codex/cli](https://learn.chatgpt.com/docs/codex/cli)
 
 
 ## Get Version

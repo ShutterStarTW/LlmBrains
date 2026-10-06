@@ -5,10 +5,11 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /** Junie CLI: the native skill directories are `$JUNIE_HOME/skills` (default `~/.junie/skills`) and `<project>/.junie/skills`. */
 class JunieSkillSyncTarget(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillSyncTarget {
     override val agentId: String = "junie"
 

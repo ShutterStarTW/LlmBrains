@@ -344,6 +344,12 @@ internal class SkillMutationController(
         prepare { service.prepareStopSharing(row.skill, targetAgentId, row.context.scope, row.context.project) }
     }
 
+    /** Removes one agent's own link/copy of a shared skill the agent reads directly anyway (reviewed, backed up first). */
+    fun removeRedundantCopy(row: SkillOccurrenceRow, targetAgentId: String) {
+        if (closed || busy.get()) return
+        prepare { service.prepareRemoveRedundantCopy(row.skill, targetAgentId, row.context.scope, row.context.project) }
+    }
+
     /** Repairs every agent currently managed by AgentHub for this skill, in one plan. */
     fun repairAll(row: SkillOccurrenceRow) {
         if (closed || busy.get()) return
@@ -447,7 +453,12 @@ internal class SkillMutationController(
 
     /** What "Clean up redundant copies" would list: shared skills that an installed agent reading the shared folder also keeps its own copy of. */
     fun redundantWork(groups: List<SkillGroup>): List<RedundantCopyWork> = groups.flatMap { group ->
-        RedundantCopyDetector(service::isInstalled, owning(group.context.project, strict = true), isLink = ::isLinkEntry)
+        RedundantCopyDetector(
+            service::isInstalled,
+            owning(group.context.project, strict = true),
+            isLink = ::isLinkEntry,
+            canLink = service::canReplaceCopyWithLink,
+        )
             .detect(group.skills)
             .map { RedundantCopyWork(it, group.context) }
     }
@@ -487,7 +498,7 @@ internal class SkillMutationController(
                             skill.name,
                             emptyList(),
                             emptyMap(),
-                            item.candidate.agentIds.associateWith { UserFacingError.describe("Could not clean up the skill", error) },
+                            (item.candidate.agentIds + item.candidate.convertAgentIds).associateWith { UserFacingError.describe("Could not clean up the skill", error) },
                         )
                     }
                 }
@@ -496,13 +507,14 @@ internal class SkillMutationController(
                 busy.set(false)
                 bulkStateChanged(false)
                 if (closed) return@deliver
-                val removedCopies = outcomes.sumOf { it.removed.size }
+                val removedCopies = outcomes.sumOf { it.removed.size + it.converted.size }
+                val touchedSkills = outcomes.count { it.removed.isNotEmpty() || it.converted.isNotEmpty() }
                 val failures = outcomes.count { it.failed.isNotEmpty() }
                 val message = when {
                     unexpectedFailure != null -> UserFacingError.describe("Clean-up stopped", unexpectedFailure)
                     cancelBulk.get() -> "Clean-up cancelled after the current skill; $removedCopies redundant copies removed"
-                    failures == 0 -> "Removed $removedCopies redundant copies from ${outcomes.count { it.removed.isNotEmpty() }} skills (backed up first)"
-                    else -> "Removed $removedCopies redundant copies; $failures skills had failures — refresh and try again"
+                    failures == 0 -> "Cleaned up $removedCopies redundant copies in $touchedSkills skills (backed up first)"
+                    else -> "Cleaned up $removedCopies redundant copies; $failures skills had failures — refresh and try again"
                 }
                 status(message, sticky = unexpectedFailure != null || cancelBulk.get() || failures > 0)
                 notify(

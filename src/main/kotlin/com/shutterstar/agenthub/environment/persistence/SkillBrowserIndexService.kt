@@ -28,11 +28,17 @@ class SkillBrowserIndexService(
     fun cachedSkills(contextKey: String): List<AgentSkill> =
         index.decoded()[contextKey]?.skills.orEmpty()
 
+    /** The source paths that were links when [contextKey] was last scanned. */
+    fun cachedLinkPaths(contextKey: String): Set<String> =
+        store.snapshot().projects.firstOrNull { it.projectId == contextKey }?.linkPaths.orEmpty().toSet()
+
     @Synchronized
-    fun record(contextKey: String, skills: List<AgentSkill>) {
+    fun record(contextKey: String, skills: List<AgentSkill>, linkPaths: Set<String> = emptySet()) {
         val environment = ProjectEnvironment(contextKey, emptySet(), skills, emptyList(), emptyList())
         val moment = Instant.now()
-        index.record(EnvironmentIndexStateMapper.encodeProject(contextKey, environment, moment), moment.toEpochMilli(), MAX_CONTEXTS)
+        val encoded = EnvironmentIndexStateMapper.encodeProject(contextKey, environment, moment)
+        encoded.linkPaths = linkPaths.sorted().toMutableList()
+        index.record(encoded, moment.toEpochMilli(), MAX_CONTEXTS)
     }
 
     fun storageStamp(): String = store.externalStamp()

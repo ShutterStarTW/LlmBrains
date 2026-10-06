@@ -9,6 +9,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Oh My Pi (`omp`) sessions: `<agent dir>/sessions/<encoded-cwd>/<timestamp>_<sessionId>.jsonl`. The directory name is a
@@ -19,7 +20,7 @@ import kotlin.io.path.extension
  * agent-injected prompts carry `attribution:"agent"` or are `custom_message` entries.
  */
 class OmpProjectProvider(
-    private val agentDirectory: Path = OmpHomeSupport.agentDirectory(Path.of(System.getProperty("user.home"))),
+    private val agentDirectory: Path = OmpHomeSupport.agentDirectory(AgentRuntime.userHome()),
 ) : AgentProjectProvider {
     override val agentId: String = AGENT_ID
 

@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Kimi Code CLI skills (docs: `customization/skills.md`): the Kimi-specific `skills/` of the data root
@@ -13,7 +14,7 @@ import java.nio.file.Path
  * from the config and the built-in skills are not modelled.
  */
 class KimiSkillProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()

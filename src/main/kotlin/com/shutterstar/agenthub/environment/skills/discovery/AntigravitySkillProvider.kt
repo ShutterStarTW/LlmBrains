@@ -8,9 +8,10 @@ import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 class AntigravitySkillProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()

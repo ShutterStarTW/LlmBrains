@@ -169,11 +169,16 @@ object TerminalCommandRunner {
         workingDirectory: String?,
         executionSettings: WslSupport.Settings = WslSupport.settings,
     ) {
-        // WSL mode: wrap for the (PowerShell) terminal line. wsl.exe maps the terminal's working
-        // directory to the matching /mnt/<drive> path, so the command starts in the project dir.
-        val effectiveCommand = if (OsDetector.isWindows() && executionSettings.useWsl) WslSupport.wrapForTerminal(command, executionSettings) else command
-
-        runInTerminal(project, title, effectiveCommand, workingDirectory)
+        if (!(OsDetector.isWindows() && executionSettings.useWsl)) {
+            runInTerminal(project, title, command, workingDirectory)
+            return
+        }
+        // WSL mode: wrap for the (PowerShell) terminal line. A Windows working directory is mapped by wsl.exe to
+        // the matching /mnt/<drive> path. A project inside the distro is given as a Linux path or as its share
+        // path (\wsl.localhost\...): neither is a usable terminal directory, so it goes to `wsl.exe --cd` and the
+        // terminal itself starts in the IDE project.
+        val (terminalDirectory, linuxDirectory) = AgentRuntime.terminalDirectories(workingDirectory, project.basePath)
+        runInTerminal(project, title, WslSupport.wrapForTerminal(command, executionSettings, linuxDirectory), terminalDirectory)
     }
 
     /** Runs a host command in the IDE terminal without applying the optional WSL wrapper. */

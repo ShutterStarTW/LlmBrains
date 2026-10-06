@@ -18,6 +18,8 @@ data class EnvironmentIndexProjectState(
     var instructions: MutableList<EnvironmentIndexInstructionState> = mutableListOf(),
     var configs: MutableList<EnvironmentIndexConfigState> = mutableListOf(),
     var warnings: MutableList<EnvironmentIndexWarningState> = mutableListOf(),
+    /** Skill source paths that are links, so a cached skill list folds them exactly like the live one. */
+    var linkPaths: MutableList<String> = mutableListOf(),
 )
 
 data class EnvironmentIndexSkillState(
@@ -38,6 +40,8 @@ data class EnvironmentIndexSkillSourceState(
     var fingerprint: String = "",
     var displayTitle: String? = null,
     var projectName: String? = null,
+    var system: Boolean = false,
+    var realPath: String? = null,
 )
 
 data class EnvironmentIndexMcpServerState(

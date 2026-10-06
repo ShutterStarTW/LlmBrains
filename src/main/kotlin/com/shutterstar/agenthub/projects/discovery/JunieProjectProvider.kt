@@ -7,6 +7,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Junie CLI sessions: `<junie home>/sessions/<sessionId>/summary.json` (`sessionId`, `createdAt`, `updatedAt` in epoch
@@ -121,6 +122,6 @@ class JunieProjectProvider(
         private val LOG: Logger = Logger.getLogger(JunieProjectProvider::class.java.name)
 
         private fun defaultJunieHome(): Path =
-            EnvHomeDirectorySupport.resolveGuarded("JUNIE_HOME", Path.of(System.getProperty("user.home")), ".junie")
+            EnvHomeDirectorySupport.resolveGuarded("JUNIE_HOME", AgentRuntime.userHome(), ".junie")
     }
 }

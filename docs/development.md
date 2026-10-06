@@ -76,8 +76,8 @@ the same script in an IDE terminal. The script delegates compilation and executi
 
 ## Verify MCP discovery without exposing configuration values
 
-On Windows, run the read-only MCP smoke CLI after changing any Antigravity, Claude, Cline,
-Codex, Copilot, Cursor, Grok, Kiro, OpenCode, or Qwen MCP provider:
+On Windows, run the read-only MCP smoke CLI after changing any MCP provider (it runs all
+seventeen agents' providers and prints only counts):
 
 ```powershell
 pwsh -File .\src\test\scripts\run-mcp-discovery.ps1
@@ -181,6 +181,11 @@ The list above covers adding the agent itself. A release additionally needs a `V
 bump, a `CHANGES.md` line, a new `plugin.xml` change-notes block, a
 `docs/blog/posts/<date>-vX.Y.Z.md` post, and a local `git tag vX.Y.Z` on the release commit —
 pushed explicitly with `git push origin vX.Y.Z`, since a plain `git push` does not push tags.
+
+Pushing the tag starts the **Release** workflow (`.github/workflows/release.yml`): it checks that the tag
+matches `VERSION.md` and that `CHANGES.md` has an entry for the version, runs the build and tests, and
+publishes a GitHub Release with `agenthub-X.Y.Z.zip` attached and that `CHANGES.md` line as its text.
+Uploading the ZIP to the JetBrains Marketplace is still done by hand.
 
 ### Adding a companion tool
 

@@ -6,17 +6,13 @@ import com.shutterstar.agenthub.environment.discovery.ProviderBackedDiscovery
 import com.shutterstar.agenthub.environment.model.EnvironmentWarning
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.OsDetector
+import com.shutterstar.agenthub.AgentRuntime
 
 class ConfigDiscoveryService(
-    providers: List<ConfigProvider> = listOf(
-        AntigravityConfigProvider(), ClaudeConfigProvider(), ClineConfigProvider(), CodexConfigProvider(),
-        CopilotConfigProvider(), CursorConfigProvider(), FreebuffConfigProvider(), GrokConfigProvider(), JunieConfigProvider(),
-        KiloConfigProvider(), KimiConfigProvider(), KiroConfigProvider(), MimoConfigProvider(), OmpConfigProvider(),
-        OpenCodeConfigProvider(), QwenConfigProvider(), VibeConfigProvider(),
-    ),
+    providers: List<ConfigProvider>? = null,
     isAgentVisible: (String) -> Boolean = { true },
 ) : ProviderBackedDiscovery<ConfigProvider, AgentConfigSource>(
-    providers, isAgentVisible, "config", "ConfigDiscovery", ConfigProvider::agentId,
+    { providers ?: defaultProviders.get() }, isAgentVisible, "config", "ConfigDiscovery", ConfigProvider::agentId,
 ) {
     fun discoverGlobal(): List<AgentConfigSource> = discoverGlobalRecordsWithWarnings().first
     fun discoverProject(project: DiscoveredProject): List<AgentConfigSource> = discoverProjectRecordsWithWarnings(project).first
@@ -46,4 +42,16 @@ class ConfigDiscoveryService(
         .map { it.copy(highlights = ConfigHighlightReader.sanitize(it.agentId, it.highlights)) }
         .sortedWith(compareBy({ it.agentId }, { it.scope }, { OsDetector.pathKey(it.path) }))
 
+
+    private companion object {
+        /** Rebuilt when the runtime (host or a WSL distro) changes: the providers hold resolved home directories. */
+        val defaultProviders = AgentRuntime.scoped<List<ConfigProvider>> {
+            listOf(
+                AntigravityConfigProvider(), ClaudeConfigProvider(), ClineConfigProvider(), CodexConfigProvider(),
+                CopilotConfigProvider(), CursorConfigProvider(), FreebuffConfigProvider(), GrokConfigProvider(), JunieConfigProvider(),
+                KiloConfigProvider(), KimiConfigProvider(), KiroConfigProvider(), MimoConfigProvider(), OmpConfigProvider(),
+                OpenCodeConfigProvider(), QwenConfigProvider(), VibeConfigProvider(),
+            )
+        }
+    }
 }

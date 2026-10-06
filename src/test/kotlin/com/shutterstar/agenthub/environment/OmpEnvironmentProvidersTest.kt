@@ -100,6 +100,24 @@ class OmpEnvironmentProvidersTest {
     }
 
     @Test
+    fun `should also list AGENTS md of the vendor-neutral dot agent and dot agents directories`() {
+        writeFile(home.resolve(".agents/AGENTS.md"), "User")
+        writeFile(home.resolve(".agent/AGENTS.md"), "User singular")
+        val root = Files.createDirectories(home.resolve("project"))
+        writeFile(root.resolve(".agents/AGENTS.md"), "Project")
+        writeFile(root.resolve("pkg/.agent/AGENTS.md"), "Nested singular")
+        writeFile(root.resolve(".claude/AGENTS.md"), "Other tool")
+
+        val provider = OmpInstructionProvider(home)
+        val global = provider.discoverGlobal()
+        val project = provider.discoverProject(project(root))
+
+        assertEquals(setOf(".agents/AGENTS.md", ".agent/AGENTS.md"), global.map { relative(home, it.path) }.toSet())
+        assertTrue(global.all { it.scope == InstructionScope.GLOBAL && it.type == InstructionType.AGENTS_MD })
+        assertEquals(setOf(".agents/AGENTS.md", "pkg/.agent/AGENTS.md"), project.map { relative(root, it.path) }.toSet())
+    }
+
+    @Test
     fun `should inventory the YAML config files of the agent directory and the project`() {
         writeFile(home.resolve(".omp/agent/config.yml"), "modelRoles:\n  default: x\n")
         writeFile(home.resolve(".omp/agent/agent.db"), "binary")

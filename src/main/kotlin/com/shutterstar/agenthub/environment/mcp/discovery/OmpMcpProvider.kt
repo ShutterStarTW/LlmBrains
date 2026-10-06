@@ -6,6 +6,7 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Oh My Pi MCP servers (docs: `mcp-config.md`): the `mcpServers` map of `mcp.json` / `.mcp.json` in the native agent
@@ -13,7 +14,7 @@ import java.util.logging.Logger
  * imports from other tools (`.claude`, `.cursor`, `.vscode`, …) belong to those agents' providers and are not repeated here.
  */
 class OmpMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
     private val agentDirectory = OmpHomeSupport.agentDirectory(homeDirectory)

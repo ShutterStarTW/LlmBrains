@@ -1,6 +1,6 @@
 package com.shutterstar.agenthub.environment.skills.sync
 
-import com.shutterstar.agenthub.OsDetector
+import com.shutterstar.agenthub.AgentRuntime
 import com.shutterstar.agenthub.environment.capabilities.AgentCapabilityRegistry
 import com.shutterstar.agenthub.environment.skills.discovery.SharedSkillProvider
 import com.shutterstar.agenthub.environment.skills.discovery.SkillFingerprint
@@ -393,7 +393,15 @@ internal class SkillSyncRequestPlanner(
                 "${request.sourceAgentId} is not a supported sync target.",
             )
 
-        val observedSource = observer.observe(target, canonicalPath, sourceFingerprint, scope, project, nativeShortCircuit = false)
+        val observedSource = observer.observe(
+            target,
+            canonicalPath,
+            sourceFingerprint,
+            scope,
+            project,
+            nativeShortCircuit = false,
+            exactTargetPath = sourcePath,
+        )
         if (observedSource.targetPath != sourcePath || observedSource.status != SkillTargetStatus.IDENTICAL_UNMANAGED) {
             return blankResult(
                 operationId,
@@ -408,7 +416,7 @@ internal class SkillSyncRequestPlanner(
         val effectiveMode = when {
             !target.supportsLinkedSkills() -> EffectiveSyncMode.COPY
             request.mode == SkillSyncMode.COPY -> EffectiveSyncMode.COPY
-            OsDetector.isWindows() -> EffectiveSyncMode.JUNCTION
+            AgentRuntime.isWindowsRuntime() -> EffectiveSyncMode.JUNCTION
             else -> EffectiveSyncMode.SYMLINK
         }
         val agentId = request.sourceAgentId
@@ -450,6 +458,7 @@ internal class SkillSyncRequestPlanner(
             observedCanonicalFingerprint = null,
             instanceKey = resolveInstanceKey(skillId, scope, project, canonicalPath, runtimeId),
             nativeShortCircuit = false,
+            observedAtExactPath = true,
         )
         return SkillSyncPlanResult(plan, planningRequest, SyncAction.PROMOTE, scope)
     }
@@ -719,7 +728,7 @@ internal class SkillSyncRequestPlanner(
                         targetAgentId,
                         if (isLink) {
                             "$targetAgentId reads the shared folder directly, so its link at $existing is redundant; only the link " +
-                                "is removed (after a backup), never the shared skill it points to."
+                                "is removed, never the shared skill it points to."
                         } else {
                             "$targetAgentId reads the shared folder directly, so its own copy at $existing is redundant; it is " +
                                 "removed after a backup."
@@ -782,7 +791,7 @@ internal class SkillSyncRequestPlanner(
      */
     private fun existingLinkRepresentation(path: Path): EffectiveSyncMode? = when {
         Files.isSymbolicLink(path) -> EffectiveSyncMode.SYMLINK
-        OsDetector.isWindows() -> EffectiveSyncMode.JUNCTION
+        AgentRuntime.isWindowsRuntime() -> EffectiveSyncMode.JUNCTION
         else -> null
     }
 

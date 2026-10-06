@@ -4,9 +4,10 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 class SharedSkillProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String? = null
     private val scanner = SkillDirectoryScanner()

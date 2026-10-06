@@ -97,6 +97,16 @@ class ConfigDiscoveryTest {
     }
 
     @Test
+    fun `should inventory opencode json of the home dot opencode config directory`() {
+        write(".opencode/opencode.json", "{}")
+        write(".opencode/credentials.json", "{}")
+
+        val names = OpenCodeConfigProvider(home).discoverGlobal().map { Path.of(it.path).fileName.toString() }
+
+        assertEquals(listOf("opencode.json"), names)
+    }
+
+    @Test
     fun `should retain empty malformed and oversized files as inventory for every provider`() {
         providers().forEachIndexed { index, provider ->
             val path = write(globalPaths[index], "")

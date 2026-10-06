@@ -62,6 +62,9 @@ internal object InstructionFileSupport {
                         }
                     }
 
+                    // An entry that cannot be inspected (a Linux symlink seen over the WSL share) is skipped, not fatal.
+                    override fun visitFileFailed(file: Path, exc: java.io.IOException): FileVisitResult = FileVisitResult.CONTINUE
+
                     override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
                         if (!budget.consume()) return FileVisitResult.TERMINATE
                         if (attributes.isRegularFile && attributes.size() > 0L && matcher(root, file)) {

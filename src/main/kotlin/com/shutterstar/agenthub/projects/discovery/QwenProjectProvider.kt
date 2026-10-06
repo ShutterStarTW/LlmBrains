@@ -8,6 +8,8 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.AgentRuntime
+import com.shutterstar.agenthub.SafeFileTree
 
 class QwenProjectProvider(
     private val qwenDirectory: Path = defaultQwenDirectory(),
@@ -21,7 +23,7 @@ class QwenProjectProvider(
     override fun discover(): List<RawAgentProject> {
         if (!isAvailable()) return emptyList()
         val sessions = runCatching {
-            Files.walk(projectsDirectory, MAX_SCAN_DEPTH).use { paths ->
+            SafeFileTree.walk(projectsDirectory, MAX_SCAN_DEPTH).use { paths ->
                 paths
                     .limit(MAX_SCAN_ENTRIES.toLong())
                     .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
@@ -192,7 +194,7 @@ class QwenProjectProvider(
         // Sessions live under the runtime base directory: QWEN_RUNTIME_DIR, else QWEN_HOME, else ~/.qwen.
         private fun defaultQwenDirectory(): Path =
             EnvHomeDirectorySupport.resolveFirst("QWEN_RUNTIME_DIR", "QWEN_HOME") {
-                Path.of(System.getProperty("user.home"), ".qwen")
+                AgentRuntime.userHome().resolve(".qwen")
             }
     }
 }

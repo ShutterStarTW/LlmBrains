@@ -120,8 +120,11 @@ class SkillSyncTargetLayoutTest {
             Layout("kimi", ".kimi-code/skills", ".kimi-code/skills", create = ::KimiSkillSyncTarget),
             Layout(
                 "kilo", ".kilo/skills", ".kilo/skills",
-                alternateGlobal = listOf(".config/kilo/skills", ".kilocode/skills", ".claude/skills"),
-                alternateProject = listOf(".kilocode/skills", ".claude/skills"),
+                alternateGlobal = listOf(
+                    ".config/kilo/skills", ".kilocode/skills", ".claude/skills",
+                    ".kilo/skill", ".config/kilo/skill", ".kilocode/skill",
+                ),
+                alternateProject = listOf(".kilocode/skills", ".claude/skills", ".kilo/skill", ".kilocode/skill"),
                 create = ::KiloSkillSyncTarget,
             ),
             Layout("kiro", ".kiro/skills", ".kiro/skills", create = ::KiroSkillSyncTarget),
@@ -138,8 +141,8 @@ class SkillSyncTargetLayoutTest {
             ),
             Layout(
                 "opencode", ".config/opencode/skills", ".opencode/skills",
-                alternateGlobal = listOf(".claude/skills"),
-                alternateProject = listOf(".claude/skills"),
+                alternateGlobal = listOf(".claude/skills", ".opencode/skills", ".config/opencode/skill", ".opencode/skill"),
+                alternateProject = listOf(".claude/skills", ".opencode/skill"),
                 create = ::OpenCodeSkillSyncTarget,
             ),
             Layout("qwen", ".qwen/skills", ".qwen/skills", create = ::QwenSkillSyncTarget),

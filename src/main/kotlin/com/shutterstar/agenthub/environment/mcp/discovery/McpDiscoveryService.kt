@@ -9,31 +9,14 @@ import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Locale
+import com.shutterstar.agenthub.AgentRuntime
 
 class McpDiscoveryService(
-    providers: List<McpProvider> = listOf(
-        AntigravityMcpProvider(),
-        ClaudeMcpProvider(),
-        ClineMcpProvider(),
-        CodexMcpProvider(),
-        CopilotMcpProvider(),
-        CursorMcpProvider(),
-        FreebuffMcpProvider(),
-        GrokMcpProvider(),
-        JunieMcpProvider(),
-        KiloMcpProvider(),
-        KimiMcpProvider(),
-        KiroMcpProvider(),
-        MimoMcpProvider(),
-        OmpMcpProvider(),
-        OpenCodeMcpProvider(),
-        QwenMcpProvider(),
-        VibeMcpProvider(),
-    ),
+    providers: List<McpProvider>? = null,
     /** Only installed agents are discovered. */
     isAgentVisible: (String) -> Boolean = { true },
 ) : ProviderBackedDiscovery<McpProvider, RawMcpServer>(
-    providers, isAgentVisible, "mcp", "McpDiscovery", McpProvider::agentId,
+    { providers ?: defaultProviders.get() }, isAgentVisible, "mcp", "McpDiscovery", McpProvider::agentId,
 ) {
     fun discoverGlobal(): List<McpServer> = normalize(discoverGlobalRecords())
 
@@ -126,4 +109,29 @@ class McpDiscoveryService(
         val normalizedName: String,
         val scope: McpScope,
     )
+
+    private companion object {
+        /** Rebuilt when the runtime (host or a WSL distro) changes: the providers hold resolved home directories. */
+        val defaultProviders = AgentRuntime.scoped<List<McpProvider>> {
+            listOf(
+                AntigravityMcpProvider(),
+                ClaudeMcpProvider(),
+                ClineMcpProvider(),
+                CodexMcpProvider(),
+                CopilotMcpProvider(),
+                CursorMcpProvider(),
+                FreebuffMcpProvider(),
+                GrokMcpProvider(),
+                JunieMcpProvider(),
+                KiloMcpProvider(),
+                KimiMcpProvider(),
+                KiroMcpProvider(),
+                MimoMcpProvider(),
+                OmpMcpProvider(),
+                OpenCodeMcpProvider(),
+                QwenMcpProvider(),
+                VibeMcpProvider(),
+            )
+        }
+    }
 }

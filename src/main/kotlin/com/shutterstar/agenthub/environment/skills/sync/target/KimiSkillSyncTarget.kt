@@ -5,10 +5,11 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /** Kimi Code CLI: the Kimi-specific skill directories are `$KIMI_CODE_HOME/skills` (default `~/.kimi-code/skills`) and `<project>/.kimi-code/skills`. */
 class KimiSkillSyncTarget(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillSyncTarget {
     override val agentId: String = "kimi"
 

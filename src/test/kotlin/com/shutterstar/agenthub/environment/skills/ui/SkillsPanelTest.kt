@@ -256,6 +256,51 @@ class SkillsPanelTest {
         }
     }
 
+    @Test fun `a copy of an already shared skill offers its own way out instead of Move to Shared`() {
+        SwingUtilities.invokeAndWait {
+            val started = mutableListOf<String>()
+            val removed = mutableListOf<String>()
+            val panel = SkillsPanel(
+                requestContext = {}, openSkill = {}, revealSkill = {},
+                startSharingSkill = { _, agentId -> started += agentId },
+                removeRedundantCopy = { _, agentId -> removed += agentId },
+                syncTargetIds = { setOf("claude", "codex") },
+                agentIcon = { null },
+            )
+            panel.setProjects(emptyList())
+            fun open(agentId: String, fingerprint: String): List<String> {
+                val sources = listOf(
+                    SkillSource(null, "C:/Users/example/.agents/skills/php-review", SkillScope.GLOBAL, true, "A", "PHP Review"),
+                    SkillSource(agentId, "C:/Users/example/.$agentId/skills/php-review", SkillScope.GLOBAL, false, fingerprint, "PHP Review"),
+                )
+                val skill = AgentSkill(SkillIdentity("php-review"), "php-review", "desc", SkillScope.GLOBAL, sources, setOf(agentId), SkillConsistency.IDENTICAL)
+                val snapshot = SkillBrowserSnapshot(SkillBrowserContext(SkillScope.GLOBAL), listOf(skill))
+                panel.showState(SkillBrowserState(snapshot.context, snapshot))
+                panel.setQuery(".$agentId")
+                assertEquals("C:/Users/example/.$agentId/skills/php-review", panel.selectedOccurrence!!.source.path)
+                return descendants(panel).filterIsInstance<JButton>().map { it.text }
+            }
+
+            // claude cannot read the shared folder: its identical copy becomes a link.
+            val claude = open("claude", "A")
+            assertTrue("Remove copy" in claude && "Move to Shared & Share…" !in claude)
+            button(panel, "Remove copy").doClick()
+            assertEquals(listOf("claude"), started)
+
+            // codex reads the shared folder: its identical copy is simply dropped.
+            panel.setQuery("")
+            val codex = open("codex", "A")
+            assertTrue("Remove copy" in codex && "Move to Shared & Share…" !in codex)
+            button(panel, "Remove copy").doClick()
+            assertEquals(listOf("codex"), removed)
+
+            // A differing copy is a conflict: neither action, and still nothing to move.
+            panel.setQuery("")
+            val differing = open("codex", "other")
+            assertTrue("Remove copy" !in differing && "Move to Shared & Share…" !in differing)
+        }
+    }
+
     @Test fun `Go to skill selects the other copy and clears the search that hid it`() {
         SwingUtilities.invokeAndWait {
             val panel = SkillsPanel(requestContext = {}, openSkill = {}, revealSkill = {}, syncTargetIds = { setOf("claude", "codex") }, agentIcon = { null })
@@ -506,10 +551,10 @@ class SkillsPanelTest {
             assertEquals("Filters (1) \u25be", panel.filtersButtonText)
             assertEquals(1, panel.occurrenceCount)
 
-            // The shared occurrence has no agent of its own, so state + ownership + agent leaves nothing.
+            // The shared occurrence lists claude too (it holds a copy), so it is the one match left.
             panel.setFilters(SkillBrowserFilter.SHARED, SkillOwnershipFilter.UNMANAGED, "claude")
             assertEquals("Filters (3) \u25be", panel.filtersButtonText)
-            assertEquals(0, panel.occurrenceCount)
+            assertEquals(1, panel.occurrenceCount)
 
             button(panel, "Clear filters").doClick()
             assertEquals("Filters \u25be", panel.filtersButtonText)
@@ -527,7 +572,7 @@ class SkillsPanelTest {
             val snapshot = SkillBrowserTest.sampleSnapshot()
             panel.showState(SkillBrowserState(snapshot.context, snapshot))
             panel.setFilters(SkillBrowserFilter.ALL, SkillOwnershipFilter.ALL, "claude")
-            assertEquals(1, panel.occurrenceCount)
+            assertEquals(2, panel.occurrenceCount, "the shared row lists the agent that holds a copy next to the copy itself")
 
             // Same scope, but the claude source is gone: filtering for it would hide everything.
             val skill = snapshot.skills.single()
@@ -933,6 +978,206 @@ class SkillsPanelTest {
             resolveButtons.single().doClick()
             assertEquals(listOf(true to listOf("claude")), conflictsResolved.map { it.second.current.shared to it.second.others.map { other -> other.agentId } })
         }
+    }
+
+    @Test fun `redundant links and copies get a removal section above Additional sources and a Remove button on the Agents tab`() {
+        SwingUtilities.invokeAndWait {
+            val removed = mutableListOf<String>()
+            val panel = SkillsPanel(
+                {}, {}, {},
+                removeRedundantCopy = { _, agentId -> removed += agentId },
+                syncTargetIds = { setOf("claude", "codex") },
+                agentIcon = { null },
+            )
+            panel.setProjects(emptyList())
+            val model = com.shutterstar.agenthub.environment.skills.model.SkillScope.GLOBAL
+            val shared = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                null, "/home/user/.agents/skills/humanizer", model, shared = true, fingerprint = "fp",
+            )
+            // codex keeps a link, cursor an identical copy (both read the shared folder directly); claude's copy differs.
+            val codexLink = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "codex", "/home/user/.codex/skills/humanizer", model, shared = false, fingerprint = "fp",
+            )
+            val cursorCopy = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "cursor", "/home/user/.cursor/skills/humanizer", model, shared = false, fingerprint = "fp",
+            )
+            val claudeCopy = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "claude", "/home/user/.claude/skills/humanizer", model, shared = false, fingerprint = "other",
+            )
+            val skill = com.shutterstar.agenthub.environment.skills.model.AgentSkill(
+                com.shutterstar.agenthub.environment.skills.model.SkillIdentity("humanizer"), "humanizer", null,
+                model, listOf(shared, codexLink, cursorCopy, claudeCopy), setOf("claude", "codex", "cursor"),
+                com.shutterstar.agenthub.environment.skills.model.SkillConsistency.DIFFERENT,
+            )
+            val snapshot = SkillBrowserSnapshot(
+                SkillBrowserContext(model), listOf(skill),
+                sourceStats = mapOf(codexLink.path to SourceStat(1, 10, isLink = true)),
+            )
+            panel.showState(SkillBrowserState(snapshot.context, snapshot))
+            assertEquals(shared.path, panel.selectedOccurrence!!.source.path)
+
+            val texts = descendants(panel).filterIsInstance<JBLabel>().map { it.text }
+            assertTrue(texts.none { it.startsWith("Linked for") || it.startsWith("Also read by") })
+            assertTrue("Redundant links and copies" in texts)
+            assertTrue(texts.indexOf("Redundant links and copies") < texts.indexOf("Additional sources"))
+            assertTrue("· Redundant link" in texts && "· Redundant copy" in texts)
+            // The identical copy is listed in the redundant section (and the Agents block), not under Additional sources;
+            // the differing one stays an additional source.
+            assertEquals(2, texts.count { it == cursorCopy.path })
+            assertEquals(1, texts.count { it == "· Agent-specific" })
+            assertEquals(1, texts.count { it == claudeCopy.path })
+
+            button(panel, "Remove link").doClick()
+            button(panel, "Remove copy").doClick()
+            assertEquals(listOf("codex", "cursor"), removed)
+        }
+    }
+
+    @Test fun `an identical copy of an agent that cannot read the shared folder gets Remove copy that swaps it for a link`() {
+        SwingUtilities.invokeAndWait {
+            val started = mutableListOf<String>()
+            val panel = SkillsPanel(
+                {}, {}, {},
+                startSharingSkill = { _, agentId -> started += agentId },
+                syncTargetIds = { setOf("claude") },
+                agentIcon = { null },
+            )
+            panel.setProjects(emptyList())
+            val scope = com.shutterstar.agenthub.environment.skills.model.SkillScope.GLOBAL
+            val shared = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                null, "/home/user/.agents/skills/humanizer", scope, shared = true, fingerprint = "fp",
+            )
+            val claudeCopy = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "claude", "/home/user/.claude/skills/humanizer", scope, shared = false, fingerprint = "fp",
+            )
+            val skill = com.shutterstar.agenthub.environment.skills.model.AgentSkill(
+                com.shutterstar.agenthub.environment.skills.model.SkillIdentity("humanizer"), "humanizer", null,
+                scope, listOf(shared, claudeCopy), setOf("claude"),
+                com.shutterstar.agenthub.environment.skills.model.SkillConsistency.IDENTICAL,
+            )
+            val snapshot = SkillBrowserSnapshot(SkillBrowserContext(scope), listOf(skill))
+            panel.showState(SkillBrowserState(snapshot.context, snapshot))
+
+            val texts = descendants(panel).filterIsInstance<JBLabel>().map { it.text }
+            assertTrue(texts.none { it.startsWith("Redundant") }, "claude does not read the shared folder: its copy is not redundant")
+            assertTrue("Additional sources" in texts)
+            button(panel, "Remove copy").doClick()
+            assertEquals(listOf("claude"), started)
+        }
+    }
+
+    @Test fun `no Remove copy is offered when the agent cannot be given a link, observed target or not`() {
+        SwingUtilities.invokeAndWait {
+            val panel = SkillsPanel(
+                {}, {}, {},
+                syncTargetIds = { setOf("claude") },
+                canReplaceCopyWithLink = { false },
+                agentIcon = { null },
+            )
+            panel.setProjects(emptyList())
+            val scope = com.shutterstar.agenthub.environment.skills.model.SkillScope.GLOBAL
+            val shared = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                null, "/home/user/.agents/skills/humanizer", scope, shared = true, fingerprint = "fp",
+            )
+            val claudeCopy = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "claude", "/home/user/.claude/skills/humanizer", scope, shared = false, fingerprint = "fp",
+            )
+            val skill = com.shutterstar.agenthub.environment.skills.model.AgentSkill(
+                com.shutterstar.agenthub.environment.skills.model.SkillIdentity("humanizer"), "humanizer", null,
+                scope, listOf(shared, claudeCopy), setOf("claude"),
+                com.shutterstar.agenthub.environment.skills.model.SkillConsistency.IDENTICAL,
+            )
+            // No observed target for claude at all: the gap this guards against.
+            val snapshot = SkillBrowserSnapshot(SkillBrowserContext(scope), listOf(skill))
+            panel.showState(SkillBrowserState(snapshot.context, snapshot))
+
+            assertTrue(descendants(panel).filterIsInstance<JButton>().none { it.text == "Remove copy" })
+        }
+    }
+
+    @Test fun `the Agents tab puts Remove copy right before Stop Sharing for an identical managed copy`() {
+        SwingUtilities.invokeAndWait {
+            val started = mutableListOf<String>()
+            val panel = SkillsPanel(
+                {}, {}, {},
+                startSharingSkill = { _, agentId -> started += agentId },
+                syncTargetIds = { setOf("claude") },
+                managedTargetIds = { setOf("claude") },
+                agentIcon = { null },
+            )
+            panel.setProjects(emptyList())
+            val scope = com.shutterstar.agenthub.environment.skills.model.SkillScope.GLOBAL
+            val shared = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                null, "/home/user/.agents/skills/humanizer", scope, shared = true, fingerprint = "fp",
+            )
+            val claudeCopy = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "claude", "/home/user/.claude/skills/humanizer", scope, shared = false, fingerprint = "fp",
+            )
+            val skill = com.shutterstar.agenthub.environment.skills.model.AgentSkill(
+                com.shutterstar.agenthub.environment.skills.model.SkillIdentity("humanizer"), "humanizer", null,
+                scope, listOf(shared, claudeCopy), setOf("claude"),
+                com.shutterstar.agenthub.environment.skills.model.SkillConsistency.IDENTICAL,
+            )
+            val target = com.shutterstar.agenthub.environment.skills.sync.planning.ObservedSkillTarget(
+                "claude", Path.of(claudeCopy.path), com.shutterstar.agenthub.environment.skills.sync.model.SkillTargetStatus.COPIED,
+                availableLinkMode = com.shutterstar.agenthub.environment.skills.sync.model.EffectiveSyncMode.SYMLINK,
+                fingerprint = "fp",
+            )
+            val snapshot = SkillBrowserSnapshot(
+                SkillBrowserContext(scope), listOf(skill), targetStatuses = mapOf(skill.identity.id to listOf(target)),
+            )
+            panel.showState(SkillBrowserState(snapshot.context, snapshot))
+
+            // Overview (Additional sources) and Agents tab each have one; on the Agents tab it sits just before Stop Sharing.
+            val buttons = descendants(panel).filterIsInstance<JButton>().map { it.text }
+            assertEquals(2, buttons.count { it == "Remove copy" })
+            assertEquals(buttons.indexOf("Stop Sharing") - 1, buttons.lastIndexOf("Remove copy"))
+            descendants(panel).filterIsInstance<JButton>().last { it.text == "Remove copy" }.doClick()
+            assertEquals(listOf("claude"), started)
+        }
+    }
+
+    @Test fun `the Agents tab flags a redundant link and swaps Stop Sharing for Remove link`() {
+        SwingUtilities.invokeAndWait {
+            val removed = mutableListOf<String>()
+            val panel = SkillsPanel(
+                {}, {}, {},
+                removeRedundantCopy = { _, agentId -> removed += agentId },
+                syncTargetIds = { setOf("codex") },
+                managedTargetIds = { setOf("codex") },
+                agentIcon = { null },
+            )
+            panel.setProjects(emptyList())
+            val model = com.shutterstar.agenthub.environment.skills.model.SkillScope.GLOBAL
+            val shared = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                null, "/home/user/.agents/skills/humanizer", model, shared = true, fingerprint = "fp",
+            )
+            val link = com.shutterstar.agenthub.environment.skills.model.SkillSource(
+                "codex", "/home/user/.codex/skills/humanizer", model, shared = false, fingerprint = "fp",
+            )
+            val skill = com.shutterstar.agenthub.environment.skills.model.AgentSkill(
+                com.shutterstar.agenthub.environment.skills.model.SkillIdentity("humanizer"), "humanizer", null,
+                model, listOf(shared, link), setOf("codex"),
+                com.shutterstar.agenthub.environment.skills.model.SkillConsistency.IDENTICAL,
+            )
+            // The observer reports an agent that reads the shared folder as NATIVE even when it keeps its own link.
+            val target = com.shutterstar.agenthub.environment.skills.sync.planning.ObservedSkillTarget(
+                "codex", Path.of(shared.path), com.shutterstar.agenthub.environment.skills.sync.model.SkillTargetStatus.NATIVE,
+            )
+            val snapshot = SkillBrowserSnapshot(
+                SkillBrowserContext(model), listOf(skill),
+                sourceStats = mapOf(link.path to SourceStat(1, 10, isLink = true)),
+                targetStatuses = mapOf(skill.identity.id to listOf(target)),
+            )
+            panel.showState(SkillBrowserState(snapshot.context, snapshot))
+
+            val buttons = descendants(panel).filterIsInstance<JButton>().map { it.text }
+            assertFalse("Stop Sharing" in buttons)
+            val labels = descendants(panel).filterIsInstance<JBLabel>().map { it.text }
+            assertTrue("Redundant link" in labels, "the Agents block carries the state")
+            assertFalse("Global shared skills" in labels, "a redundant reader is not grouped under the direct readers")
+            // One button on the Overview, one in the Agents block.
+            assertEquals(2, buttons.count { it == "Remove link" })        }
     }
 
     @Test fun `the Agents tab groups direct shared readers and offers Start Sharing for an unshared agent`() {

@@ -152,20 +152,20 @@ class SkillSyncApplicationServiceTest {
         val facade = SkillSyncApplicationService(
             targets = mapOf(
                 "claude" to Target(root.resolve("claude"), "claude"),
-                "cline" to Target(root.resolve("cline"), "cline"),
+                "kiro" to Target(root.resolve("kiro"), "kiro"),
             ),
             backupRoot = root.resolve("backups"),
             ownershipStore = SkillOwnershipStateService(),
             auditTrail = SkillSyncAuditStateService(),
             settings = SkillSyncSettingsStateService(),
             sharedSkillDirectory = SharedSkillProvider(root),
-            detectedInstalledAgentIds = { setOf("cline", "unsupported") },
+            detectedInstalledAgentIds = { setOf("kiro", "unsupported") },
         )
 
-        assertEquals(listOf("cline"), facade.shareTargetIds())
-        assertEquals(setOf("claude", "cline"), facade.adapterTargetIds())
+        assertEquals(listOf("kiro"), facade.shareTargetIds())
+        assertEquals(setOf("claude", "kiro"), facade.adapterTargetIds())
         val prepared = facade.prepareShareEverywhere(skill(canonical), SkillScope.GLOBAL, null)
-        assertEquals(listOf("cline"), prepared.planResult.planningRequest.targets.map { it.agentId })
+        assertEquals(listOf("kiro"), prepared.planResult.planningRequest.targets.map { it.agentId })
     }
 
     @Test
@@ -190,7 +190,7 @@ class SkillSyncApplicationServiceTest {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val claudeRoot = root.resolve("claude")
         val facade = SkillSyncApplicationService(
-            targets = mapOf("claude" to Target(claudeRoot, "claude"), "cline" to Target(root.resolve("cline"), "cline")),
+            targets = mapOf("claude" to Target(claudeRoot, "claude"), "kiro" to Target(root.resolve("kiro"), "kiro")),
             backupRoot = root.resolve("backups"),
             ownershipStore = SkillOwnershipStateService(),
             auditTrail = SkillSyncAuditStateService(),
@@ -205,7 +205,7 @@ class SkillSyncApplicationServiceTest {
             facade.prepareResync(theSkill, "claude", SkillScope.GLOBAL, null),
             facade.prepareRepair(theSkill, "claude", SkillScope.GLOBAL, null),
             facade.prepareStopSharing(theSkill, "claude", SkillScope.GLOBAL, null),
-            facade.prepareShareToSelected(theSkill, setOf("claude", "cline"), SkillScope.GLOBAL, null),
+            facade.prepareShareToSelected(theSkill, setOf("claude", "kiro"), SkillScope.GLOBAL, null),
             facade.prepareUpdateSharing(theSkill, setOf("claude"), emptySet(), SkillScope.GLOBAL, null),
         )
 
@@ -215,13 +215,13 @@ class SkillSyncApplicationServiceTest {
         }
         assertFalse(Files.exists(claudeRoot.resolve("review")))
         assertTrue(
-            facade.prepareShare(theSkill, "cline", SkillScope.GLOBAL, null).planResult.plan.steps.isNotEmpty(),
+            facade.prepareShare(theSkill, "kiro", SkillScope.GLOBAL, null).planResult.plan.steps.isNotEmpty(),
             "an installed agent is still planned normally",
         )
     }
 
     @Test
-    fun `WSL runtime guard prevents host filesystem mutations`() {
+    fun `a runtime that disallows mutations gets a no-op plan and a failed result`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val targetRoot = root.resolve("claude")
         val facade = SkillSyncApplicationService(
@@ -238,7 +238,7 @@ class SkillSyncApplicationServiceTest {
         val result = facade.execute(prepared)
 
         assertTrue(prepared.planResult.plan.steps.isEmpty())
-        assertTrue(prepared.planResult.plan.warnings.single().message.contains("WSL"))
+        assertTrue(prepared.planResult.plan.warnings.single().message.contains("not available"))
         assertEquals(SyncOperationStatus.FAILED, result.status)
         assertFalse(Files.exists(targetRoot.resolve("review")))
     }
@@ -247,9 +247,9 @@ class SkillSyncApplicationServiceTest {
     fun `prepareShareToSelected shares only the chosen subset - the primitive behind the multi-select Share with… button`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val claudeRoot = root.resolve("claude")
-        val clineRoot = root.resolve("cline")
+        val kiroRoot = root.resolve("kiro")
         val facade = SkillSyncApplicationService(
-            targets = mapOf("claude" to Target(claudeRoot, "claude"), "cline" to Target(clineRoot, "cline")),
+            targets = mapOf("claude" to Target(claudeRoot, "claude"), "kiro" to Target(kiroRoot, "kiro")),
             backupRoot = root.resolve("backups"),
             ownershipStore = SkillOwnershipStateService(),
             auditTrail = SkillSyncAuditStateService(),
@@ -257,13 +257,13 @@ class SkillSyncApplicationServiceTest {
             sharedSkillDirectory = SharedSkillProvider(root),
         )
 
-        val prepared = facade.prepareShareToSelected(skill(canonical), setOf("cline"), SkillScope.GLOBAL, null)
-        assertEquals(listOf("cline"), prepared.planResult.planningRequest.targets.map { it.agentId })
+        val prepared = facade.prepareShareToSelected(skill(canonical), setOf("kiro"), SkillScope.GLOBAL, null)
+        assertEquals(listOf("kiro"), prepared.planResult.planningRequest.targets.map { it.agentId })
 
         val result = facade.execute(prepared)
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status)
-        assertTrue(Files.exists(clineRoot.resolve("review").resolve("SKILL.md")))
+        assertTrue(Files.exists(kiroRoot.resolve("review").resolve("SKILL.md")))
         assertFalse(Files.exists(claudeRoot.resolve("review")), "an unselected installed target must be left untouched")
     }
 
@@ -274,7 +274,7 @@ class SkillSyncApplicationServiceTest {
         val facade = SkillSyncApplicationService(
             targets = mapOf(
                 "claude" to Target(claudeRoot, "claude"),
-                "cline" to Target(root.resolve("cline"), "cline"),
+                "kiro" to Target(root.resolve("kiro"), "kiro"),
             ),
             backupRoot = root.resolve("backups"),
             ownershipStore = SkillOwnershipStateService(),
@@ -367,7 +367,7 @@ class SkillSyncApplicationServiceTest {
     fun `execute chains PromoteSkill alsoShareWith into a rediscover-then-share, merged into one result`() {
         val claudeRoot = root.resolve("claude")
         val sourcePath = writeSkillMd(claudeRoot.resolve("review"), "content")
-        val clineRoot = root.resolve("cline")
+        val kiroRoot = root.resolve("kiro")
         val canonicalPath = root.resolve(".agents").resolve("skills").resolve("review")
         val preSourceSkill = AgentSkill(
             SkillIdentity("skill-1"),
@@ -382,7 +382,7 @@ class SkillSyncApplicationServiceTest {
             sources = preSourceSkill.sources + SkillSource(null, canonicalPath.toString(), SkillScope.GLOBAL, true, "fixture"),
         )
         val facade = SkillSyncApplicationService(
-            targets = mapOf("claude" to Target(claudeRoot, "claude"), "cline" to Target(clineRoot, "cline")),
+            targets = mapOf("claude" to Target(claudeRoot, "claude"), "kiro" to Target(kiroRoot, "kiro")),
             backupRoot = root.resolve("backups"),
             ownershipStore = SkillOwnershipStateService(),
             auditTrail = SkillSyncAuditStateService(),
@@ -391,14 +391,14 @@ class SkillSyncApplicationServiceTest {
             rediscoverForMigration = { _, _ -> listOf(postPromoteSkill) },
         )
 
-        val prepared = facade.preparePromote(preSourceSkill, "claude", sourcePath, SkillScope.GLOBAL, null, alsoShareWith = setOf("cline"))
+        val prepared = facade.preparePromote(preSourceSkill, "claude", sourcePath, SkillScope.GLOBAL, null, alsoShareWith = setOf("kiro"))
         val result = facade.execute(prepared)
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status, "errors=${result.errors}; targets=${result.targetResults}")
-        assertTrue(Files.exists(clineRoot.resolve("review").resolve("SKILL.md")), "the chained share must have actually run")
-        // targetResults keeps the promote's own "claude" entry and gains "cline" from the chained share.
-        assertEquals(setOf("claude", "cline"), result.targetResults.map { it.agentId }.toSet())
-        assertEquals(SyncTargetOutcome.CHANGED, result.targetResults.first { it.agentId == "cline" }.outcome)
+        assertTrue(Files.exists(kiroRoot.resolve("review").resolve("SKILL.md")), "the chained share must have actually run")
+        // targetResults keeps the promote's own "claude" entry and gains "kiro" from the chained share.
+        assertEquals(setOf("claude", "kiro"), result.targetResults.map { it.agentId }.toSet())
+        assertEquals(SyncTargetOutcome.CHANGED, result.targetResults.first { it.agentId == "kiro" }.outcome)
         // The merged view only adds the share's outcome for display; the promote's own operation
         // id, applied steps and instance key still describe the promote alone (see doc comment on
         // SkillSyncApplicationService.mergedWithAlsoShareWith) - the share itself is a separate,
@@ -416,7 +416,7 @@ class SkillSyncApplicationServiceTest {
         // simply excludes it, rather than failing the whole multi-target share.
         val claudeRoot = root.resolve("claude")
         val sourcePath = writeSkillMd(claudeRoot.resolve("review"), "content")
-        val clineRoot = root.resolve("cline")
+        val kiroRoot = root.resolve("kiro")
         val canonicalPath = root.resolve(".agents").resolve("skills").resolve("review")
         val preSourceSkill = AgentSkill(
             SkillIdentity("skill-1"),
@@ -429,7 +429,7 @@ class SkillSyncApplicationServiceTest {
         )
         val facade = SkillSyncApplicationService(
             // No adapter registered for "cursor".
-            targets = mapOf("claude" to Target(claudeRoot, "claude"), "cline" to Target(clineRoot, "cline")),
+            targets = mapOf("claude" to Target(claudeRoot, "claude"), "kiro" to Target(kiroRoot, "kiro")),
             backupRoot = root.resolve("backups"),
             ownershipStore = SkillOwnershipStateService(),
             auditTrail = SkillSyncAuditStateService(),
@@ -444,12 +444,43 @@ class SkillSyncApplicationServiceTest {
             },
         )
 
-        val prepared = facade.preparePromote(preSourceSkill, "claude", sourcePath, SkillScope.GLOBAL, null, alsoShareWith = setOf("cline", "cursor"))
+        val prepared = facade.preparePromote(preSourceSkill, "claude", sourcePath, SkillScope.GLOBAL, null, alsoShareWith = setOf("kiro", "cursor"))
         val result = facade.execute(prepared)
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status, "errors=${result.errors}; targets=${result.targetResults}")
-        assertTrue(Files.exists(clineRoot.resolve("review").resolve("SKILL.md")))
-        assertEquals(setOf("claude", "cline"), result.targetResults.map { it.agentId }.toSet(), "cursor has no adapter, so it never gets a step or a target result")
+        assertTrue(Files.exists(kiroRoot.resolve("review").resolve("SKILL.md")))
+        assertEquals(setOf("claude", "kiro"), result.targetResults.map { it.agentId }.toSet(), "cursor has no adapter, so it never gets a step or a target result")
+    }
+
+    @Test
+    fun `a vendor copy in a sub-folder of the agent root can be promoted`() {
+        val claudeRoot = root.resolve("claude")
+        val sourcePath = writeSkillMd(claudeRoot.resolve("synced").resolve("bucket").resolve("review"), "content")
+        val skill = AgentSkill(
+            SkillIdentity("skill-1"),
+            "review",
+            null,
+            SkillScope.GLOBAL,
+            listOf(SkillSource("claude", sourcePath.toString(), SkillScope.GLOBAL, false, "fixture", system = true)),
+            setOf("claude"),
+            SkillConsistency.SINGLE_SOURCE,
+        )
+        val facade = SkillSyncApplicationService(
+            targets = mapOf("claude" to Target(claudeRoot, "claude")),
+            backupRoot = root.resolve("backups"),
+            ownershipStore = SkillOwnershipStateService(),
+            auditTrail = SkillSyncAuditStateService(),
+            settings = SkillSyncSettingsStateService(),
+            sharedSkillDirectory = SharedSkillProvider(root),
+        )
+
+        val prepared = facade.preparePromote(skill, "claude", sourcePath, SkillScope.GLOBAL, null)
+        val result = facade.execute(prepared)
+
+        assertTrue(prepared.planResult.plan.steps.isNotEmpty(), prepared.planResult.plan.warnings.toString())
+        assertEquals(SyncOperationStatus.SUCCESS, result.status, "errors=${result.errors}")
+        assertTrue(Files.exists(root.resolve(".agents").resolve("skills").resolve("review").resolve("SKILL.md")))
+        assertTrue(Files.exists(sourcePath.resolve("SKILL.md")), "the vendor location is a copy of the shared skill again")
     }
 
     @Test
@@ -475,7 +506,7 @@ class SkillSyncApplicationServiceTest {
             rediscoverForMigration = { _, _ -> error("Must not rediscover after a failed promote") },
         )
 
-        val prepared = facade.preparePromote(preSourceSkill, "claude", claudeRoot.resolve("review"), SkillScope.GLOBAL, null, alsoShareWith = setOf("cline"))
+        val prepared = facade.preparePromote(preSourceSkill, "claude", claudeRoot.resolve("review"), SkillScope.GLOBAL, null, alsoShareWith = setOf("kiro"))
         val result = facade.execute(prepared)
 
         assertEquals(SyncOperationStatus.FAILED, result.status)
@@ -512,37 +543,37 @@ class SkillSyncApplicationServiceTest {
     fun `prepareUpdateSharing shares the newly checked agent and stops the unchecked one in one reviewed operation`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "canonical content")
         val claudeRoot = root.resolve("claude")
-        val clineRoot = root.resolve("cline")
-        val facade = updateSharingFacade(claudeRoot, clineRoot)
+        val kiroRoot = root.resolve("kiro")
+        val facade = updateSharingFacade(claudeRoot, kiroRoot)
         val theSkill = skill(canonical)
         assertEquals(SyncOperationStatus.SUCCESS, facade.execute(facade.prepareShareToSelected(theSkill, setOf("claude"), SkillScope.GLOBAL, null)).status)
         assertEquals(setOf("claude"), facade.managedTargetIds(theSkill, SkillScope.GLOBAL, null))
 
-        val prepared = facade.prepareUpdateSharing(theSkill, setOf("cline"), setOf("claude"), SkillScope.GLOBAL, null)
+        val prepared = facade.prepareUpdateSharing(theSkill, setOf("kiro"), setOf("claude"), SkillScope.GLOBAL, null)
 
         assertEquals(SyncAction.UPDATE_SHARING, prepared.planResult.action)
         assertTrue(prepared.planResult.plan.steps.any { it.agentId == "claude" && it is SkillSyncStep.RemoveExisting })
-        assertTrue(prepared.planResult.plan.steps.any { it.agentId == "cline" && it is SkillSyncStep.CopySkill })
-        assertEquals(setOf("claude", "cline"), prepared.planResult.planningRequest.targets.map { it.agentId }.toSet())
+        assertTrue(prepared.planResult.plan.steps.any { it.agentId == "kiro" && it is SkillSyncStep.CopySkill })
+        assertEquals(setOf("claude", "kiro"), prepared.planResult.planningRequest.targets.map { it.agentId }.toSet())
         assertTrue(Files.exists(claudeRoot.resolve("review")), "preparing is a dry run")
-        assertFalse(Files.exists(clineRoot.resolve("review")), "preparing is a dry run")
+        assertFalse(Files.exists(kiroRoot.resolve("review")), "preparing is a dry run")
 
         val result = facade.execute(prepared)
 
         assertEquals(SyncOperationStatus.SUCCESS, result.status, "errors=${result.errors}; targets=${result.targetResults}")
         assertFalse(Files.exists(claudeRoot.resolve("review")), "the unchecked agent's sharing is removed")
-        assertEquals("canonical content", Files.readString(clineRoot.resolve("review").resolve("SKILL.md")))
-        assertEquals(setOf("cline"), facade.managedTargetIds(theSkill, SkillScope.GLOBAL, null))
+        assertEquals("canonical content", Files.readString(kiroRoot.resolve("review").resolve("SKILL.md")))
+        assertEquals(setOf("kiro"), facade.managedTargetIds(theSkill, SkillScope.GLOBAL, null))
         val history = facade.historyFor(theSkill, SkillScope.GLOBAL, null)
         assertEquals(listOf(SyncAction.UPDATE_SHARING, SyncAction.SHARE_EVERYWHERE), history.map { it.action }, "one entry for the whole change")
-        assertEquals(setOf("claude", "cline"), history.first().affectedAgents)
+        assertEquals(setOf("claude", "kiro"), history.first().affectedAgents)
     }
 
     @Test
     fun `unchecking every shared agent stops all sharing and the preview says the managed copy is removed`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val claudeRoot = root.resolve("claude")
-        val facade = updateSharingFacade(claudeRoot, root.resolve("cline"))
+        val facade = updateSharingFacade(claudeRoot, root.resolve("kiro"))
         val theSkill = skill(canonical)
         facade.execute(facade.prepareShareToSelected(theSkill, setOf("claude"), SkillScope.GLOBAL, null))
 
@@ -560,7 +591,7 @@ class SkillSyncApplicationServiceTest {
     fun `an agent named as both shared and stopped is only shared, never removed`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val claudeRoot = root.resolve("claude")
-        val facade = updateSharingFacade(claudeRoot, root.resolve("cline"))
+        val facade = updateSharingFacade(claudeRoot, root.resolve("kiro"))
         val theSkill = skill(canonical)
         facade.execute(facade.prepareShareToSelected(theSkill, setOf("claude"), SkillScope.GLOBAL, null))
 
@@ -578,7 +609,7 @@ class SkillSyncApplicationServiceTest {
     @Test
     fun `an update naming no agents plans nothing and says so`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
-        val facade = updateSharingFacade(root.resolve("claude"), root.resolve("cline"))
+        val facade = updateSharingFacade(root.resolve("claude"), root.resolve("kiro"))
 
         val prepared = facade.prepareUpdateSharing(skill(canonical), emptySet(), emptySet(), SkillScope.GLOBAL, null)
 
@@ -590,29 +621,29 @@ class SkillSyncApplicationServiceTest {
     fun `undoing an update restores the stopped agent and removes the newly shared one`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "canonical content")
         val claudeRoot = root.resolve("claude")
-        val clineRoot = root.resolve("cline")
-        val facade = updateSharingFacade(claudeRoot, clineRoot)
+        val kiroRoot = root.resolve("kiro")
+        val facade = updateSharingFacade(claudeRoot, kiroRoot)
         val theSkill = skill(canonical)
         facade.execute(facade.prepareShareToSelected(theSkill, setOf("claude"), SkillScope.GLOBAL, null))
-        val prepared = facade.prepareUpdateSharing(theSkill, setOf("cline"), setOf("claude"), SkillScope.GLOBAL, null)
+        val prepared = facade.prepareUpdateSharing(theSkill, setOf("kiro"), setOf("claude"), SkillScope.GLOBAL, null)
         assertEquals(SyncOperationStatus.SUCCESS, facade.execute(prepared).status)
 
         val undo = facade.undoOperation(prepared.planResult.plan.operationId)
 
         assertTrue(undo != null && undo.errors.isEmpty(), "undo=$undo")
         assertEquals("canonical content", Files.readString(claudeRoot.resolve("review").resolve("SKILL.md")), "the removed sharing comes back from its backup")
-        assertFalse(Files.exists(clineRoot.resolve("review")), "the newly created sharing is removed again")
+        assertFalse(Files.exists(kiroRoot.resolve("review")), "the newly created sharing is removed again")
     }
 
     @Test
     fun `history reports a backup that was removed instead of silently dropping Undo`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "canonical content")
         val claudeRoot = root.resolve("claude")
-        val clineRoot = root.resolve("cline")
-        val facade = updateSharingFacade(claudeRoot, clineRoot)
+        val kiroRoot = root.resolve("kiro")
+        val facade = updateSharingFacade(claudeRoot, kiroRoot)
         val theSkill = skill(canonical)
         facade.execute(facade.prepareShareToSelected(theSkill, setOf("claude"), SkillScope.GLOBAL, null))
-        val prepared = facade.prepareUpdateSharing(theSkill, setOf("cline"), setOf("claude"), SkillScope.GLOBAL, null)
+        val prepared = facade.prepareUpdateSharing(theSkill, setOf("kiro"), setOf("claude"), SkillScope.GLOBAL, null)
         facade.execute(prepared)
         val operationId = prepared.planResult.plan.operationId
 
@@ -846,6 +877,28 @@ class SkillSyncApplicationServiceTest {
         assertTrue(outcome.skipped.isEmpty() && outcome.failed.isEmpty(), "outcome=$outcome")
     }
 
+    @Test
+    fun `removeRedundantCopies also runs the share for agents whose identical copy is to become a link`() {
+        val canonical = writeSkillMd(root.resolve("shared/review"), "content")
+        writeSkillMd(root.resolve("claude").resolve("review"), "content")
+        val facade = manageExistingFacade(root.resolve("claude"), manageExisting = false)
+        val candidate = com.shutterstar.agenthub.environment.skills.sync.migration.RedundantCopyCandidate(
+            skill(canonical), emptyList(), convertAgentIds = listOf("claude"),
+        )
+
+        val outcome = facade.removeRedundantCopies(candidate, SkillScope.GLOBAL, null)
+
+        assertEquals(listOf("claude"), outcome.converted)
+        assertTrue(outcome.removed.isEmpty() && outcome.failed.isEmpty(), "outcome=$outcome")
+    }
+
+    @Test
+    fun `a copy can only be swapped for a link by an adapter that links while links are the preferred mode`() {
+        // Both fixtures here are copy-mode, link-less adapters.
+        assertFalse(manageExistingFacade(root.resolve("claude"), manageExisting = false).canReplaceCopyWithLink("claude"))
+        assertFalse(redundantCopyFacade(root.resolve("codex")).canReplaceCopyWithLink("claude"))
+    }
+
     private fun redundantCopyFacade(codexRoot: Path) = SkillSyncApplicationService(
         targets = mapOf("codex" to Target(codexRoot, "codex")),
         backupRoot = root.resolve("backups"),
@@ -873,8 +926,8 @@ class SkillSyncApplicationServiceTest {
             sharedSkillDirectory = SharedSkillProvider(root),
         )
 
-    private fun updateSharingFacade(claudeRoot: Path, clineRoot: Path) = SkillSyncApplicationService(
-        targets = mapOf("claude" to Target(claudeRoot, "claude"), "cline" to Target(clineRoot, "cline")),
+    private fun updateSharingFacade(claudeRoot: Path, kiroRoot: Path) = SkillSyncApplicationService(
+        targets = mapOf("claude" to Target(claudeRoot, "claude"), "kiro" to Target(kiroRoot, "kiro")),
         backupRoot = root.resolve("backups"),
         ownershipStore = SkillOwnershipStateService(),
         auditTrail = SkillSyncAuditStateService(),

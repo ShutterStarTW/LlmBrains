@@ -1,8 +1,10 @@
 package com.shutterstar.agenthub.environment.skills.ui
 
+import com.shutterstar.agenthub.environment.capabilities.AgentCapabilityRegistry
 import com.shutterstar.agenthub.environment.model.EnvironmentWarning
 import com.shutterstar.agenthub.environment.skills.model.AgentSkill
 import com.shutterstar.agenthub.environment.skills.model.SkillConsistency
+import com.shutterstar.agenthub.environment.skills.model.SkillRootOwner
 import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.environment.skills.model.SkillSource
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
@@ -114,8 +116,11 @@ internal data class SkillOccurrenceRow(
     val skill: AgentSkill,
     val source: SkillSource,
     val context: SkillBrowserContext,
+    /** The agents the skill folder belongs to (in a project: only those that have worked on the project). */
     val agentIds: Set<String>,
     val contextLabel: String,
+    /** Agents that merely read this folder because it belongs to another agent. */
+    val readerAgentIds: Set<String> = emptySet(),
 ) {
     val stateLabel: String get() = when (skill.consistency) {
         SkillConsistency.DIFFERENT -> "Different contents"
@@ -137,10 +142,17 @@ internal object SkillBrowserModel {
         conflictCount = skills.count { it.consistency == SkillConsistency.DIFFERENT },
     )
 
-    /** Vendor-shipped/synced (system) occurrences sort after everything else; ties break by title, then path. */
+    /**
+     * The user's skills by name first; the vendor-shipped/synced (system) ones after them, grouped by the agent they
+     * belong to and by name within it. Ties break by path, so the order never depends on how the rows were collected.
+     */
     private val rowOrder = compareBy<SkillOccurrenceRow> { it.source.system }
+        .thenBy { row -> if (row.source.system) systemOwner(row) else "" }
         .thenBy { it.title.lowercase(Locale.ROOT) }
         .thenBy { it.source.path }
+
+    private fun systemOwner(row: SkillOccurrenceRow): String =
+        (SkillRootOwner.ownerOf(row.source.path) ?: row.source.agentId ?: row.agentIds.firstOrNull() ?: "").lowercase(Locale.ROOT)
 
     /** Kept for tests/callers that already have a snapshot in hand; delegates to the (context, skills) overload. */
     fun rows(snapshot: SkillBrowserSnapshot): List<SkillOccurrenceRow> = rows(snapshot.context, snapshot.skills)
@@ -152,18 +164,52 @@ internal object SkillBrowserModel {
             .groupBy { it.path }
             .map { (path, sources) ->
                 val source = sources.firstOrNull { it.shared } ?: sources.first()
+                val (owners, readers) = ownersAndReaders(sources, context, skill)
                 SkillOccurrenceRow(
                     key = "${context.key}:${skill.identity.id}:$path",
                     title = source.displayTitle?.takeIf(String::isNotBlank) ?: skill.name,
                     skill = skill,
                     source = source,
                     context = context,
-                    agentIds = sources.mapNotNullTo(sortedSetOf()) { it.agentId },
+                    agentIds = owners,
                     contextLabel = if (context.scope == SkillScope.GLOBAL) "Global" else
                         "${context.project!!.name} · Project",
+                    readerAgentIds = readers,
                 )
             }
     }.sortedWith(rowOrder)
+
+    /**
+     * Owners are the agents whose own folder this is; when none of them is known (the owner is not installed), the
+     * agents that read it stand in. In a project the owner of a folder is always shown, but an agent that merely reads
+     * the folder only when it has a session there, so it never shows up for a project it has nothing to do with: the
+     * shared `.agents/skills` folder is shown with the project's agents that read it.
+     */
+    private fun ownersAndReaders(
+        sources: List<SkillSource>,
+        context: SkillBrowserContext,
+        skill: AgentSkill,
+    ): Pair<Set<String>, Set<String>> {
+        val inScope = context.project?.takeIf { context.scope == SkillScope.PROJECT }
+            ?.let { project -> project.agents.mapTo(hashSetOf()) { it.agentId } }
+        val candidates = sources.filter { it.agentId != null }
+        val native = candidates.filter { it.native }.mapNotNullTo(sortedSetOf()) { it.agentId }
+        val readers = candidates.filterNot { it.native }.mapNotNullTo(sortedSetOf()) { it.agentId }
+        if (inScope == null) {
+            val owners = native.ifEmpty { readers }
+            return owners to (readers - owners)
+        }
+        val sharedReaders = if (sources.any { it.shared }) {
+            skill.compatibleAgents.filterTo(sortedSetOf()) { it in AgentCapabilityRegistry.agentIdsSupportingSharedSkills() }
+        } else {
+            emptySet()
+        }
+        // The agent a folder belongs to is shown even without a session (there are many reasons for having none); only
+        // the agents that merely read a folder have to have worked on the project.
+        val owners = (native + sharedReaders.filterTo(sortedSetOf()) { it in inScope }).toSortedSet()
+            .ifEmpty { readers.filterTo(sortedSetOf()) { it in inScope } }
+        return owners to (readers - owners)
+    }
 
     /**
      * Folds a skill's linked occurrences (a symlink/junction into another location - almost
@@ -179,13 +225,16 @@ internal object SkillBrowserModel {
     fun mergeLinkedOccurrences(rows: List<SkillOccurrenceRow>, isLink: (String) -> Boolean): List<SkillOccurrenceRow> =
         rows.groupBy { it.context.key to it.skill.identity.id }.values.flatMap { group ->
             val (linked, real) = group.partition { isLink(it.source.path) }
-            if (linked.isEmpty() || real.isEmpty()) return@flatMap group
+            if (real.isEmpty()) return@flatMap group
             val primary = real.firstOrNull { it.source.shared } ?: real.first()
-            // Only the folded-away linked rows' agent ids join primary's own - a genuinely
-            // independent copy (real, not primary) keeps its agent icon on its own row only, so
-            // that agent doesn't appear to have two separate installations.
-            val mergedAgentIds = (primary.agentIds + linked.flatMap { it.agentIds }).toSortedSet()
-            listOf(primary.copy(agentIds = mergedAgentIds)) + (real - primary)
+            // A shared source also shows the agents that hold an independent copy of it (they have the skill just as
+            // much as the ones that link it); a copy keeps its own row too. A non-shared primary takes only its links.
+            val copies = if (primary.source.shared) real - primary else emptyList()
+            if (linked.isEmpty() && copies.isEmpty()) return@flatMap group
+            val folded = linked + copies
+            val mergedAgentIds = (primary.agentIds + folded.flatMap { it.agentIds }).toSortedSet()
+            val mergedReaderIds = (primary.readerAgentIds + folded.flatMap { it.readerAgentIds }).toSortedSet() - mergedAgentIds
+            listOf(primary.copy(agentIds = mergedAgentIds, readerAgentIds = mergedReaderIds)) + (real - primary)
         }.sortedWith(rowOrder)
 
     fun filter(

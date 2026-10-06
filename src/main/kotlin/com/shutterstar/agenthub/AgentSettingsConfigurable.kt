@@ -73,6 +73,14 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
     private val tables = listOf(agentTable, companionTable)
 
     private val detectButton = JButton("Detect installed agents")
+    private val checkInstalledAgentsButton = JButton("Check installed agents")
+    private val checkInstalledToolsButton = JButton("Check installed tools")
+    // Headings carry the environment the selection belongs to: Windows and every WSL distribution keep their own.
+    private val agentsSeparator = titledSeparator("AgentHub")
+    private val companionsSeparator = titledSeparator("Companion Tools")
+    private val agentsIntroLabel = JBLabel("Select which coding agents appear in the toolbar dropdown.").apply {
+        alignmentX = Component.LEFT_ALIGNMENT
+    }
     private val customValidationLabel = JBLabel("").apply { isVisible = false }
     private val detectStatusLabel = JBLabel("")
 
@@ -125,13 +133,9 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
             val content = JPanel()
             content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
 
-            content.add(titledSeparator("AgentHub"))
+            content.add(agentsSeparator)
             content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
-            content.add(
-                JBLabel("Select which coding agents appear in the toolbar dropdown.").apply {
-                    alignmentX = Component.LEFT_ALIGNMENT
-                },
-            )
+            content.add(agentsIntroLabel)
             content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
             content.add(detectionBannerLabel)
             content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.PANEL_INSET)))
@@ -141,9 +145,11 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
                 alignmentX = Component.LEFT_ALIGNMENT
                 preferredSize = Dimension(JBUI.scale(AgentHubUiComponents.SETTINGS_TABLE_WIDTH), agentTable.table.rowHeight * 15 + agentTable.table.tableHeader.preferredSize.height)
             })
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
+            content.add(checkInstalledRow(checkInstalledAgentsButton, agentRows, agentTable))
 
             content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SETTINGS_SECTION_GAP)))
-            content.add(titledSeparator("Companion Tools"))
+            content.add(companionsSeparator)
             content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SMALL_GAP)))
             content.add(
                 JBLabel("Optional CLI utilities that work alongside the agents.").apply {
@@ -158,6 +164,8 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
                 val visibleRows = companionRows.size.coerceIn(1, 5)
                 preferredSize = Dimension(JBUI.scale(AgentHubUiComponents.SETTINGS_TABLE_WIDTH), companionTable.table.rowHeight * visibleRows + companionTable.table.tableHeader.preferredSize.height)
             })
+            content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
+            content.add(checkInstalledRow(checkInstalledToolsButton, companionRows, companionTable))
 
             content.add(Box.createVerticalStrut(JBUI.scale(AgentHubUiComponents.SETTINGS_SECTION_GAP)))
             content.add(titledSeparator("Custom Agent"))
@@ -243,6 +251,48 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
             }
 
             add(content, BorderLayout.NORTH)
+        }
+    }
+
+    /**
+     * The row under a table: one button that ticks what the last detection found installed and unticks what it found
+     * missing (agents it knows nothing about stay as they are). Edits the table only; Apply saves it like any change.
+     */
+    private fun checkInstalledRow(button: JButton, rows: List<AgentRow>, table: AgentTable): JComponent {
+        button.addActionListener {
+            rows.forEach { row -> detectedInstalled[row.agent.id]?.let { installed -> row.enabled = installed } }
+            table.tableModel.fireTableDataChanged()
+        }
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            add(button)
+            add(Box.createHorizontalStrut(JBUI.scale(AgentHubUiComponents.CONTROL_GAP)))
+            add(JBLabel("Ticks the installed ones, unticks the missing ones.").apply { foreground = JBColor.GRAY })
+            alignmentX = Component.LEFT_ALIGNMENT
+        }
+    }
+
+    /** The buttons need a detection result to go by; the headings name the environment the tables belong to. */
+    private fun updateEnvironmentUi() {
+        val known = detectedInstalled.isNotEmpty()
+        listOf(checkInstalledAgentsButton, checkInstalledToolsButton).forEach { button ->
+            button.isEnabled = known
+            button.toolTipText = if (known) {
+                "Tick the agents and tools found installed by the last detection, untick the ones found missing"
+            } else {
+                "Run \"Detect installed agents\" first"
+            }
+        }
+        // Only WSL mode names its environment: the native Windows setup is the default and needs no label.
+        val state = settingsState.getState()
+        val inWsl = OsDetector.isWindows() && state.useWsl
+        val label = AgentSettingsState.runtimeLabel(true, state.wslDistro)
+        agentsSeparator.text = if (inWsl) "AgentHub · $label" else "AgentHub"
+        companionsSeparator.text = if (inWsl) "Companion Tools · $label" else "Companion Tools"
+        agentsIntroLabel.text = if (inWsl) {
+            "Select which coding agents appear in the toolbar dropdown. Windows and each WSL distribution keep their own selection."
+        } else {
+            "Select which coding agents appear in the toolbar dropdown."
         }
     }
 
@@ -467,6 +517,7 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
     }
 
     private fun refreshDetectStatusLabel() {
+        updateEnvironmentUi()
         detectionBannerLabel.isVisible = detectedInstalled.isEmpty()
         if (detectedInstalled.isEmpty()) {
             detectStatusLabel.text = ""
@@ -541,13 +592,13 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
             val envChanged = newUseWsl != state.useWsl || (newUseWsl && newDistro != state.wslDistro)
             settings.setWslMode(newUseWsl, newDistro)
             if (envChanged) {
-                // The installed-set differs per environment — drop stale results and re-detect.
-                settings.clearDetectionResults()
-                detectedInstalled = emptyMap()
-                outdatedAgents = emptySet()
-                unverifiedAgents = emptySet()
+                // Each environment keeps its own selection and detection results ([AgentSettingsState.setWslMode]
+                // swapped them in); a fresh detection brings them up to date.
+                detectedInstalled = settings.getDetectionResults() ?: emptyMap()
+                outdatedAgents = settings.getOutdatedAgentIds()
+                unverifiedAgents = settings.getUnverifiedAgentIds()
                 // The agent list itself also differs: WSL mode surfaces the unsupportedOnWindows
-                // agents (forge, plandex, …), native mode hides them.
+                // agents (forge, leanctl, …), native mode hides them.
                 rebuildRows()
                 refreshDetectStatusLabel()
                 AgentDetector.detectAndNotify(ProjectManager.getInstance().openProjects.lastOrNull())
@@ -585,6 +636,7 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
         outdatedAgents = settings.getOutdatedAgentIds()
         unverifiedAgents = settings.getUnverifiedAgentIds()
         tables.forEach { it.tableModel.fireTableDataChanged() }
+        updateEnvironmentUi()
         if (inProgressAgentIds.isNotEmpty() && !uiDisposed && !spinnerTimer.isRunning) spinnerTimer.start()
         val state = settings.getState()
         customEnabledCheckbox.isSelected = state.customAgentEnabled

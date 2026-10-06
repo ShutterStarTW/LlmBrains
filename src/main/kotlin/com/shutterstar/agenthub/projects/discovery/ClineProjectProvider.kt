@@ -11,6 +11,7 @@ import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import com.shutterstar.agenthub.SafeFileTree
 
 data class ClineSessionRecord(
     val id: String,
@@ -60,7 +61,7 @@ class ClineProjectProvider(
     private fun discoverJsonSessions(): List<RawAgentProject> {
         if (!Files.isDirectory(sessionsDirectory, LinkOption.NOFOLLOW_LINKS)) return emptyList()
         return runCatching {
-            Files.walk(sessionsDirectory, MAX_SCAN_DEPTH).use { paths ->
+            SafeFileTree.walk(sessionsDirectory, MAX_SCAN_DEPTH).use { paths ->
                 paths
                     .limit(MAX_SCAN_ENTRIES.toLong())
                     .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }

@@ -4,6 +4,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Freebuff skills (Codebuff source `sdk/src/skills/load-skills.ts`): `<skillsDir>/<name>/SKILL.md` under `<cwd>/.claude/skills`,
@@ -12,7 +13,7 @@ import java.nio.file.Path
  * compatibility roots. (There is no sync target — Share goes through the shared folder.)
  */
 class FreebuffSkillProvider(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillProvider {
     override val agentId: String = AGENT_ID
     private val scanner = SkillDirectoryScanner()

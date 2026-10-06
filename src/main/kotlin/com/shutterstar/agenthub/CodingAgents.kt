@@ -138,7 +138,7 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g @augmentcode/auggie",
             uninstallHint = "npm uninstall -g @augmentcode/auggie",
             provider = "Augment",
-            url = "https://www.augmentcode.com/product/CLI",
+            url = "https://www.augmentcode.com/product/cli",
             devUrl = "https://github.com/augmentcode/auggie",
         ),
         CodingAgent(
@@ -203,7 +203,7 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g @sourcegraph/cody",
             uninstallHint = "npm uninstall -g @sourcegraph/cody",
             provider = "Sourcegraph",
-            url = "https://sourcegraph.com/cody",
+            url = "https://sourcegraph.com/docs/cody",
         ),
         CodingAgent(
             id = "commandcode",
@@ -283,7 +283,7 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g droid",
             uninstallHint = "npm uninstall -g droid",
             provider = "Factory AI",
-            url = "https://factory.ai/product/ide",
+            url = "https://factory.com/product/ide",
             devUrl = "https://github.com/Factory-AI/factory",
         ),
         CodingAgent(
@@ -310,7 +310,7 @@ object CodingAgents {
             uninstallHint = "npm uninstall -g freebuff",
             provider = "Codebuff",
             url = "https://freebuff.com/cli",
-            devUrl = "https://github.com/CodebuffAI/codebuff",
+            devUrl = "https://github.com/CodebuffAI/freebuff",
         ),
         CodingAgent(
             id = "goose",
@@ -335,7 +335,7 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g @xai-official/grok",
             uninstallHint = "npm uninstall -g @xai-official/grok",
             provider = "xAI",
-            url = "https://x.ai/cli",
+            url = "https://x.ai/build",
             devUrl = "https://github.com/xai-org/grok-build",
         ),
         CodingAgent(
@@ -444,7 +444,7 @@ object CodingAgents {
             installHintWindows = "wsl bash -c \"curl -fsSL https://dev.meta.ai/install.sh | bash\"",
             uninstallHintWindows = "wsl bash -c \"rm -f ~/.local/bin/muse ~/.local/bin/muse-bin-*\"",
             provider = "Meta",
-            url = "https://developer.meta.com/ai/products/muse-code/",
+            url = "https://dev.meta.ai/products/muse-code",
             unsupportedOnWindows = true, // installer hard-fails on native Windows; WSL2-only
         ),
         CodingAgent(
@@ -506,7 +506,7 @@ object CodingAgents {
             updateHint = "pip install --upgrade --upgrade-strategy eager openhands-ai",
             uninstallHint = "pip uninstall -y openhands-ai",
             provider = "All Hands",
-            url = "https://openhands.dev/",
+            url = "https://www.openhands.dev/",
             devUrl = "https://github.com/OpenHands/OpenHands",
         ),
         CodingAgent(
@@ -521,21 +521,6 @@ object CodingAgents {
             devUrl = "https://github.com/earendil-works/pi",
         ),
         CodingAgent(
-            id = "plandex",
-            name = "Plandex",
-            command = "plandex",
-            installHint = "curl -sL https://plandex.ai/install.sh | bash",
-            updateHint = "plandex upgrade",
-            versionSource = "github:plandex-ai/plandex",
-            uninstallHint = "rm -f $(which plandex) $(which pdx)",
-            installHintWindows = "wsl bash -c \"curl -sL https://plandex.ai/install.sh | bash\"",
-            uninstallHintWindows = "wsl bash -c \"rm -f `$(which plandex) `$(which pdx)\"",
-            provider = "Plandex",
-            url = "https://plandex.ai",
-            devUrl = "https://github.com/plandex-ai/plandex",
-            unsupportedOnWindows = true, // WSL-only install; binary not visible to Windows-native detection
-        ),
-        CodingAgent(
             id = "qodo",
             name = "Qodo",
             command = "qodo",
@@ -543,7 +528,7 @@ object CodingAgents {
             updateHint = "npm update --quiet --no-fund -g @qodo/command",
             uninstallHint = "npm uninstall -g @qodo/command",
             provider = "Qodo",
-            url = "https://qodo.ai",
+            url = "https://www.qodo.ai",
             devUrl = "https://github.com/qodo-ai/command",
         ),
         CodingAgent(

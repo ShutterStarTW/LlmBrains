@@ -5,8 +5,9 @@ import com.shutterstar.agenthub.environment.discovery.MimoHomeSupport
 import com.shutterstar.agenthub.environment.discovery.OmpHomeSupport
 import java.nio.file.Path
 import com.shutterstar.agenthub.OsDetector
+import com.shutterstar.agenthub.AgentRuntime
 
-private fun home(): Path = Path.of(System.getProperty("user.home"))
+private fun home(): Path = AgentRuntime.userHome()
 private fun agentHome(home: Path, env: String, directory: String): Path =
     EnvHomeDirectorySupport.resolveGuarded(env, home, directory)
 
@@ -48,10 +49,10 @@ class CursorConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
 ) {
     companion object {
         private fun cursorHome(homeDirectory: Path): Path {
-            val defaultHome = homeDirectory.toAbsolutePath().normalize() == home().toAbsolutePath().normalize()
+            val defaultHome = homeDirectory.toAbsolutePath().normalize() == AgentRuntime.hostHome().toAbsolutePath().normalize()
             return if (defaultHome && !System.getenv("CURSOR_CONFIG_DIR").isNullOrBlank()) {
                 agentHome(homeDirectory, "CURSOR_CONFIG_DIR", ".cursor")
-            } else if (defaultHome && !OsDetector.isWindows() && !System.getenv("XDG_CONFIG_HOME").isNullOrBlank()) {
+            } else if (defaultHome && !AgentRuntime.isWindowsRuntime() && !System.getenv("XDG_CONFIG_HOME").isNullOrBlank()) {
                 EnvHomeDirectorySupport.resolveXdgGuarded("XDG_CONFIG_HOME", homeDirectory, ".config", "cursor")
             } else homeDirectory.resolve(".cursor")
         }
@@ -62,17 +63,25 @@ class OpenCodeConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
     "opencode",
     listOf("opencode.json", "opencode.jsonc", "tui.json", "cli.json").map {
         EnvHomeDirectorySupport.resolveXdgGuarded("XDG_CONFIG_HOME", homeDirectory, ".config", "opencode").resolve(it)
-    },
+    } + listOf("opencode.json", "opencode.jsonc").map { homeDirectory.resolve(".opencode").resolve(it) },
     listOf("opencode.json", "opencode.jsonc", "tui.json"),
 )
 
-/** Kilo Code CLI: `kilo.json(c)`/`config.json` and `tui.json(c)` in `~/.config/kilo`, `kilo.json(c)` in project `.kilo/`. */
+/**
+ * Kilo Code CLI: `kilo.json(c)`/`config.json` and `tui.json(c)` in `~/.config/kilo`, `kilo.json(c)` in project `.kilo/`.
+ * Kilo also loads `opencode.json(c)` next to them (its `ALL_CONFIG_FILES`), so those are inventoried too.
+ */
 class KiloConfigProvider(homeDirectory: Path = home()) : FileConfigProvider(
     "kilo",
     EnvHomeDirectorySupport.resolveXdgGuarded("XDG_CONFIG_HOME", homeDirectory, ".config", "kilo").let { directory ->
-        listOf("kilo.json", "kilo.jsonc", "config.json", "tui.json", "tui.jsonc").map(directory::resolve)
+        listOf("kilo.json", "kilo.jsonc", "opencode.json", "opencode.jsonc", "config.json", "tui.json", "tui.jsonc").map(directory::resolve)
     },
-    listOf("kilo.json", "kilo.jsonc", ".kilo/kilo.json", ".kilo/kilo.jsonc", ".kilocode/kilo.json", ".kilocode/kilo.jsonc", ".kilo/tui.json", ".kilo/tui.jsonc"),
+    listOf(
+        "kilo.json", "kilo.jsonc", "opencode.json", "opencode.jsonc",
+        ".kilo/kilo.json", ".kilo/kilo.jsonc", ".kilo/opencode.json", ".kilo/opencode.jsonc",
+        ".kilocode/kilo.json", ".kilocode/kilo.jsonc", ".kilocode/opencode.json", ".kilocode/opencode.jsonc",
+        ".kilo/tui.json", ".kilo/tui.jsonc",
+    ),
 )
 
 /** Kimi Code CLI: `config.toml` and `tui.toml` in the data root (`~/.kimi-code`, or `KIMI_CODE_HOME`). */

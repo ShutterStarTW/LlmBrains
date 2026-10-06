@@ -12,4 +12,7 @@ data class SkillSource(
     val system: Boolean = false,
     /** Resolved during discovery so the UI can collapse aliases without filesystem access on the EDT. */
     val realPath: String? = null,
-)
+) {
+    /** False when [agentId] only reads this folder because it is another agent's (e.g. Cline reading `.claude/skills`). */
+    val native: Boolean get() = agentId == null || SkillRootOwner.isNative(agentId, path)
+}

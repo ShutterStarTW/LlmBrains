@@ -39,7 +39,9 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         // section headers — Agents / Companion Tools / Utilities — instead of one flat list that
         // gets harder to scan as more agents/companions are enabled.
         if (activeAgents.isNotEmpty() || customAgent != null) {
-            actions += Separator("Agents")
+            // In WSL mode the list is the distribution's own selection: say so in the header.
+            val environmentSuffix = if (WslSupport.isActive()) " · " + AgentSettingsState.runtimeLabel(true, WslSupport.settings.distro) else ""
+            actions += Separator("Agents$environmentSuffix")
         }
         activeAgents.forEach { agent ->
             actions += AgentDirectAction(agent, project)
@@ -154,7 +156,7 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
             val quotedArgs = args.joinToString(" ") { "'${escapeForPowerShell(it)}'" }
             // -File (not -Command "...") so the terminal's PowerShell parses this line only once.
             // -Command "& '...' $args" would re-parse $quotedArgs as script text, and agent payloads
-            // routinely contain unescaped `"`, `$`, and `|` (e.g. forge/goose/plandex install hints)
+            // routinely contain unescaped `"`, `$`, and `|` (e.g. forge/goose install hints)
             // that would break out of the outer double-quoted -Command string.
             """powershell -NoProfile -File '$escapedPath' $subcommand $quotedArgs"""
         } else {

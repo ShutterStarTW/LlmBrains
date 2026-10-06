@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.skills.model.SkillScope
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Claude Code caches skills synced from the user's Claude.ai account under `skills/synced/<bucket>/`
@@ -15,7 +16,7 @@ import java.nio.file.Path
  * to avoid discovering the same skill twice under two different flags).
  */
 class ClaudeSkillProvider(
-    userHome: Path = Path.of(System.getProperty("user.home")),
+    userHome: Path = AgentRuntime.userHome(),
 ) : DirectorySkillProvider(
     agentId = "claude",
     userHome = userHome,

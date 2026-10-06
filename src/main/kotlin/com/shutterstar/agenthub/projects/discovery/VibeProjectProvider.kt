@@ -7,6 +7,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.util.logging.Logger
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Mistral Vibe sessions (`mistral-vibe` on PyPI, the `vibe.core.session` and `vibe.core.paths` modules of the package):
@@ -105,6 +106,6 @@ class VibeProjectProvider(
         private val LOG: Logger = Logger.getLogger(VibeProjectProvider::class.java.name)
 
         private fun defaultVibeHome(): Path =
-            EnvHomeDirectorySupport.resolveGuarded("VIBE_HOME", Path.of(System.getProperty("user.home")), ".vibe")
+            EnvHomeDirectorySupport.resolveGuarded("VIBE_HOME", AgentRuntime.userHome(), ".vibe")
     }
 }

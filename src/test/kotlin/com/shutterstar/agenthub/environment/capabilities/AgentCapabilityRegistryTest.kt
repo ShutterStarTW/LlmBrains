@@ -40,6 +40,11 @@ class AgentCapabilityRegistryTest {
             assertTrue(capabilities.supportsMcp && capabilities.supportsProjectMcp, agent)
             assertTrue(capabilities.supportsInstructions && capabilities.supportsConfig, agent)
         }
+        // Cline and Qwen Code read ~/.agents/skills and <project>/.agents/skills themselves (checked in their sources);
+        // Claude Code and Kiro CLI do not.
+        assertTrue(AgentCapabilityRegistry.capabilitiesFor("cline").supportsSharedAgentSkills)
+        assertTrue(AgentCapabilityRegistry.capabilitiesFor("qwen").supportsSharedAgentSkills)
+        assertFalse(AgentCapabilityRegistry.capabilitiesFor("kiro").supportsSharedAgentSkills)
         assertTrue(AgentCapabilityRegistry.capabilitiesFor("kiro").supportsMcp)
         assertTrue(AgentCapabilityRegistry.capabilitiesFor("qwen").supportsSkills)
         assertFalse(AgentCapabilityRegistry.capabilitiesFor("unknown-agent").supportsSkills)

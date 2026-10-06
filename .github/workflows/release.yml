@@ -1,0 +1,71 @@
+# Pushing a version tag (vX.Y.Z) builds and tests the plugin and publishes a GitHub Release with the ZIP attached.
+# The release text is the matching `- `X.Y.Z`: ...` line of CHANGES.md. Uploading the ZIP to the
+# JetBrains Marketplace stays a manual step.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The tag, VERSION.md (which build.gradle.kts reads) and CHANGES.md must agree, or the ZIP and its notes would not match.
+      - name: Check the tag against VERSION.md and CHANGES.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          expected="$(tr -d '[:space:]' < VERSION.md)"
+          if [ "$version" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION.md ($expected)"
+            exit 1
+          fi
+          notes="$(grep -m1 "^- \`${version}\`: " CHANGES.md | sed -E 's/^- `[^`]+`: //')"
+          if [ -z "$notes" ]; then
+            echo "::error::CHANGES.md has no '- \`${version}\`: ...' entry"
+            exit 1
+          fi
+          printf '%s\n' "$notes" > release-notes.md
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # gradlew may lose its exec bit when committed from Windows.
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # `build` runs the tests and produces the plugin ZIP (buildPlugin).
+      - name: Build plugin & run tests
+        run: ./gradlew build --stacktrace
+
+      - name: Check the plugin ZIP
+        run: test -f "build/distributions/agenthub-${VERSION}.zip"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip="build/distributions/agenthub-${VERSION}.zip"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$zip" --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" "$zip" --title "AgentHub ${VERSION}" --notes-file release-notes.md --verify-tag
+          fi

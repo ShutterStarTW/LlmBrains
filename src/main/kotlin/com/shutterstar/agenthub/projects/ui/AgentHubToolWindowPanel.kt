@@ -19,6 +19,8 @@ import com.shutterstar.agenthub.AgentSettingsState
 import com.shutterstar.agenthub.DetectionResultsWatcher
 import com.shutterstar.agenthub.TerminalCommandRunner
 import com.shutterstar.agenthub.UserFacingError
+import com.shutterstar.agenthub.AgentRuntime
+import com.shutterstar.agenthub.WslSupport
 import com.shutterstar.agenthub.environment.config.discovery.ConfigDiscoveryService
 import com.shutterstar.agenthub.environment.discovery.AgentEnvironmentDiscoveryService
 import com.shutterstar.agenthub.environment.discovery.ProjectEnvironmentDiscoveryService
@@ -40,6 +42,7 @@ import com.shutterstar.agenthub.environment.skills.ui.SkillBrowserController
 import com.shutterstar.agenthub.environment.skills.ui.SkillBrowserDiscovery
 import com.shutterstar.agenthub.environment.skills.ui.SkillBrowserModel
 import com.shutterstar.agenthub.environment.skills.ui.SkillBrowserSnapshot
+import com.shutterstar.agenthub.environment.skills.ui.SourceStat
 import com.shutterstar.agenthub.environment.skills.ui.SkillBrowserState
 import com.shutterstar.agenthub.environment.skills.ui.SkillMutationController
 import com.shutterstar.agenthub.environment.skills.ui.SkillOccurrenceRow
@@ -138,9 +141,13 @@ class AgentHubToolWindowPanel(
         promoteSkill = { skillMutationController.promote(it) },
         resyncSkill = { row, agentId -> skillMutationController.resync(row, agentId) },
         stopSharingSkill = { row, agentId -> skillMutationController.stopSharing(row, agentId) },
+        removeRedundantCopy = { row, agentId -> skillMutationController.removeRedundantCopy(row, agentId) },
         resolveVersions = { row, sides -> skillMutationController.resolveVersions(row, sides) },
         owningAgent = { path, candidates, scope, project ->
             runCatching { skillSyncService.owningAgentId(Path.of(path), candidates, scope, project) }.getOrNull()
+        },
+        owningAgentStrict = { path, candidates, scope, project ->
+            runCatching { skillSyncService.owningAgentId(Path.of(path), candidates, scope, project, exactPrimaryOnly = true) }.getOrNull()
         },
         hasHistory = { row -> skillSyncService.historyFor(row.skill, row.context.scope, row.context.project).isNotEmpty() },
         historyEntries = { row ->
@@ -160,6 +167,7 @@ class AgentHubToolWindowPanel(
                 row.source.agentId in skillSyncService.managedTargetIds(row.skill, row.context.scope, row.context.project)
         },
         syncTargetIds = skillSyncService::adapterTargetIds,
+        canReplaceCopyWithLink = skillSyncService::canReplaceCopyWithLink,
         openSettings = {
             val dialog = SkillSyncSettingsDialog(project, skillSyncService.currentSettings())
             if (dialog.showAndGet()) {
@@ -192,7 +200,11 @@ class AgentHubToolWindowPanel(
         discover = { context ->
             skillsDiscovery.discover(context).also { snapshot ->
                 if (snapshot.warnings.isEmpty()) {
-                    runCatching { SkillBrowserIndexService.getInstance().record(context.key, snapshot.skills) }
+                    runCatching { SkillBrowserIndexService.getInstance().record(
+                        context.key,
+                        snapshot.skills,
+                        snapshot.sourceStats.filterValues { it.isLink }.keys,
+                    ) }
                 }
             }
         },
@@ -665,7 +677,9 @@ class AgentHubToolWindowPanel(
         }
         if (indexed.isNotEmpty() && (context.scope != SkillScope.PROJECT || context.project != null)) {
             return visibleSkills(indexed).takeIf { it.isNotEmpty() }?.let {
-                SkillBrowserSnapshot(context, it)
+                // Link-ness is part of what the list looks like (links fold into their source), so it is cached too.
+                val links = SkillBrowserIndexService.getInstance().cachedLinkPaths(context.key)
+                SkillBrowserSnapshot(context, it, sourceStats = links.associateWith { SourceStat(0, 0L, isLink = true) })
             }
         }
         if (context.scope == SkillScope.GLOBAL) {
@@ -836,9 +850,17 @@ class AgentHubToolWindowPanel(
             // Blocking `--help` probe of the installed CLI — decides which optional flags to pass.
             val command = NativeResumeCommands.command(session.agentId, session.nativeResumeId) { AgentDetector.shellOutput(it) }
                 ?: return@executeOnPooledThread
-            val workingDirectory = session.projectPath
-                ?.let { path -> runCatching { Path.of(path).takeIf(Files::isDirectory) }.getOrNull() }
-                ?: project.basePath?.let(Path::of)
+            // A session of a distro project (WSL mode) has a Linux path: it is checked over the distro share and
+            // handed to the terminal as is (wsl.exe --cd); a Windows project is checked as a local directory.
+            val workingDirectory: String? = session.projectPath
+                ?.let { path ->
+                    if (WslSupport.isActive() && path.startsWith("/")) {
+                        path.takeIf { runCatching { AgentRuntime.toHostPath(it)?.let { host -> Files.isDirectory(Path.of(host)) } }.getOrNull() == true }
+                    } else {
+                        runCatching { Path.of(path).takeIf(Files::isDirectory)?.toString() }.getOrNull()
+                    }
+                }
+                ?: project.basePath
             ApplicationManager.getApplication().invokeLater({
                 if (disposed || project.isDisposed) return@invokeLater
                 if (transcriptMissing) {
@@ -854,7 +876,7 @@ class AgentHubToolWindowPanel(
                 val name = (session.title ?: session.firstMessage)?.trim()?.takeIf { it.isNotEmpty() }
                 val label = name?.let { if (it.length > TAB_TITLE_CHARS) it.take(TAB_TITLE_CHARS).trimEnd() + "…" else it }
                     ?: session.id.take(SESSION_ID_TITLE_CHARS)
-                TerminalCommandRunner.run(project, "🤖 $agentName · $label", command, workingDirectory?.toString())
+                TerminalCommandRunner.run(project, "🤖 $agentName · $label", command, workingDirectory)
             }, ModalityState.any())
         }
     }
@@ -914,7 +936,7 @@ class AgentHubToolWindowPanel(
         /** A plain success message in the Skills status line fades after this long. */
         private const val SKILLS_STATUS_VISIBLE_MILLIS = 15_000
         /** Agents the tool window can discover sessions for (one project provider each); static, as the init block already needs it. */
-        private val DISCOVERABLE_AGENT_IDS: Set<String> by lazy { AgentProjectProviders.all.mapTo(sortedSetOf()) { it.agentId } }
+        private val DISCOVERABLE_AGENT_IDS: Set<String> get() = AgentProjectProviders.agentIds
         /** Focus changes inside the panel check the shared files for foreign changes at most this often. */
         private val SHARED_CHECK_MIN_INTERVAL_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(3)
         private const val CARD_MAIN = "main"

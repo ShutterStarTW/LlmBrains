@@ -5,6 +5,7 @@ import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 /**
  * Bespoke, matching [com.shutterstar.agenthub.environment.skills.discovery.OpenCodeSkillProvider]'s
@@ -13,7 +14,7 @@ import java.nio.file.Path
  * both scopes like the [DirectorySkillSyncTarget]-backed agents.
  */
 class OpenCodeSkillSyncTarget(
-    private val userHome: Path = Path.of(System.getProperty("user.home")),
+    private val userHome: Path = AgentRuntime.userHome(),
 ) : SkillSyncTarget {
     override val agentId: String = "opencode"
 
@@ -33,7 +34,14 @@ class OpenCodeSkillSyncTarget(
     // Mirrors OpenCodeSkillProvider's ".claude/skills" compatibility root at both scopes (its
     // nested project-level scan for the same owner directories is discovery's job, not this
     // lightweight presence check's).
-    override fun alternateGlobalSkillDirectories(): List<Path> = listOf(userHome.resolve(".claude").resolve("skills"))
+    // Also the home-level `~/.opencode` config directory, which OpenCode scans for skills as well, and the singular
+    // `skill/` folders it accepts next to `skills/`.
+    override fun alternateGlobalSkillDirectories(): List<Path> = listOf(
+        userHome.resolve(".claude").resolve("skills"),
+        userHome.resolve(".opencode").resolve("skills"),
+        globalSkillDirectory().resolveSibling("skill"),
+        userHome.resolve(".opencode").resolve("skill"),
+    )
 
     override fun alternateProjectSkillDirectories(project: DiscoveredProject): List<Path> {
         val rawPath = project.path ?: project.gitRoot ?: return emptyList()
@@ -42,7 +50,7 @@ class OpenCodeSkillSyncTarget(
         } catch (_: InvalidPathException) {
             return emptyList()
         }
-        return listOf(projectRoot.resolve(".claude").resolve("skills"))
+        return listOf(projectRoot.resolve(".claude").resolve("skills"), projectRoot.resolve(".opencode").resolve("skill"))
     }
 
     override fun supportsLinkedSkills(): Boolean = true

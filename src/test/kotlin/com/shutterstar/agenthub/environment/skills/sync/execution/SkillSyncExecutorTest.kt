@@ -175,9 +175,9 @@ class SkillSyncExecutorTest {
         val canonical = writeSkillMd(root.resolve("canonical"), "content")
         val canonicalFingerprint = fingerprintCalculator.calculate(canonical)!!
 
-        val healthyRoot = root.resolve("cline-root")
+        val healthyRoot = root.resolve("kiro-root")
         val healthyTargetPath = healthyRoot.resolve("canonical")
-        val healthyTarget = FakeTarget("cline", healthyRoot)
+        val healthyTarget = FakeTarget("kiro", healthyRoot)
 
         // A plain file where the target's parent directory needs to be created forces a
         // deterministic, portable CreateDirectory failure for this agent only.
@@ -198,7 +198,7 @@ class SkillSyncExecutorTest {
         val result = executor.execute(
             plan,
             request,
-            mapOf("cline" to healthyTarget, "claude" to brokenTarget),
+            mapOf("kiro" to healthyTarget, "claude" to brokenTarget),
             SkillScope.GLOBAL,
             null,
             root.resolve("backups"),

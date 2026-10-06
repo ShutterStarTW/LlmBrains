@@ -2,9 +2,10 @@ package com.shutterstar.agenthub.environment.skills.discovery
 
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import java.nio.file.Path
+import com.shutterstar.agenthub.AgentRuntime
 
 class KiroSkillProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : DirectorySkillProvider(
     agentId = "kiro",
     userHome = homeDirectory,

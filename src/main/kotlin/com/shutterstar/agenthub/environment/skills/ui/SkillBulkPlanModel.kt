@@ -11,6 +11,7 @@ internal enum class BulkPlanChange(val caption: String) {
     LINKED("Own copies are replaced by links to the shared skills"),
     LINK_REMOVED("Links to the shared skills are removed (the shared skills are never touched)"),
     COPY_REMOVED("Identical copies are removed (backed up first)"),
+    COPY_TO_LINK("Identical copies are replaced by links to the shared skills (backed up first)"),
 }
 
 /** One directory in a bulk plan: [path], the [change] made there, the agents that own it and the skills affected. */
@@ -86,13 +87,17 @@ internal data class SkillBulkPlanModel(
                     val change = if (agentId in item.candidate.linkedAgentIds) BulkPlanChange.LINK_REMOVED else BulkPlanChange.COPY_REMOVED
                     entries += Entry(parentOf(source.path), change, agentId, name)
                 }
+                item.candidate.convertAgentIds.forEach { agentId ->
+                    val source = skill.sources.firstOrNull { it.agentId == agentId && !it.shared } ?: return@forEach
+                    entries += Entry(parentOf(source.path), BulkPlanChange.COPY_TO_LINK, agentId, name)
+                }
             }
             val count = work.size
             return SkillBulkPlanModel(
                 title = "Clean Up Redundant Copies",
                 applyLabel = if (count == 1) "Clean Up 1 Skill" else "Clean Up $count Skills",
-                summary = "These agents read the shared folder directly, so their own link or identical copy is not needed. " +
-                    "A link is only unlinked; a copy is removed after a backup. Copies that differ from the shared skill are never touched.",
+                summary = "A link is only unlinked; a copy is removed after a backup. An identical copy of an agent that cannot " +
+                    "read the shared folder is replaced by a link. Copies that differ are never touched.",
                 directories = group(entries),
                 backupPath = backupDirectory?.toString(),
                 warnings = emptyList(),

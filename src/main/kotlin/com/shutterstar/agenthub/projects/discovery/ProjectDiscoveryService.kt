@@ -28,7 +28,8 @@ data class ProjectDiscoveryResult(
 )
 
 class ProjectDiscoveryService(
-    private val providers: List<AgentProjectProvider> = AgentProjectProviders.all,
+    /** Null: the providers of the current runtime ([AgentProjectProviders.all]), looked up on every [discover]. */
+    private val providers: List<AgentProjectProvider>? = null,
     private val projectResolver: ProjectResolver = ProjectResolver(),
     private val isAgentRelevant: (String) -> Boolean = { true },
     private val providerTimeoutMillis: Long = DEFAULT_PROVIDER_TIMEOUT_MILLIS,
@@ -36,7 +37,7 @@ class ProjectDiscoveryService(
 
     fun discover(): ProjectDiscoveryResult {
         val warnings = mutableListOf<ProjectDiscoveryWarning>()
-        val availableProviders = providers.filter { provider ->
+        val availableProviders = (providers ?: AgentProjectProviders.all).filter { provider ->
             if (!isAgentRelevant(provider.agentId)) {
                 false
             } else {

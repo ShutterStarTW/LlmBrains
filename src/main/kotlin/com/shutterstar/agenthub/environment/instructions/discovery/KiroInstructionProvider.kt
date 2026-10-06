@@ -7,9 +7,10 @@ import com.shutterstar.agenthub.environment.instructions.model.InstructionType
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import java.nio.file.Path
 import kotlin.io.path.extension
+import com.shutterstar.agenthub.AgentRuntime
 
 class KiroInstructionProvider(
-    private val homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val homeDirectory: Path = AgentRuntime.userHome(),
 ) : InstructionProvider {
     override val agentId: String = "kiro"
     private val kiroDirectory = EnvHomeDirectorySupport.resolveGuarded("KIRO_HOME", homeDirectory, ".kiro")

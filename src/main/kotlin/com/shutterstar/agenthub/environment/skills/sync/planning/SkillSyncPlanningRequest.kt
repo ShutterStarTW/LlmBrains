@@ -20,4 +20,9 @@ data class SkillSyncPlanningRequest(
      * look "not in the expected state" both when planning and when revalidating before execution.
      */
     val nativeShortCircuit: Boolean = true,
+    /**
+     * True for a promotion: the observed target is the very directory the user picked, which for a vendor-provided
+     * skill is not `<agent skills root>/<name>` (e.g. `skills/.system/<name>`), so it is re-observed at that path.
+     */
+    val observedAtExactPath: Boolean = false,
 )

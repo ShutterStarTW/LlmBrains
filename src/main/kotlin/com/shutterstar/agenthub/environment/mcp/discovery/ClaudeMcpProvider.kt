@@ -10,9 +10,10 @@ import java.nio.file.Path
 import java.util.Locale
 import java.util.logging.Logger
 import com.shutterstar.agenthub.OsDetector
+import com.shutterstar.agenthub.AgentRuntime
 
 class ClaudeMcpProvider(
-    homeDirectory: Path = Path.of(System.getProperty("user.home")),
+    homeDirectory: Path = AgentRuntime.userHome(),
 ) : McpProvider {
     override val agentId: String = AGENT_ID
 
@@ -130,12 +131,13 @@ class ClaudeMcpProvider(
 
     private fun pathsMatch(configuredPath: String, projectRoot: Path): Boolean {
         val normalizedConfigured = try {
-            Path.of(configuredPath).toAbsolutePath().normalize().toString()
+            // In WSL mode ~/.claude.json holds Linux paths; compare them in the form the project root has (the distro share).
+            Path.of(AgentRuntime.toHostPath(configuredPath) ?: return false).toAbsolutePath().normalize().toString()
         } catch (_: InvalidPathException) {
             return false
         }
         val normalizedProject = projectRoot.toString()
-        return if (OsDetector.isWindows()) {
+        return if (AgentRuntime.isWindowsRuntime()) {
             normalizedConfigured.equals(normalizedProject, ignoreCase = true)
         } else {
             normalizedConfigured == normalizedProject

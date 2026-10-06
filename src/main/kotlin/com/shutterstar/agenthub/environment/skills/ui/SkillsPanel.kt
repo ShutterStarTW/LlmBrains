@@ -78,10 +78,15 @@ internal class SkillsPanel(
     private val promoteSkill: (SkillOccurrenceRow) -> Unit = {},
     private val resyncSkill: (SkillOccurrenceRow, String) -> Unit = { _, _ -> },
     private val stopSharingSkill: (SkillOccurrenceRow, String) -> Unit = { _, _ -> },
+    /** Removes an agent's own link/copy of the shared skill (reviewed plan, backed up first). */
+    private val removeRedundantCopy: (SkillOccurrenceRow, String) -> Unit = { _, _ -> },
     /** Opens the one comparison dialog: the row's skill against another version (see [versionSides]). */
     private val resolveVersions: (SkillOccurrenceRow, VersionSides) -> Unit = { _, _ -> },
     /** Which candidate agent really owns the skill directory at a path (agents read each other's folders); null = unknown. */
     private val owningAgent: (path: String, candidateAgentIds: List<String>, scope: SkillScope, project: DiscoveredProject?) -> String? =
+        { _, candidates, _, _ -> candidates.firstOrNull() },
+    /** Like [owningAgent] but only the agent whose own skill directory it is (what the clean-up uses to tell redundant copies). */
+    private val owningAgentStrict: (path: String, candidateAgentIds: List<String>, scope: SkillScope, project: DiscoveredProject?) -> String? =
         { _, candidates, _, _ -> candidates.firstOrNull() },
     private val hasHistory: (SkillOccurrenceRow) -> Boolean = { false },
     /** Every recorded operation for the row's skill, newest first (the History page lists them all). */
@@ -96,6 +101,8 @@ internal class SkillsPanel(
     private val managedTargetIds: (SkillOccurrenceRow) -> Set<String> = { emptySet() },
     private val isManagedOccurrence: (SkillOccurrenceRow) -> Boolean = { false },
     private val syncTargetIds: () -> Set<String> = { emptySet() },
+    /** True when an agent's identical copy can be swapped for a link (it has a linking adapter and links are the preferred mode). */
+    private val canReplaceCopyWithLink: (String) -> Boolean = { true },
     private val openSettings: () -> Unit = {},
     private val migrateDuplicates: (List<AgentSkill>, SkillBrowserContext) -> Unit = { _, _ -> },
     private val cancelBulkMigration: () -> Unit = {},
@@ -893,8 +900,19 @@ internal class SkillsPanel(
         // couldn't run (null) stays visible rather than risk hiding a genuine source. The source
         // already shown above under "Location" is excluded too - this section is for whatever
         // *else* exists, not a second listing of the skill the user is already looking at.
+        // Redundant links/copies get their own section (with a way to remove them), above the sources.
+        val redundant = redundantEntries(row)
+        if (redundant.isNotEmpty()) {
+            addDetailDivider(column)
+            addSection(column, redundantTitle(redundant), topGap = 0)
+            redundant.forEachIndexed { index, entry ->
+                if (index > 0) addDetailDivider(column, dotted = true)
+                addRedundantEntry(column, row, entry)
+            }
+        }
+        val redundantPaths = redundant.mapTo(mutableSetOf()) { it.source.path }
         val additionalSources = row.skill.sources.filter { it.scope == row.source.scope }.distinctBy { it.path }
-            .filterNot { it.path == row.source.path }
+            .filterNot { it.path == row.source.path || it.path in redundantPaths }
             .filterNot { source -> snapshot?.sourceStats?.get(source.path)?.isLink == true }
         if (additionalSources.isNotEmpty()) {
             addDetailDivider(column)
@@ -937,6 +955,9 @@ internal class SkillsPanel(
                         sourceActions.add(versionAction(row, sides))
                     }
                 }
+                // The counterpart of Resolve Conflict: a copy identical to the shared skill (of an agent that cannot
+                // read the shared folder itself) is replaced by a link to it.
+                if (row.source.shared) identicalCopyAction(row, source)?.let(sourceActions::add)
                 column.add(buttonRow(sourceActions))
             }
         }
@@ -955,9 +976,12 @@ internal class SkillsPanel(
         val column = pageColumn()
         val observed = snapshot?.targetStatuses?.get(row.skill.identity.id).orEmpty()
         val managedIds = managedTargetIds(row)
-        val agentIds = (observed.map { it.agentId } + managedIds.sorted()).distinct()
+        // An agent that reads the shared folder yet keeps its own link/copy is observed as NATIVE, but is not
+        // "nothing to manage": it gets its own block with the removal instead of joining the direct readers.
+        val redundantIds = redundantEntries(row).mapTo(mutableSetOf()) { it.agentId }
+        val agentIds = (observed.map { it.agentId } + managedIds.sorted() + redundantIds.sorted()).distinct()
         val nativeIds = agentIds.filter { agentId ->
-            observed.any { it.agentId == agentId && it.status == SkillTargetStatus.NATIVE }
+            agentId !in redundantIds && observed.any { it.agentId == agentId && it.status == SkillTargetStatus.NATIVE }
         }
         val targetIds = agentIds - nativeIds.toSet()
         if (nativeIds.isNotEmpty()) {
@@ -1019,6 +1043,12 @@ internal class SkillsPanel(
                 toolTipText = text
             })
         }
+        val redundant = redundantEntries(row).firstOrNull { it.agentId == agentId }
+        val identicalCopy = target != null && (
+            target.status == SkillTargetStatus.IDENTICAL_UNMANAGED ||
+                (target.status == SkillTargetStatus.COPIED && copiedInSync(row.skill.identity.id, agentId, target.fingerprint))
+            )
+        val removeCopy = replaceCopyAction(row, agentId, target, identicalCopy)
         block.add(JPanel(BorderLayout()).apply {
             alignmentX = Component.LEFT_ALIGNMENT
             isOpaque = false
@@ -1026,9 +1056,13 @@ internal class SkillsPanel(
                 text = displayName(agentId)
                 font = font.deriveFont(Font.BOLD)
             }, BorderLayout.WEST)
-            target?.let { add(JBLabel(targetStateLabel(row, it)).apply { foreground = JBColor.GRAY }, BorderLayout.EAST) }
+            val state = redundant?.let { "Redundant ${it.noun}" } ?: target?.let { targetStateLabel(row, it) }
+            state?.let { add(JBLabel(it).apply { foreground = JBColor.GRAY }, BorderLayout.EAST) }
         })
-        if (target != null) {
+        if (redundant != null) {
+            secondary("Reads the shared folder directly")
+            secondary(redundant.source.path)
+        } else if (target != null) {
             val ownership = when (target.owner) {
                 SyncOwner.AGENTHUB -> "AgentHub-managed"
                 SyncOwner.EXTERNAL -> "Externally managed"
@@ -1053,13 +1087,21 @@ internal class SkillsPanel(
         } else {
             secondary("AgentHub-managed")
         }
-        if (managed) {
-            block.add(buttonRow(managedActions(row, agentId)).apply {
+        if (redundant != null) {
+            block.add(buttonRow(listOf(removeRedundantAction(row, redundant))).apply {
+                border = JBUI.Borders.emptyTop(AgentHubUiComponents.SMALL_GAP)
+            })
+        } else if (managed) {
+            block.add(buttonRow(withRemoveCopy(managedActions(row, agentId), removeCopy)).apply {
                 border = JBUI.Borders.emptyTop(AgentHubUiComponents.SMALL_GAP)
             })
         } else if (canStopExisting(target)) {
             // Not created by AgentHub, but the setting lets it take the sharing away (after a backup).
-            block.add(buttonRow(managedActions(row, agentId).filter { it.label == "Stop Sharing" }).apply {
+            block.add(buttonRow(withRemoveCopy(managedActions(row, agentId).filter { it.label == "Stop Sharing" }, removeCopy)).apply {
+                border = JBUI.Borders.emptyTop(AgentHubUiComponents.SMALL_GAP)
+            })
+        } else if (removeCopy != null) {
+            block.add(buttonRow(listOf(removeCopy)).apply {
                 border = JBUI.Borders.emptyTop(AgentHubUiComponents.SMALL_GAP)
             })
         } else if (target?.status in setOf(SkillTargetStatus.NOT_AVAILABLE, SkillTargetStatus.DIFFERENT, SkillTargetStatus.BROKEN_LINK) &&
@@ -1074,6 +1116,13 @@ internal class SkillsPanel(
             })
         }
         return block
+    }
+
+    /** [removeCopy] goes right before Stop Sharing (or last when there is none). */
+    private fun withRemoveCopy(actions: List<SkillRowAction>, removeCopy: SkillRowAction?): List<SkillRowAction> {
+        if (removeCopy == null) return actions
+        val stop = actions.indexOfFirst { it.label == "Stop Sharing" }
+        return if (stop < 0) actions + removeCopy else actions.take(stop) + removeCopy + actions.drop(stop)
     }
 
     private fun canStopExisting(target: ObservedSkillTarget?): Boolean =
@@ -1161,14 +1210,11 @@ internal class SkillsPanel(
             })
         } else {
             val agentId = ownerOf(row, row.source)
-            if (agentId != null && agentId in syncTargetIds()) {
-                // The opened skill is what every other source is compared with (buttons live on those sources,
-                // under Additional sources), so it has no compare button of its own. A copy that differs from
-                // an existing shared skill can't be promoted over it - it is resolved there instead.
-                val differsFromShared = row.skill.consistency == SkillConsistency.DIFFERENT && row.skill.sources.any { it.shared }
-                if (!differsFromShared) {
-                    add(SkillRowAction("Move to Shared & Share…", "Move this skill into the shared folder and choose which agents get it", ActionGroup.MUTATION) { promoteSkill(row) })
-                }
+            // A shared skill has nothing to move; differing copies are resolved from the shared skill.
+            if (sharedSourceOf(row) != null) {
+                identicalCopyAction(row, row.source)?.let(::add)
+            } else if (agentId != null && agentId in syncTargetIds()) {
+                add(SkillRowAction("Move to Shared & Share…", "Move this skill into the shared folder and choose which agents get it", ActionGroup.MUTATION) { promoteSkill(row) })
             }
         }
     }
@@ -1212,6 +1258,96 @@ internal class SkillsPanel(
             .distinctBy { it.path }
         return others.takeIf { it.isNotEmpty() }?.let { VersionSides(current, it, preferredAgentId, sharedExists = canonical != null) }
     }
+    /** An agent's own link or identical copy of a shared skill, although the agent reads the shared folder on its own. */
+    private class RedundantEntry(val agentId: String, val source: SkillSource, val link: Boolean) {
+        val noun get() = if (link) "link" else "copy"
+    }
+
+    /** The shared source of the opened skill (in the opened scope), if it has one. */
+    private fun sharedSourceOf(row: SkillOccurrenceRow): SkillSource? =
+        row.skill.sources.firstOrNull { it.shared && it.scope == row.source.scope }
+
+    /** The agent whose own skill directory [source] is; the same strict rule as the clean-up. */
+    private fun strictOwnerOf(row: SkillOccurrenceRow, source: SkillSource): String? {
+        val listedUnder = row.skill.sources.filter { it.path == source.path }.mapNotNull { it.agentId }.distinct()
+        return owningAgentStrict(source.path, listedUnder, source.scope, row.context.project)
+    }
+
+    /** True for a symlink or junction (the stats say so); such an entry is never a real copy. */
+    private fun isLinkSource(source: SkillSource): Boolean = snapshot?.sourceStats?.get(source.path)?.isLink == true
+
+    /**
+     * [source] as a redundant entry of the opened skill's shared source, when it is one: an agent that reads the
+     * shared folder itself and keeps a link to it or an identical copy. A copy that differs is a conflict, handled
+     * by Resolve Conflict, never redundant.
+     */
+    private fun redundantEntry(row: SkillOccurrenceRow, source: SkillSource): RedundantEntry? {
+        val shared = sharedSourceOf(row) ?: return null
+        if (source.shared || source.system || source.scope != shared.scope) return null
+        val link = isLinkSource(source)
+        if (!link && (source.fingerprint == null || source.fingerprint != shared.fingerprint)) return null
+        val agentId = strictOwnerOf(row, source)?.takeIf { it in AgentCapabilityRegistry.agentIdsSupportingSharedSkills() } ?: return null
+        return RedundantEntry(agentId, source, link)
+    }
+
+    /** Empty unless [row] is the shared source. */
+    private fun redundantEntries(row: SkillOccurrenceRow): List<RedundantEntry> =
+        if (!row.source.shared) emptyList()
+        else row.skill.sources.distinctBy { it.path }.mapNotNull { redundantEntry(row, it) }.sortedBy { it.agentId }
+
+    /**
+     * "Remove copy" for an agent that cannot read the shared folder: its identical real copy of the opened skill's
+     * shared source is replaced by a link to it (the ordinary share operation, so the plan review and Undo apply).
+     * Null when there is no shared source, the agent has no sync adapter, the copy is not identical, or links are not possible.
+     */
+    private fun replaceCopyAction(row: SkillOccurrenceRow, agentId: String, target: ObservedSkillTarget?, identical: Boolean): SkillRowAction? {
+        if (sharedSourceOf(row) == null || !identical || agentId !in syncTargetIds() || !canReplaceCopyWithLink(agentId)) return null
+        if (target != null && (target.requestedMode != SkillSyncMode.SYMLINK || target.availableLinkMode == null)) return null
+        return SkillRowAction(
+            "Remove copy",
+            "Replace ${displayName(agentId)}'s copy with a link to the shared skill",
+            ActionGroup.MUTATION,
+        ) { startSharingSkill(row, agentId) }
+    }
+
+    /** Remove copy for an identical copy of the shared source: dropped when the agent reads the shared folder, else replaced by a link. */
+    private fun identicalCopyAction(row: SkillOccurrenceRow, source: SkillSource): SkillRowAction? {
+        val shared = sharedSourceOf(row) ?: return null
+        if (source.shared || source.system || isLinkSource(source)) return null
+        redundantEntry(row, source)?.let { return removeRedundantAction(row, it) }
+        if (source.fingerprint == null || source.fingerprint != shared.fingerprint) return null
+        val agentId = strictOwnerOf(row, source) ?: return null
+        val target = snapshot?.targetStatuses?.get(row.skill.identity.id)?.firstOrNull { it.agentId == agentId }
+        return replaceCopyAction(row, agentId, target, true)
+    }
+
+    private fun removeRedundantAction(row: SkillOccurrenceRow, entry: RedundantEntry) = SkillRowAction(
+        "Remove ${entry.noun}",
+        "Remove ${displayName(entry.agentId)}'s ${entry.noun}" + if (entry.link) "" else " (backed up first)",
+        ActionGroup.MUTATION,
+    ) { removeRedundantCopy(row, entry.agentId) }
+
+    /** "Redundant links", "Redundant copies" or both, for the section that lists [entries]. */
+    private fun redundantTitle(entries: List<RedundantEntry>): String = when {
+        entries.all { it.link } -> "Redundant links"
+        entries.none { it.link } -> "Redundant copies"
+        else -> "Redundant links and copies"
+    }
+
+    /** One redundant entry: who, what kind, where it is, and the way to remove it. */
+    private fun addRedundantEntry(column: JPanel, row: SkillOccurrenceRow, entry: RedundantEntry) {
+        column.add(JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(JBLabel(displayName(entry.agentId), agentIcon(entry.agentId), JLabel.LEADING).apply {
+                accessibleContext.accessibleName = displayName(entry.agentId)
+            })
+            add(JBLabel("· Redundant ${entry.noun}"))
+        })
+        addSingleLineText(column, entry.source.path, muted = true)
+        column.add(buttonRow(listOf(removeRedundantAction(row, entry))))
+    }
+
     /** The agent a source directory belongs to; discovery may list one folder under every agent that scans it. */
     private fun ownerOf(row: SkillOccurrenceRow, source: SkillSource): String? {
         val candidates = row.skill.sources.filter { it.path == source.path && it.agentId != null }.mapNotNull { it.agentId }.distinct()

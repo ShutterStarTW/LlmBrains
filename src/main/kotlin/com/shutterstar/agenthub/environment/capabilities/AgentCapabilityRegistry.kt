@@ -20,7 +20,7 @@ object AgentCapabilityRegistry {
         ),
         "cline" to AgentCapabilities(
             supportsSkills = true,
-            supportsSharedAgentSkills = false,
+            supportsSharedAgentSkills = true,
             supportsMcp = true,
             supportsProjectMcp = true,
             supportsInstructions = true,
@@ -124,7 +124,7 @@ object AgentCapabilityRegistry {
         ),
         "qwen" to AgentCapabilities(
             supportsSkills = true,
-            supportsSharedAgentSkills = false,
+            supportsSharedAgentSkills = true,
             supportsMcp = true,
             supportsProjectMcp = true,
             supportsInstructions = true,

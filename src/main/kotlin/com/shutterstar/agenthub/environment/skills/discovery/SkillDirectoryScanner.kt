@@ -58,6 +58,9 @@ internal class SkillDirectoryScanner(
                 emptySet(),
                 MAXIMUM_SCAN_DEPTH,
                 object : SimpleFileVisitor<Path>() {
+                    // An entry that cannot be inspected (a Linux symlink seen over the WSL share) is skipped, not fatal.
+                    override fun visitFileFailed(file: Path, exc: java.io.IOException): FileVisitResult = FileVisitResult.CONTINUE
+
                     override fun preVisitDirectory(
                         directory: Path,
                         attributes: BasicFileAttributes,
@@ -118,6 +121,9 @@ internal class SkillDirectoryScanner(
                 emptySet(),
                 MAXIMUM_SCAN_DEPTH,
                 object : SimpleFileVisitor<Path>() {
+                    // An entry that cannot be inspected (a Linux symlink seen over the WSL share) is skipped, not fatal.
+                    override fun visitFileFailed(file: Path, exc: java.io.IOException): FileVisitResult = FileVisitResult.CONTINUE
+
                     override fun preVisitDirectory(
                         directory: Path,
                         attributes: BasicFileAttributes,

@@ -46,6 +46,18 @@ class AdditionalAgentInstructionProviderTest {
     }
 
     @Test
+    fun `should list the global vendor-neutral AGENTS md that Cline reads as a rule`() {
+        writeFile(temporaryDirectory.resolve(".agents/AGENTS.md"), "Instructions")
+
+        val global = ClineInstructionProvider(temporaryDirectory).discoverGlobal()
+
+        assertEquals(1, global.size)
+        assertEquals(InstructionType.AGENTS_MD, global.single().type)
+        assertEquals(InstructionScope.GLOBAL, global.single().scope)
+        assertTrue(global.single().path.replace(java.io.File.separatorChar, '/').endsWith("/.agents/AGENTS.md"))
+    }
+
+    @Test
     fun `should discover Kiro steering and nested AGENTS md files`() {
         writeFile(temporaryDirectory.resolve(".kiro/steering/global.md"), "Instructions")
         val projectRoot = Files.createDirectories(temporaryDirectory.resolve("kiro-project"))

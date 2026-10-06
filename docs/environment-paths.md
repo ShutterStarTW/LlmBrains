@@ -1,19 +1,29 @@
 # Environment discovery paths
 
-This page lists the paths **AgentHub currently scans** for skills, instruction files, and MCP
-servers. It describes AgentHub's implementation, which may cover a different set of sources than
-the agent CLI itself. The list applies to the seventeen agents with environment providers.
+This page lists the paths **AgentHub currently scans** for skills, instruction files, MCP
+servers and sessions, and the config files it inventories (table at the end). It describes AgentHub's
+implementation, which may cover a different set of sources than the agent CLI itself. It covers all
+seventeen agents the tool window knows.
 
 `~` means the operating system user's home directory. `<project>` means the resolved local
 project root. `**` means AgentHub also scans matching nested directories, subject to the scan
 limits below. A path ending in `/` is a directory; otherwise it is a file. Environment variable
 overrides affect global paths only; project paths remain relative to `<project>`.
 
+## WSL mode
+
+In WSL mode `~` is the home directory of the selected distribution, read over the `\\wsl.localhost\<distro>` share, and
+the environment-variable overrides below (`CLAUDE_CONFIG_DIR`, `XDG_*`, ...) are ignored, because they describe the
+Windows side. See [WSL mode](wsl-mode.md).
+
 ## Shared skill location
 
 AgentHub scans `~/.agents/skills/` and `<project>/**/.agents/skills/` once and associates those
-skills with Antigravity, Codex, Copilot, Cursor, Grok, and OpenCode. The other four agents do not
-receive this shared location. The table below omits `.agents/skills/` where this rule applies.
+skills with every agent that reads that folder itself: all of them except Claude Code and Kiro CLI.
+Cline and Qwen Code were added after checking their sources (Cline's skill directory list and Qwen's
+`SKILL_PROVIDER_CONFIG_DIRS = ['.qwen', '.agents']`). Copilot CLI stops reading `~/.agents/skills`
+when `COPILOT_HOME` is set (changelog 1.0.66), which AgentHub does not model. The sections below omit
+`.agents/skills/` where this rule applies.
 
 ## Antigravity CLI
 
@@ -37,6 +47,8 @@ receive this shared location. The table below omits `.agents/skills/` where this
   (including its `config/`), and recognized global plugin folders.
 - **MCP, project:** `<project>/mcp_config.json` and the same filename under
   `<project>/{.agents,.agent,_agents,_agent,.gemini}/` and recognized project plugin folders.
+- **Sessions:** `$ANTIGRAVITY_DATA_DIR`, `$ANTIGRAVITY_HOME` or `$GEMINI_HOME` (first one set; default
+  `~/.gemini/antigravity-cli/`), plus the sibling `antigravity/` directory when it exists.
 
 ## Claude Code
 
@@ -59,13 +71,16 @@ receive this shared location. The table below omits `.agents/skills/` where this
 ## Cline
 
 - **Skills:** global `~/.cline/skills/`; project `<project>/.cline/skills/`,
-  `<project>/.clinerules/skills/`, and `<project>/.claude/skills/`.
-- **Instructions:** global Markdown and text rules under `~/.cline/rules/`,
+  `<project>/.clinerules/skills/`, and `<project>/.claude/skills/` (read by the VS Code extension; the newer
+  Cline SDK no longer reads `.claude/skills/`).
+- **Instructions:** global `~/.agents/AGENTS.md` and Markdown and text rules under `~/.cline/rules/`,
   `~/Documents/Cline/Rules/`, and `~/Cline/Rules/`; project nested `AGENTS.md`,
   `.cursorrules`, `.windsurfrules`, `.clinerules/**/*.{md,txt}`, and
   `.cline/rules/**/*.{md,txt}`.
 - **MCP:** global `$CLINE_DATA_DIR/settings/cline_mcp_settings.json` (default
   `~/.cline/data/settings/cline_mcp_settings.json`); project `<project>/.cline/mcp.json`.
+- **Sessions:** `$CLINE_DATA_DIR` (default `~/.cline/data/`): the SQLite database `db/sessions.db` (or `sessions/sessions.db`,
+  opened read-only) and the JSON session files under `sessions/` with their `*.messages.json`.
 
 ## Codex CLI
 
@@ -75,6 +90,8 @@ receive this shared location. The table below omits `.agents/skills/` where this
   `$CODEX_HOME/AGENTS.md`; project `AGENTS.override.md` or `AGENTS.md` in each scanned
   directory, with the override taking priority within that directory.
 - **MCP:** global `$CODEX_HOME/config.toml`; project `<project>/.codex/config.toml`.
+- **Sessions:** `$CODEX_HOME/sessions/` and `$CODEX_HOME/archived_sessions/` (`rollout-*.jsonl`); user-assigned thread
+  names come from `$CODEX_HOME/session_index.jsonl`.
 
 ## GitHub Copilot CLI
 
@@ -92,6 +109,8 @@ receive this shared location. The table below omits `.agents/skills/` where this
   `$COPILOT_HOME/installed-plugins/`, including marketplace and `_direct` installs.
   Manifest paths are constrained to the plugin folder. This filesystem scan does not resolve
   session-specific enablement or plugins loaded directly from an external live directory.
+- **Sessions:** `$COPILOT_HOME/sessions/`, `session-state/` and `history-session-state/` (default `~/.copilot/`;
+  `workspace.yaml` and `events.jsonl` per session).
 
 ## Cursor CLI
 
@@ -103,10 +122,11 @@ receive this shared location. The table below omits `.agents/skills/` where this
   root `CLAUDE.md` and `.cursorrules`, and `**/.cursor/rules/**/*.mdc`.
 - **MCP:** global `~/.cursor/mcp.json` and supported Cursor plugin MCP files; project
   `<project>/.cursor/mcp.json`.
+- **Sessions:** `~/.cursor/chats/<…>/meta.json` and `prompt_history.json`; the conversation database `store.db` is never opened.
 
 ## Freebuff (`freebuff`)
 
-Sources: the open-source [Codebuff](https://github.com/CodebuffAI/codebuff) CLI (`cli/src/utils/config-dir.ts`,
+Sources: the open-source [Codebuff](https://github.com/CodebuffAI/freebuff) CLI (`cli/src/utils/config-dir.ts`,
 `chat-history.ts`, `chat-meta.ts`, `cli/src/project-files.ts`, `cli/src/utils/agent-dir-trust.ts`,
 `common/src/constants/knowledge.ts`, `sdk/src/agents/load-mcp-config.ts`, `sdk/src/skills/load-skills.ts`). Checked
 2026-10-05 against `freebuff` 0.2.16.
@@ -141,6 +161,8 @@ The config directory is `~/.config/manicode`, or `FREEBUFF_CONFIG_DIR` (an absol
 - **MCP:** global `$GROK_HOME/config.toml`, `~/.claude.json`, and
   `~/.cursor/mcp.json`; project `<project>/.grok/config.toml`,
   `<project>/.mcp.json`, `<project>/.cursor/mcp.json`, and matching Claude project entries.
+- **Sessions:** `$GROK_HOME/sessions/<percent-encoded cwd>/<session id>/` (default `~/.grok/`) with `summary.json`,
+  `chat_history.jsonl` and `updates.jsonl`.
 
 ## Junie CLI (`junie`)
 
@@ -167,25 +189,25 @@ guidelines and memory, MCP configuration — and the structure of the sessions o
 
 ## Kilo Code CLI
 
-Sources: the [Kilo docs](https://kilo.ai/docs/cli) (skills, MCP, CLI) and the open-source
+Sources: the [Kilo docs](https://kilo.ai/docs/code-with-ai/platforms/cli) (skills, MCP, CLI) and the open-source
 [`Kilo-Org/kilocode`](https://github.com/Kilo-Org/kilocode) CLI (an OpenCode fork; config directories,
 instruction files, session database, `--session`). Checked 2026-10-05.
 
 - **Sessions:** the SQLite database `$XDG_DATA_HOME/kilo/kilo.db` (default `~/.local/share/kilo/`, also on
   Windows) and channel databases `kilo-<channel>.db`; same `session`/`message`/`part` schema as OpenCode,
   read-only. There is no legacy JSON layout. Resume: `kilo --session <id>`.
-- **Skills:** `skills/` in `~/.config/kilo`, `~/.kilo`, `~/.kilocode` (legacy), `$KILO_CONFIG_DIR` and the VS Code
-  extension's global storage (`…/Code/User/globalStorage/kilocode.kilo-code`); project `.kilo/skills` and
-  `.kilocode/skills`. The Claude compatibility root `~/.claude/skills` and `.claude/skills` is read by default
+- **Skills:** `skills/` (and the singular `skill/`) in `~/.config/kilo`, `~/.kilo`, `~/.kilocode` (legacy), `$KILO_CONFIG_DIR`
+  and the VS Code extension's global storage (`…/Code/User/globalStorage/kilocode.kilo-code`); project `.kilo/skills`,
+  `.kilocode/skills` and the singular `.kilo/skill`, `.kilocode/skill`. The Claude compatibility root `~/.claude/skills` and `.claude/skills` is read by default
   (switched off by `KILO_DISABLE_CLAUDE_CODE[_SKILLS]`, not modelled); the shared `.agents/skills` is the shared
   provider's. The sync target writes the documented `~/.kilo/skills` and `<project>/.kilo/skills`.
 - **Instructions:** global `$KILO_CONFIG_DIR/AGENTS.md` or `~/.config/kilo/AGENTS.md`, falling back to
   `~/.claude/CLAUDE.md`; project nested `AGENTS.md`, and `CLAUDE.md` as a fallback when no `AGENTS.md` is in the
   same directory (a shadowed `CLAUDE.md` is listed with an info line). The deprecated `CONTEXT.md` is not read.
-- **MCP:** the `mcp` key of `kilo.json` / `kilo.jsonc` in `~/.config/kilo` (also `config.json`), `~/.kilo`,
+- **MCP:** the `mcp` key of `kilo.json(c)` and `opencode.json(c)` (Kilo loads both, source `ALL_CONFIG_FILES`) in `~/.config/kilo` (also `config.json`), `~/.kilo`,
   `~/.kilocode`, `$KILO_CONFIG_DIR`, the single file `$KILO_CONFIG`, and in the project root, `.kilo/` and `.kilocode/`.
-- **Config:** `kilo.json(c)`, `config.json`, `tui.json(c)` in `~/.config/kilo`; project `kilo.json(c)`,
-  `.kilo/` and `.kilocode/` `kilo.json(c)`, `.kilo/tui.json(c)`.
+- **Config:** `kilo.json(c)`, `opencode.json(c)`, `config.json`, `tui.json(c)` in `~/.config/kilo`; project `kilo.json(c)` and
+  `opencode.json(c)`, the same two in `.kilo/` and `.kilocode/`, and `.kilo/tui.json(c)`.
 
 ## Kimi Code (`kimi`)
 
@@ -215,6 +237,7 @@ The data root is `~/.kimi-code`, or `KIMI_CODE_HOME` (the generic `~/.agents` re
   `.kiro/steering/**/*.md`.
 - **MCP:** global `$KIRO_HOME/settings/mcp.json`; project
   `<project>/.kiro/settings/mcp.json`.
+- **Sessions:** `$KIRO_HOME/sessions/cli/` (default `~/.kiro/sessions/cli/`).
 
 ## MiMo Code (`mimo`)
 
@@ -277,8 +300,9 @@ whole agent directory for the default profile, and a named profile (`OMP_PROFILE
 - **Skills:** `skills/<name>/SKILL.md` and `managed-skills/` in the agent directory; per project `.omp/skills` and the foreign
   project roots `.claude/skills` and `.codex/skills`, which OMP loads by default. The shared `.agents/skills` is the shared
   provider's. Foreign user-level roots are opt-in in OMP; skillshare/plugin packages and custom directories are not modelled.
-- **Instructions:** global `AGENTS.md` and the sticky `RULES.md` of the agent directory; project `.omp/AGENTS.md`,
-  `.omp/RULES.md` and standalone `AGENTS.md` files (not those inside other dot-directories). The cross-tool context files
+- **Instructions:** global `AGENTS.md` and the sticky `RULES.md` of the agent directory, plus `~/.agent/AGENTS.md` and
+  `~/.agents/AGENTS.md`; project `.omp/AGENTS.md`, `.omp/RULES.md`, `.agent/AGENTS.md`, `.agents/AGENTS.md` and standalone
+  `AGENTS.md` files (not those inside other dot-directories). The cross-tool context files
   (`.claude/CLAUDE.md`, `.gemini/GEMINI.md`, …) and the "nearest non-empty `.omp`" rule are not modelled.
 - **MCP:** the `mcpServers` map of `mcp.json` / `.mcp.json` in the agent directory, in the project's `.omp/`, and the portable
   root `mcp.json` / `.mcp.json`. Servers OMP imports from other tools belong to those tools' providers.
@@ -286,18 +310,24 @@ whole agent directory for the default profile, and a named profile (`OMP_PROFILE
 
 ## OpenCode
 
-- **Skills:** global `~/.config/opencode/skills/`, `~/.claude/skills/`, and `skills/` in the directory
-  named by `$OPENCODE_CONFIG_DIR`; project nested `**/{.opencode,.claude}/skills/`.
+- **Skills:** global `~/.config/opencode/skills/`, `~/.opencode/skills/` (the home-level `.opencode` is a config
+  directory too), `~/.claude/skills/`, and `skills/` in the directory named by `$OPENCODE_CONFIG_DIR`; the singular
+  `skill/` folder is accepted next to `skills/` in each config directory. Project nested `**/{.opencode,.claude}/skills/`
+  and `<project>/.opencode/skill/`. (OpenCode finds the project directories by walking *up* from the working directory
+  to the worktree root; AgentHub's nested scan is a superset of that.)
 - **Instructions:** global `~/.config/opencode/AGENTS.md`; OpenCode V1 can fall back to
   `~/.claude/CLAUDE.md`. Project nested `AGENTS.md`; V1 can use `CLAUDE.md` when a
   nonempty `AGENTS.md` is absent in that directory. AgentHub checks `opencode --version`
   to disable the Claude fallback for V2; when the CLI version cannot be determined, it
   retains the V1 fallback.
 - **MCP:** global `$XDG_CONFIG_HOME/opencode/opencode.json` or `opencode.jsonc` (default
-  `~/.config/opencode/`) and the same files in the directory named by `$OPENCODE_CONFIG_DIR`;
+  `~/.config/opencode/`) and the same files in `~/.opencode/` and in the directory named by `$OPENCODE_CONFIG_DIR`;
   project `<project>/opencode.json` or `opencode.jsonc` and `<project>/.opencode/opencode.json`
   or `opencode.jsonc` (OpenCode loads both). In each directory the JSON file takes priority
   when both exist. The single custom config file named by `$OPENCODE_CONFIG` is read as global.
+- **Sessions:** the SQLite database `opencode.db` (and channel databases `opencode-<channel>.db`) in `$XDG_DATA_HOME/opencode`
+  (default `~/.local/share/opencode/`, also on Windows), opened read-only; the older JSON layout (`storage/session` and
+  `project/`) is still read.
 
 ## Qwen Code
 

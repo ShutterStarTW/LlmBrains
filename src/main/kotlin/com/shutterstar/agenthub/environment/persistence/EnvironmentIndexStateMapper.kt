@@ -97,6 +97,8 @@ object EnvironmentIndexStateMapper {
                 fingerprint = source.fingerprint,
                 displayTitle = source.displayTitle,
                 projectName = source.projectName,
+                system = source.system,
+                realPath = source.realPath,
             )
         }.toMutableList(),
     )
@@ -176,6 +178,8 @@ object EnvironmentIndexStateMapper {
             fingerprint = source.fingerprint,
             displayTitle = source.displayTitle,
             projectName = source.projectName,
+            system = source.system,
+            realPath = source.realPath,
         )
     }
 
