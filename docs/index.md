@@ -1,6 +1,6 @@
-![GitHub Tag](https://img.shields.io/github/v/tag/ShutterStarTW/LlmBrains)
-![GitHub Release](https://img.shields.io/github/v/release/ShutterStarTW/LlmBrains)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/y/ShutterStarTW/LlmBrains)
+![GitHub Tag](https://img.shields.io/github/v/tag/ShutterStarTW/AgentHub)
+![GitHub Release](https://img.shields.io/github/v/release/ShutterStarTW/AgentHub)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/ShutterStarTW/AgentHub)
 ![JetBrains Plugin Version](https://img.shields.io/jetbrains/plugin/v/32310)
 ![JetBrains Plugin Downloads](https://img.shields.io/jetbrains/plugin/d/32310?logo=jetbrains)
 

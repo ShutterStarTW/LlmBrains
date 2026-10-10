@@ -1,0 +1,12 @@
+nav:
+  - index.md
+  - agents
+  - skills.md
+  - companion-tools.md
+  - wsl-mode.md
+  - environment-paths.md
+  - session-statistics.md
+  - downloads.md
+  - development.md
+  - blog
+  - ...

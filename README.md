@@ -2,7 +2,7 @@
 
 [![JetBrains Plugin Version](https://img.shields.io/jetbrains/plugin/v/32310)](https://plugins.jetbrains.com/plugin/32310-agenthub)
 [![JetBrains Plugin Downloads](https://img.shields.io/jetbrains/plugin/d/32310?logo=jetbrains)](https://plugins.jetbrains.com/plugin/32310-agenthub)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/y/ShutterStarTW/LlmBrains)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/ShutterStarTW/AgentHub)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A JetBrains IDE plugin that adds a toolbar button to launch popular **CLI coding agents**
@@ -275,7 +275,7 @@ In WSL mode:
 
 Switching between native and WSL mode (or changing the distro) re-runs detection automatically,
 because each environment has its own set of installed agents. See
-[WSL Mode](https://shutterstartw.github.io/LlmBrains/wsl-mode/) in the docs for details.
+[WSL Mode](https://shutterstartw.github.io/AgentHub/wsl-mode/) in the docs for details.
 
 ## Usage
 
