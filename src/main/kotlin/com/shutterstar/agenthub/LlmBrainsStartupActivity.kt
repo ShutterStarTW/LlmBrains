@@ -52,7 +52,6 @@ class LlmBrainsStartupActivity : ProjectActivity, DumbAware {
         }
 
         if (detectionFinished.get() && updateCheckDone.compareAndSet(false, true)) {
-            LegacyAgentMigrationPrompt.offerIfNeeded(project)
             AgentDetector.checkForUpdates(project)
         }
     }

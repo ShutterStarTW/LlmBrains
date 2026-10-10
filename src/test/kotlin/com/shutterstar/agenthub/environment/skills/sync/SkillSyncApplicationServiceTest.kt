@@ -221,29 +221,6 @@ class SkillSyncApplicationServiceTest {
     }
 
     @Test
-    fun `a runtime that disallows mutations gets a no-op plan and a failed result`() {
-        val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
-        val targetRoot = root.resolve("claude")
-        val facade = SkillSyncApplicationService(
-            targets = mapOf("claude" to Target(targetRoot)),
-            backupRoot = root.resolve("backups"),
-            ownershipStore = SkillOwnershipStateService(),
-            auditTrail = SkillSyncAuditStateService(),
-            settings = SkillSyncSettingsStateService(),
-            sharedSkillDirectory = SharedSkillProvider(root),
-            runtimeMutationAllowed = { false },
-        )
-
-        val prepared = facade.prepareShare(skill(canonical), "claude", SkillScope.GLOBAL, null)
-        val result = facade.execute(prepared)
-
-        assertTrue(prepared.planResult.plan.steps.isEmpty())
-        assertTrue(prepared.planResult.plan.warnings.single().message.contains("not available"))
-        assertEquals(SyncOperationStatus.FAILED, result.status)
-        assertFalse(Files.exists(targetRoot.resolve("review")))
-    }
-
-    @Test
     fun `prepareShareToSelected shares only the chosen subset - the primitive behind the multi-select Share with… button`() {
         val canonical = writeSkillMd(root.resolve("shared/review"), "# Review\n")
         val claudeRoot = root.resolve("claude")

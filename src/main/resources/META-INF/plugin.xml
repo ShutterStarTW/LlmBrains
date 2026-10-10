@@ -111,7 +111,7 @@
             <li><a href="https://vinhnx.github.io/">VT Code</a> &mdash; vinhnx</li>
         </ul>
 
-        <p><i>Command Code, ForgeCode, LeanCTL and Muse Code are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
+        <p><i>Command Code, LeanCTL and Muse Code are hidden on Windows (no native Windows build, or a launch command that collides with a built-in Windows command). CodeRabbit CLI (companion tool) is hidden on Windows for the same reason (Windows support not released yet).</i></p>
 
         <p><b>Companion tools</b> &mdash; optional CLI utilities that work alongside the agents (off by default):</p>
         <ul>
@@ -130,6 +130,16 @@
         </ul>
     ]]></description>
     <change-notes><![CDATA[
+        <p><b>1.3.3</b></p>
+        <ul>
+            <li>Skill sync restores the original when an atomic replace fails instead of deleting it.</li>
+            <li><b>Resume</b> and <b>Launch</b> use the session's own directory and warn when it is missing.</li>
+            <li>Detection, update and install results belong to the environment they were started in; switching between Windows and WSL cannot apply a stale result. The tool window index is refreshed per environment.</li>
+            <li>A hung WSL distro lookup times out, and large output from background installs no longer blocks them.</li>
+            <li>Update checks validate the npm/pip report and show <code>?</code> when the query fails. <b>Update all</b> clears the outdated flag only for agents that were updated, and update commands with pipes or fallbacks run as written.</li>
+            <li>Junie sessions beyond about 1,700 are no longer cut off. Session ids starting with <code>-</code> are refused.</li>
+            <li>Devin, ForgeCode and Junie CLI install through npm; ForgeCode is no longer hidden on Windows. The one-time Kimi migration prompt was removed.</li>
+        </ul>
         <p><b>1.3.2</b></p>
         <ul>
             <li><b>WSL mode covers the tool window.</b> Projects, sessions, skills, MCP servers, instruction files and configuration are read from the distribution's home directory. <b>Resume</b> and <b>Launch</b> start inside the distro, and skill sync works on the distro's skill folders.</li>

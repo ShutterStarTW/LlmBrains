@@ -3,7 +3,7 @@ package com.shutterstar.agenthub.environment.skills.sync.target
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import java.nio.file.InvalidPathException
+import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import com.shutterstar.agenthub.AgentRuntime
 
@@ -17,13 +17,7 @@ class VibeSkillSyncTarget(
         EnvHomeDirectorySupport.resolveGuarded("VIBE_HOME", userHome, ".vibe").resolve("skills")
 
     override fun projectSkillDirectory(project: DiscoveredProject): Path? {
-        val rawPath = project.path ?: project.gitRoot ?: return null
-        val root = try {
-            Path.of(rawPath)
-        } catch (_: InvalidPathException) {
-            return null
-        }
-        return root.resolve(".vibe").resolve("skills")
+        return ProjectPathResolver.resolveExistingRoot(project)?.resolve(".vibe")?.resolve("skills")
     }
 
     override fun supportsLinkedSkills(): Boolean = true

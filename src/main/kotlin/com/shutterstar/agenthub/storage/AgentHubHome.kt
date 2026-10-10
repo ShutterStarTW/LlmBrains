@@ -161,7 +161,7 @@ class AgentHubHome(
         private val disabledBackupRoot = Path.of(System.getProperty("java.io.tmpdir"), "agenthub-unavailable-${UUID.randomUUID()}")
 
         fun resolvePath(
-            userHome: Path = AgentRuntime.userHome(),
+            userHome: Path = AgentRuntime.hostHome(),
             environmentValue: String? = System.getenv("AGENTHUB_HOME"),
             propertyValue: String? = System.getProperty("agenthub.home"),
         ): Path? = runCatching {

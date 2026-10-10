@@ -97,14 +97,14 @@ folders, with backups and rollback.
 | [Copilot CLI](https://github.com/features/copilot/cli)                         | `copilot`    | GitHub      | `npm install -g @github/copilot`                                                |
 | [Crush](https://charm.land/)                                                   | `crush`      | Charm       | `npm install -g @charmland/crush`                                               |
 | [Cursor CLI](https://cursor.com/cli)                                           | `cursor-agent` | Cursor    | `curl https://cursor.com/install -fsS \| bash`                                  |
-| [Devin](https://devin.ai/cli)                                                  | `devin`      | Cognition   | `curl -fsSL https://cli.devin.ai/install.sh \| bash`                            |
+| [Devin](https://devin.ai/cli)                                                  | `devin`      | Cognition   | `npm install -g devin`                                                          |
 | [Droid](https://factory.com/product/ide)                                        | `droid`      | Factory AI  | `npm install -g droid`                                                          |
-| [ForgeCode](https://forgecode.dev)                                             | `forge`      | Antinomy    | `curl -fsSL https://forgecode.dev/cli \| sh`                                    |
+| [ForgeCode](https://forgecode.dev)                                             | `forge`      | Antinomy    | `npm install -g forgecode`                                    |
 | [Freebuff](https://freebuff.com/cli)                                           | `freebuff`   | Codebuff    | `npm install -g freebuff`                                                       |
 | [Goose CLI](https://goose-docs.ai)                                             | `goose`      | Block       | `curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh \| bash` |
 | [Grok Build](https://x.ai/build)                                                 | `grok`       | xAI         | `npm install -g @xai-official/grok`                                             |
 | [iFlow CLI](https://iflow.cn)                                                  | `iflow`      | iFlow       | `npm install -g @iflow-ai/iflow-cli`                                            |
-| [Junie CLI](https://junie.jetbrains.com)                                       | `junie`      | JetBrains   | `npm install -g @jetbrains/junie-cli`                                           |
+| [Junie CLI](https://junie.jetbrains.com)                                       | `junie`      | JetBrains   | `npm install -g @jetbrains/junie`                                               |
 | [Kilo Code](https://kilo.ai)                                                   | `kilo`       | Kilo        | `npm install -g @kilocode/cli`                                                  |
 | [Kimi Code](https://www.kimi.com/code)                                         | `kimi`       | Moonshot AI | `npm install -g @moonshot-ai/kimi-code`                                          |
 | [Kiro CLI](https://kiro.dev/cli/)                                              | `kiro-cli`   | Kiro        | `curl -fsSL https://cli.kiro.dev/install \| bash`                               |
@@ -124,7 +124,7 @@ folders, with backups and rollback.
 | [SWE-agent](https://swe-agent.com)                                             | `sweagent`   | SWE-agent   | `pip install sweagent`                                                          |
 | [VT Code](https://vinhnx.github.io/)                                           | `vtcode`     | vinhnx      | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com`           |
 
-> **Note:** Command Code, ForgeCode, LeanCTL, and Muse Code are hidden on Windows (they have no native Windows build, or their launch command collides with a built-in Windows command).
+> **Note:** Command Code, LeanCTL, and Muse Code are hidden on Windows (they have no native Windows build, or their launch command collides with a built-in Windows command).
 
 ## Companion Tools
 
@@ -175,7 +175,7 @@ In WSL mode:
 - Detection uses the distro's own `command -v` and ignores Windows binaries exposed through WSL
   interop, so an agent installed only on the Windows side is reported as not installed in the distro.
 - A few agents that are hidden on native Windows because they have no native Windows build
-  (ForgeCode, LeanCTL, Muse Code, Command Code) become available, since they run as Linux
+  (LeanCTL, Muse Code, Command Code) become available, since they run as Linux
   binaries inside the distro.
 - If `pip` or `npm` is missing in the distro, install and update commands print a hint
   (e.g. `sudo apt install python3-pip`) instead of failing silently.

@@ -30,12 +30,18 @@ internal object LocalSessionSupport {
 
     /**
      * Feeds the first lines of [file] to [onLine] while staying inside a line-count and a character
-     * budget. A line longer than [maxLineCharacters] is skipped (it still counts); [onLine] returns
+     * budget ([characterBudget], 512 KB by default). A line longer than [maxLineCharacters] is skipped (it still counts); [onLine] returns
      * true to stop early.
      */
-    inline fun scanHeaderLines(file: Path, maxLines: Int, maxLineCharacters: Int, onLine: (String) -> Boolean) {
+    inline fun scanHeaderLines(
+        file: Path,
+        maxLines: Int,
+        maxLineCharacters: Int,
+        characterBudget: Int = HEADER_CHARACTER_BUDGET,
+        onLine: (String) -> Boolean,
+    ) {
         Files.newBufferedReader(file).use { reader ->
-            var remainingCharacters = HEADER_CHARACTER_BUDGET
+            var remainingCharacters = characterBudget
             var linesRead = 0
             while (linesRead < maxLines && remainingCharacters > 0) {
                 val line = readBoundedLine(reader, remainingCharacters, maxLineCharacters) ?: break

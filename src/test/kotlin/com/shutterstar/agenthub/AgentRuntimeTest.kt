@@ -47,6 +47,13 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun `the shared AgentHub store stays on the Windows home in WSL mode`() {
+        val resolved = com.shutterstar.agenthub.storage.AgentHubHome.resolvePath(environmentValue = null, propertyValue = null)
+
+        assertEquals(AgentRuntime.hostHome().resolve(".agenthub").toAbsolutePath().normalize(), resolved)
+    }
+
+    @Test
     fun `a failed lookup never falls back to the Windows home and is retried after a pause`() {
         var now = 0L
         AgentRuntime.nanoTime = { now }
@@ -74,6 +81,17 @@ class AgentRuntimeTest {
         assertEquals("C:\\Windows", AgentRuntime.toHostPath("C:\\Windows"))
         assertNull(AgentRuntime.toHostPath("relative/path"))
         assertNull(AgentRuntime.toHostPath("  "))
+    }
+
+
+    @Test
+    fun `should retain UNC aliases of the selected distro and reject other shares`() {
+        assertEquals(share + "\\home\\me\\proj", AgentRuntime.toHostPath(share + "\\home\\me\\proj"))
+        assertEquals(share + "\\home\\me\\proj", AgentRuntime.toHostPath("//wsl.localhost/Ubuntu/home/me/proj"))
+        assertEquals(share + "\\home\\me\\proj", AgentRuntime.toHostPath("\\\\wsl$\\Ubuntu\\home\\me\\proj"))
+        assertNull(AgentRuntime.toHostPath("\\\\wsl.localhost\\Debian\\home\\me"))
+        assertNull(AgentRuntime.toHostPath("//wsl.localhostile/Ubuntu/home/me"))
+        assertEquals("K:\\ide" to "/home/me/proj", AgentRuntime.terminalDirectories("//wsl.localhost/Ubuntu/home/me/proj", "K:\\ide"))
     }
 
     @Test

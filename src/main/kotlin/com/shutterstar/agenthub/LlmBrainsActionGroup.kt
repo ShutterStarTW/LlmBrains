@@ -122,11 +122,16 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
                 val tempFile = Files.createTempFile("llmbrains-update-", ".txt")
                 val command = buildUpdateScript(outdatedAgents, tempFile)
                 TerminalCommandRunner.runRespectingSettings(proj, "Update Agents", "🔄 Update Agents", command)
-                DetectionResultsWatcher.watchForUpdateResults(tempFile) { ok, uptodate, failed, updatedNames: List<String> ->
-                    AgentSettingsState.getInstance().saveOutdatedAgents(emptyList())
+                DetectionResultsWatcher.watchForUpdateResults(tempFile, onTimeout = {
+                    DetectionResultsWatcher.showNotification(proj, "Update", "Update result timed out. Check for updates to refresh the agent status.", NotificationType.WARNING)
+                }) { report ->
+                    val currentSettings = AgentSettingsState.getInstance()
+                    currentSettings.saveOutdatedAgents(report.remainingOutdated(
+                        currentSettings.getOutdatedAgentIds(), outdatedAgents.mapTo(mutableSetOf()) { it.id },
+                    ))
                     AgentSettingsConfigurable.scheduleRefresh()
-                    val type = if (failed > 0) NotificationType.WARNING else NotificationType.INFORMATION
-                    val msg = DetectionResultsWatcher.updateSummaryMessage(ok, uptodate, failed, updatedNames)
+                    val type = if (report.failed > 0) NotificationType.WARNING else NotificationType.INFORMATION
+                    val msg = DetectionResultsWatcher.updateSummaryMessage(report.updated, report.upToDate, report.failed, report.updatedNames)
                     DetectionResultsWatcher.showNotification(proj, "Update", msg, type)
                 }
             }
@@ -168,10 +173,7 @@ class LlmBrainsActionGroup : ActionGroup("AgentHub", "Open any CLI coding agent 
         }
     }
 
-    // Pipe-delimited agent record. [agent.platformInstallHint] may itself contain `|` (e.g. `irm ... | iex`),
-    // so it is always placed LAST — the scripts' parsing assigns the line remainder to the final field.
-    private fun agentPayload(agent: CodingAgent): String =
-        "${agent.id}|${agent.name}|${agent.command}|${agent.versionArgs}|${agent.updateHint}|${agent.platformInstallHint}"
+    private fun agentPayload(agent: CodingAgent): String = agentScriptPayload(agent)
 
     // The payload routinely contains raw `"`, `$`, and `|` that get mangled if passed inline as a
     // command-line argument, so the scripts read it from this temp file instead (and delete it after).

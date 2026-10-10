@@ -843,31 +843,32 @@ class AgentHubToolWindowPanel(
      */
     private fun resumeSession(session: AgentSession) {
         if (NativeResumeCommands.command(session.agentId, session.nativeResumeId) == null) return
+        val settings = AgentSettingsState.getInstance()
+        val snapshot = settings.executionSnapshot()
         ApplicationManager.getApplication().executeOnPooledThread {
             val transcriptMissing = session.sourcePath
                 ?.let { path -> runCatching { !Files.exists(Path.of(path)) }.getOrDefault(true) }
                 ?: false
             // Blocking `--help` probe of the installed CLI — decides which optional flags to pass.
-            val command = NativeResumeCommands.command(session.agentId, session.nativeResumeId) { AgentDetector.shellOutput(it) }
+            val command = NativeResumeCommands.command(session.agentId, session.nativeResumeId) { AgentDetector.shellOutput(it, executionSettings = snapshot.settings) }
                 ?: return@executeOnPooledThread
-            // A session of a distro project (WSL mode) has a Linux path: it is checked over the distro share and
-            // handed to the terminal as is (wsl.exe --cd); a Windows project is checked as a local directory.
-            val workingDirectory: String? = session.projectPath
-                ?.let { path ->
-                    if (WslSupport.isActive() && path.startsWith("/")) {
-                        path.takeIf { runCatching { AgentRuntime.toHostPath(it)?.let { host -> Files.isDirectory(Path.of(host)) } }.getOrNull() == true }
-                    } else {
-                        runCatching { Path.of(path).takeIf(Files::isDirectory)?.toString() }.getOrNull()
-                    }
-                }
-                ?: project.basePath
+            val workingDirectory = com.shutterstar.agenthub.projects.launch.SessionLaunchDirectory.resolve(session.projectPath)
             ApplicationManager.getApplication().invokeLater({
                 if (disposed || project.isDisposed) return@invokeLater
+                if (!settings.isExecutionCurrent(snapshot)) return@invokeLater
                 if (transcriptMissing) {
                     DetectionResultsWatcher.showNotification(
                         project,
                         "Resume session",
                         "The session file is no longer available. Refresh the project index.",
+                        NotificationType.WARNING,
+                    )
+                    return@invokeLater
+                }
+                if (workingDirectory == null) {
+                    DetectionResultsWatcher.showNotification(
+                        project, "Resume session",
+                        "The session project directory is unavailable. Refresh the project index; the agent was not started.",
                         NotificationType.WARNING,
                     )
                     return@invokeLater

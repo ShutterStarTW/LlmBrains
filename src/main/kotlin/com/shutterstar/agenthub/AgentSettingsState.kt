@@ -28,7 +28,6 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         var activeCompanionIds: MutableList<String> = mutableListOf(),
         var useWsl: Boolean = false,
         var wslDistro: String = "",
-        var dismissedMigrationIds: MutableList<String> = mutableListOf(),
         /** The environment ([runtimeKey]) the agent/tool selection and detection fields above currently belong to. */
         var profileKey: String = "",
         /** The same fields of the other environments (Windows native, each WSL distribution), set aside while unused. */
@@ -65,7 +64,9 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
     override fun getState(): State = state
 
+    @Synchronized
     override fun loadState(state: State) {
+        executionGeneration++
         this.state = state
         // A settings file from before the per-environment profiles belongs to whatever environment is selected now.
         if (state.profileKey.isEmpty()) state.profileKey = runtimeKey()
@@ -76,12 +77,40 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
     /** The environment the current agent/tool selection and detection results belong to. */
     fun runtimeKey(): String = runtimeKey(state.useWsl, state.wslDistro)
 
+
+    internal data class ExecutionSnapshot(val settings: WslSupport.Settings, val generation: Long)
+
+    private var executionGeneration = 0L
+
+    @Synchronized
+    internal fun executionSnapshot(): ExecutionSnapshot =
+        ExecutionSnapshot(WslSupport.Settings(state.useWsl, state.wslDistro), executionGeneration)
+
+    @Synchronized
+    internal fun isExecutionCurrent(snapshot: ExecutionSnapshot): Boolean =
+        snapshot == executionSnapshot()
+
+    /** Commit a background result under the same lock as a runtime switch. */
+    @Synchronized
+    internal fun applyIfCurrent(snapshot: ExecutionSnapshot, action: () -> Unit): Boolean {
+        if (!isExecutionCurrent(snapshot)) return false
+        action()
+        return true
+    }
+
     /** Persist WSL mode and mirror it into [WslSupport] (the SDK-free layer cannot read this service). */
+    @Synchronized
     fun setWslMode(useWsl: Boolean, distro: String) {
+        val newKey = runtimeKey(useWsl, distro)
+        if (state.useWsl == useWsl && state.wslDistro == distro && state.profileKey == newKey) return
+        val changed = state.profileKey != newKey
+        executionGeneration++
         state.useWsl = useWsl
         state.wslDistro = distro
-        switchProfile(runtimeKey(useWsl, distro))
+        switchProfile(newKey)
         syncWslSettings()
+        // Listeners must see the new profile, execution settings and invalidated runtime caches together.
+        if (changed) detectionChanged()
     }
 
     /**
@@ -121,8 +150,6 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
         state.profileKey = newKey
         defaultsAfterNextDetection = stored == null
         detectionFailed = false
-        // The installed set differs: whatever was derived from the old one (indexes, visibility) must be redone.
-        detectionChanged()
     }
 
     private fun syncWslSettings() {
@@ -280,12 +307,6 @@ class AgentSettingsState : PersistentStateComponent<AgentSettingsState.State> {
 
     /** False while there is no completed detection for the current environment. */
     fun isInstallationKnown(): Boolean = getDetectionResults() != null
-
-    fun isMigrationDismissed(agentId: String): Boolean = agentId in state.dismissedMigrationIds
-
-    fun dismissMigration(agentId: String) {
-        if (agentId !in state.dismissedMigrationIds) state.dismissedMigrationIds.add(agentId)
-    }
 
     fun getLastDetectedPluginVersion(): String = state.lastDetectedPluginVersion
 

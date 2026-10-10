@@ -3,7 +3,7 @@ package com.shutterstar.agenthub.environment.skills.sync.target
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import java.nio.file.InvalidPathException
+import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import com.shutterstar.agenthub.AgentRuntime
 
@@ -22,13 +22,7 @@ class OpenCodeSkillSyncTarget(
         EnvHomeDirectorySupport.resolveXdgGuarded("XDG_CONFIG_HOME", userHome, ".config", "opencode").resolve("skills")
 
     override fun projectSkillDirectory(project: DiscoveredProject): Path? {
-        val rawPath = project.path ?: project.gitRoot ?: return null
-        val projectRoot = try {
-            Path.of(rawPath)
-        } catch (_: InvalidPathException) {
-            return null
-        }
-        return projectRoot.resolve(".opencode").resolve("skills")
+        return ProjectPathResolver.resolveExistingRoot(project)?.resolve(".opencode")?.resolve("skills")
     }
 
     // Mirrors OpenCodeSkillProvider's ".claude/skills" compatibility root at both scopes (its
@@ -44,12 +38,7 @@ class OpenCodeSkillSyncTarget(
     )
 
     override fun alternateProjectSkillDirectories(project: DiscoveredProject): List<Path> {
-        val rawPath = project.path ?: project.gitRoot ?: return emptyList()
-        val projectRoot = try {
-            Path.of(rawPath)
-        } catch (_: InvalidPathException) {
-            return emptyList()
-        }
+        val projectRoot = ProjectPathResolver.resolveExistingRoot(project) ?: return emptyList()
         return listOf(projectRoot.resolve(".claude").resolve("skills"), projectRoot.resolve(".opencode").resolve("skill"))
     }
 

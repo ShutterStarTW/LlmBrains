@@ -25,6 +25,11 @@ Usage:
 # (rather than inline on the command line) because the payload contains raw `"`, `$`, and `|`
 # characters (e.g. forge/goose/plandex install hints) that PowerShell mangles when passed as
 # arguments to a native executable. The caller deletes nothing; this function consumes the file.
+function ConvertFrom-AgentField {
+    param([string]$Value)
+    return $Value.Replace('%7C', '|').Replace('%7E', '~').Replace('%0D', "`r").Replace('%0A', "`n").Replace('%25', '%')
+}
+
 function Read-AgentDefinitions {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -80,13 +85,14 @@ function Invoke-Update {
 
     if (Get-Command $Binary -ErrorAction SilentlyContinue) {
         Write-Host ("  [~] {0}" -f $Name) -ForegroundColor White
+        # Registry update hints are shell text (fallback chains/pipes), matching bash run_update_command.
         $updateOutput = (cmd /c "$UpdateCommand 2>&1") -join "`n"
         $pipNoise = 'Collecting |Downloading |Installing collected|Using cached |Building wheels|Obtaining |Attempting|Running command|Getting requirements|Preparing metadata|Requirement already satisfied|Uninstalling |Successfully uninstalled|Found existing installation|which is incompatible|\[notice\]|WARNING|NOTE|DEPRECATION|ERROR: pip'
         $displayLines = $updateOutput -split "`n" | Where-Object { $_ -notmatch $pipNoise -and $_.Trim() -ne "" }
         if ($displayLines) {
             $displayLines | ForEach-Object { Write-Host ("     {0}" -f $_.TrimEnd()) }
         }
-        if ($LASTEXITCODE -eq 0 -or $updateOutput -match "Successfully installed") {
+        if ($LASTEXITCODE -eq 0) {
             if ($updateOutput -match "up to date|Requirement already satisfied|already up-to-date|already installed") {
                 Write-Host ("  [~] {0,-20} " -f $Name) -NoNewline
                 Write-Host "up to date" -ForegroundColor DarkGray
@@ -215,6 +221,7 @@ switch ($Subcommand) {
 
         $agentsData -split "~" | ForEach-Object {
             $parts = $_ -split '\|', 6
+            $parts = @($parts | ForEach-Object { ConvertFrom-AgentField $_ })
             if ($parts.Count -ge 3 -and $parts[0]) {
                 $id = $parts[0]
                 $name = $parts[1]
@@ -312,10 +319,14 @@ switch ($Subcommand) {
         $uptodateCount = 0
         $failCount = 0
         $updatedNames = @()
+        $updatedIds = @()
+        $uptodateIds = @()
+        $failedIds = @()
 
         $activeIdsList = ",$activeIds,"
         $agentsData -split "~" | ForEach-Object {
             $parts = $_ -split '\|', 6
+            $parts = @($parts | ForEach-Object { ConvertFrom-AgentField $_ })
             if ($parts.Count -ge 5 -and $parts[0]) {
                 $id = $parts[0]
                 if ($activeIdsList -like "*,$id,*") {
@@ -324,9 +335,9 @@ switch ($Subcommand) {
                     $updateHint = $parts[4]
                     $installHint = if ($parts.Count -gt 5) { $parts[5] } else { "" }
                     $result = Invoke-Update -Name $name -Binary $command -UpdateCommand $updateHint -InstallHint $installHint
-                    if ($result -eq 2) { $uptodateCount++ }
-                    elseif ($result -eq 0) { $okCount++; $updatedNames += $name }
-                    else { $failCount++ }
+                    if ($result -eq 2) { $uptodateCount++; $uptodateIds += $id }
+                    elseif ($result -eq 0) { $okCount++; $updatedNames += $name; $updatedIds += $id }
+                    else { $failCount++; $failedIds += $id }
                 }
             }
         }
@@ -341,6 +352,9 @@ switch ($Subcommand) {
             "uptodate=$uptodateCount" | Out-File -FilePath $outputFile -Append -Encoding ascii
             "failed=$failCount" | Out-File -FilePath $outputFile -Append -Encoding ascii
             "updated_names=$($updatedNames -join '~')" | Out-File -FilePath $outputFile -Append -Encoding ascii
+            "updated_ids=$($updatedIds -join ',')" | Out-File -FilePath $outputFile -Append -Encoding ascii
+            "uptodate_ids=$($uptodateIds -join ',')" | Out-File -FilePath $outputFile -Append -Encoding ascii
+            "failed_ids=$($failedIds -join ',')" | Out-File -FilePath $outputFile -Append -Encoding ascii
             "done=1" | Out-File -FilePath $outputFile -Append -Encoding ascii
         }
     }
@@ -365,6 +379,7 @@ switch ($Subcommand) {
 
         $agentsData -split "~" | ForEach-Object {
             $parts = $_ -split '\|', 5
+            $parts = @($parts | ForEach-Object { ConvertFrom-AgentField $_ })
             if ($parts.Count -ge 3 -and $parts[0]) {
                 $id = $parts[0]
                 $name = $parts[1]

@@ -38,6 +38,25 @@ class TrackedAgentCommandTest {
         assertEquals(7, future.get(5, TimeUnit.SECONDS))
     }
 
+
+    @Test
+    fun `should complete a detached process that writes more than a pipe buffer`() {
+        val argv = if (OsDetector.isWindows()) {
+            listOf("powershell", "-NoProfile", "-NonInteractive", "-Command",
+                "[Console]::Out.Write(('x' * 2097152)); [Console]::Error.Write(('y' * 2097152))")
+        } else {
+            listOf("bash", "-c", "head -c 2097152 /dev/zero; head -c 2097152 /dev/zero >&2")
+        }
+        val process = startDetachedBackgroundProcess(argv)
+        try {
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS), "a discarded output stream cannot fill a pipe")
+            assertEquals(0, process.exitValue())
+            assertEquals(-1, process.inputStream.read())
+        } finally {
+            if (process.isAlive) process.destroyForcibly()
+        }
+    }
+
     @Test fun `background launch failure and interruption release the operation`() {
         assertEquals(-1, runBackgroundProcess(listOf("fake")) { throw IOException("missing") })
         try {

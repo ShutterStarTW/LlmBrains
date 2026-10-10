@@ -29,7 +29,7 @@ class LegacyStateMigration(
     private val home: AgentHubHome,
     private val configRoot: Path,
     private val systemRoot: Path,
-    private val userHome: Path = AgentRuntime.userHome(),
+    private val userHome: Path = AgentRuntime.hostHome(),
 ) {
     fun migrate(): Boolean {
         if (!home.prepare()) return false

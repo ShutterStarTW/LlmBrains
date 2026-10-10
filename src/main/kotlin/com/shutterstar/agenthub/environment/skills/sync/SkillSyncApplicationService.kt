@@ -81,7 +81,6 @@ internal class SkillSyncApplicationService(
     private val settings: SkillSyncSettingsStateService = SkillSyncSettingsStateService.getInstance(),
     sharedSkillDirectory: SharedSkillProvider? = null,
     private val operationId: () -> String = { UUID.randomUUID().toString() },
-    private val runtimeMutationAllowed: () -> Boolean = { true },
     private val mutationHome: AgentHubHome? = AgentHubStorage.home(),
     /** Null only when the settings service is unavailable; an unknown detection is an empty set, not "all". */
     private val detectedInstalledAgentIds: () -> Set<String>? = {
@@ -147,26 +146,23 @@ internal class SkillSyncApplicationService(
         project: DiscoveredProject?,
         backupBeforeReplacement: Boolean,
     ): SkillSyncPlanResult {
-        if (runtimeMutationAllowed()) {
-            // The UI only offers installed agents, but a stale dialog or a direct call must not
-            // start an operation on an agent whose CLI was uninstalled in the meantime.
-            val hidden = (explicitTargets(request) + installedAgentIds).filterNot(isAgentInstalled)
-            if (hidden.isNotEmpty()) {
-                return noOpPlan(request, skill, operationId, scope, notInstalledMessage(hidden))
-            }
-            return engine.planner.plan(
-                request,
-                skill,
-                operationId,
-                targetsByAgentId,
-                installedAgentIds,
-                scope,
-                project,
-                backupBeforeReplacement,
-                manageExistingTargets = settings.current().manageExistingTargets,
-            )
+        // The UI only offers installed agents, but a stale dialog or a direct call must not
+        // start an operation on an agent whose CLI was uninstalled in the meantime.
+        val hidden = (explicitTargets(request) + installedAgentIds).filterNot(isAgentInstalled)
+        if (hidden.isNotEmpty()) {
+            return noOpPlan(request, skill, operationId, scope, notInstalledMessage(hidden))
         }
-        return noOpPlan(request, skill, operationId, scope, WSL_MUTATION_DISABLED_MESSAGE)
+        return engine.planner.plan(
+            request,
+            skill,
+            operationId,
+            targetsByAgentId,
+            installedAgentIds,
+            scope,
+            project,
+            backupBeforeReplacement,
+            manageExistingTargets = settings.current().manageExistingTargets,
+        )
     }
 
     private fun explicitTargets(request: SkillSyncRequest): Set<String> = when (request) {
@@ -311,12 +307,14 @@ internal class SkillSyncApplicationService(
         targetAgentId: String,
         scope: SkillScope,
         project: DiscoveredProject?,
+        alwaysBackup: Boolean = false,
     ): PreparedSkillSync = prepare(
         SkillSyncRequest.ShareSkill(skill.identity.id, targetAgentId, settings.current().preferredSyncMode),
         skill,
         setOf(targetAgentId),
         scope,
         project,
+        alwaysBackup = alwaysBackup,
     )
 
     /** Every installed target at once - the "share everywhere" special case of [prepareShareToSelected]. */
@@ -484,7 +482,7 @@ internal class SkillSyncApplicationService(
         val skipped = mutableMapOf<String, String>()
         val failed = mutableMapOf<String, String>()
         candidate.convertAgentIds.forEach { agentId ->
-            val prepared = runCatching { prepareShare(candidate.skill, agentId, scope, project) }
+            val prepared = runCatching { prepareShare(candidate.skill, agentId, scope, project, alwaysBackup = true) }
                 .getOrElse { error -> failed[agentId] = error.message ?: error.javaClass.simpleName; return@forEach }
             val result = runCatching { execute(prepared) }
                 .getOrElse { error -> failed[agentId] = error.message ?: error.javaClass.simpleName; return@forEach }
@@ -572,21 +570,12 @@ internal class SkillSyncApplicationService(
     }
 
     fun previewUndoOperation(operationId: String): UndoPreview? =
-        if (runtimeMutationAllowed()) engine.runner.previewUndoOperation(operationId, backupRoot) else null
+        engine.runner.previewUndoOperation(operationId, backupRoot)
 
     /** See [SkillSyncOperationRunner.undoOperation] — reverses a past operation purely from disk. */
     @Synchronized
     fun undoOperation(operationId: String): UndoResult? =
-        if (runtimeMutationAllowed()) {
-            mutate { engine.runner.undoOperation(operationId, backupRoot) }
-        } else {
-            UndoResult(
-                operationId,
-                emptyList(),
-                emptyList(),
-                listOf(SyncError(null, WSL_MUTATION_DISABLED_MESSAGE)),
-            )
-        }
+        mutate { engine.runner.undoOperation(operationId, backupRoot) }
 
     /**
      * Executes what [com.shutterstar.agenthub.environment.skills.sync.migration.BulkMigrationDetector]
@@ -610,19 +599,16 @@ internal class SkillSyncApplicationService(
     fun backupDirectory(): Path = backupRoot
 
     fun restorableBackups(skill: AgentSkill, scope: SkillScope, project: DiscoveredProject?): List<StoredBackupRecord> =
-        if (runtimeMutationAllowed()) engine.runner.restorableBackups(skill, scope, project, backupRoot) else emptyList()
+        engine.runner.restorableBackups(skill, scope, project, backupRoot)
 
     fun skillIdsWithBackups(skills: List<AgentSkill>, scope: SkillScope, project: DiscoveredProject?): Set<String> =
-        if (runtimeMutationAllowed()) engine.runner.skillIdsWithBackups(skills, scope, project, backupRoot) else emptySet()
+        engine.runner.skillIdsWithBackups(skills, scope, project, backupRoot)
 
     fun undoAvailability(operationIds: Set<String>): UndoAvailability =
-        if (runtimeMutationAllowed()) engine.runner.undoAvailability(operationIds, backupRoot) else UndoAvailability(emptySet(), emptySet())
+        engine.runner.undoAvailability(operationIds, backupRoot)
 
     @Synchronized
     fun executeRestoreBackup(record: StoredBackupRecord): SkillSyncResult {
-        if (!runtimeMutationAllowed()) {
-            return blockedResult(record.backup.operationId, record.instanceKey.skillId, record.backup.originalPath)
-        }
         val result = mutate {
             val restored = engine.runner.restoreBackup(record, backupRoot, operationId())
             runCatching { BackupSweeper.sweep(backupRoot) }
@@ -633,13 +619,6 @@ internal class SkillSyncApplicationService(
 
     @Synchronized
     fun execute(prepared: PreparedSkillSync): SkillSyncResult {
-        if (!runtimeMutationAllowed()) {
-            return blockedResult(
-                prepared.planResult.plan.operationId,
-                prepared.planResult.plan.skillId,
-                prepared.planResult.plan.canonicalPath,
-            )
-        }
         val result = mutate {
             val executed = engine.runner.execute(
                 prepared.planResult,
@@ -655,17 +634,6 @@ internal class SkillSyncApplicationService(
         if (prepared.alsoShareWith.isEmpty() || result.status != SyncOperationStatus.SUCCESS) return result
         return result.mergedWithAlsoShareWith(prepared)
     }
-
-    private fun blockedResult(operationId: String, skillId: String, path: Path): SkillSyncResult =
-        SkillSyncResult(
-            operationId = operationId,
-            status = SyncOperationStatus.FAILED,
-            appliedSteps = emptyList(),
-            errors = listOf(SyncError(null, WSL_MUTATION_DISABLED_MESSAGE)),
-            rollbackAvailable = false,
-            skillId = skillId,
-            canonicalPath = path,
-        )
 
     /**
      * Orderly `PromoteSkill.alsoShareWith` workflow: a share plan for those agents cannot be built
@@ -693,9 +661,6 @@ internal class SkillSyncApplicationService(
     }
 
     companion object {
-        private const val WSL_MUTATION_DISABLED_MESSAGE =
-            "Skill synchronization is not available in this environment."
-
         fun getInstance(): SkillSyncApplicationService = service()
 
         private fun defaultTargets(userHome: Path = AgentRuntime.userHome()): Map<String, SkillSyncTarget> =

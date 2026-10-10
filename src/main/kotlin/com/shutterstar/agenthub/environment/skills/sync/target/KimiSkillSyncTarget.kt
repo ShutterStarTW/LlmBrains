@@ -3,7 +3,7 @@ package com.shutterstar.agenthub.environment.skills.sync.target
 import com.shutterstar.agenthub.environment.discovery.EnvHomeDirectorySupport
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import java.nio.file.InvalidPathException
+import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import com.shutterstar.agenthub.AgentRuntime
 
@@ -17,13 +17,7 @@ class KimiSkillSyncTarget(
         EnvHomeDirectorySupport.resolveGuarded("KIMI_CODE_HOME", userHome, ".kimi-code").resolve("skills")
 
     override fun projectSkillDirectory(project: DiscoveredProject): Path? {
-        val rawPath = project.path ?: project.gitRoot ?: return null
-        val root = try {
-            Path.of(rawPath)
-        } catch (_: InvalidPathException) {
-            return null
-        }
-        return root.resolve(".kimi-code").resolve("skills")
+        return ProjectPathResolver.resolveExistingRoot(project)?.resolve(".kimi-code")?.resolve("skills")
     }
 
     override fun supportsLinkedSkills(): Boolean = true

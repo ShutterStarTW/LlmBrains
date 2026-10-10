@@ -3,7 +3,7 @@ package com.shutterstar.agenthub.environment.skills.sync.target
 import com.shutterstar.agenthub.environment.discovery.OmpHomeSupport
 import com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncTarget
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
-import java.nio.file.InvalidPathException
+import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.nio.file.Path
 import com.shutterstar.agenthub.AgentRuntime
 
@@ -28,12 +28,5 @@ class OmpSkillSyncTarget(
 
     override fun supportsLinkedSkills(): Boolean = true
 
-    private fun projectRoot(project: DiscoveredProject): Path? {
-        val rawPath = project.path ?: project.gitRoot ?: return null
-        return try {
-            Path.of(rawPath)
-        } catch (_: InvalidPathException) {
-            null
-        }
-    }
+    private fun projectRoot(project: DiscoveredProject): Path? = ProjectPathResolver.resolveExistingRoot(project)
 }

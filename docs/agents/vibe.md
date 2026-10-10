@@ -7,7 +7,7 @@
 pip install mistral-vibe
 
 # Update to latest version
-pip install --upgrade --upgrade-strategy eager mistral-vibe
+pip install --upgrade mistral-vibe
 
 # Uninstall
 pip uninstall -y mistral-vibe

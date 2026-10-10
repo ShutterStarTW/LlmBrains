@@ -2,28 +2,18 @@
 
 ## Installation
 
-### macOS / Linux
-
 ```shell
 # Install
-curl -fsSL https://cli.devin.ai/install.sh | bash
+npm install -g devin
 
 # Update
-devin update
+npm update -g devin
 
-# Uninstall (add --clean to also remove config/history)
-devin uninstall --force
+# Uninstall
+npm uninstall -g devin
 ```
 
-### Windows
-
-```powershell
-# Install
-irm https://static.devin.ai/cli/setup.ps1 | iex
-
-# or with winget
-winget install --id CognitionAI.DevinCLI
-```
+Other options: the [install script, Homebrew and a Windows installer](https://docs.devin.ai/cli).
 
 > via [devin.ai/cli](https://devin.ai/cli) &middot; [docs.devin.ai/cli/reference/commands](https://docs.devin.ai/cli/reference/commands)
 

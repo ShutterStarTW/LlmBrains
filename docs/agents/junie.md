@@ -2,34 +2,18 @@
 
 ## Installation
 
-### macOS / Linux
-
 ```shell
-# Install (official installer, adds the `junie` shim to ~/.local/bin)
-curl -fsSL https://junie.jetbrains.com/install.sh | bash
-
-# Update (stages the latest build, applied on the next launch)
-junie update
-
-# Uninstall
-rm -f ~/.local/bin/junie && rm -rf ~/.local/share/junie
-```
-
-### Windows
-
-Use the official PowerShell installer, which adds the `junie` shim to `~/.local/bin` and your user PATH:
-
-```powershell
 # Install
-irm https://junie.jetbrains.com/install.ps1 | iex
+npm install -g @jetbrains/junie
+
+# Update
+npm update -g @jetbrains/junie
 
 # Uninstall
-Remove-Item -Force "$env:USERPROFILE\.local\bin\junie.bat" -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force "$env:USERPROFILE\.local\share\junie" -ErrorAction SilentlyContinue
+npm uninstall -g @jetbrains/junie
 ```
 
-> Junie updates itself automatically on launch; `junie update` stages the latest build manually.
-> After installing, restart the IDE so the updated PATH is picked up.
+Other options: the installer script (`curl -fsSL https://junie.jetbrains.com/install.sh | bash`, `junie update` to update) and Homebrew.
 
 > via [junie.jetbrains.com](https://junie.jetbrains.com)
 

@@ -88,6 +88,8 @@ class ProjectResolver(
             val canonical = try {
                 when {
                     WINDOWS_DRIVE.containsMatchIn(value) && File.separatorChar != '\\' -> normalizePortablePath(value)
+                    value.startsWith("//") && File.separatorChar == '\\' ->
+                        Path.of(value).toAbsolutePath().normalize().toString().replace('\\', '/')
                     value.startsWith('/') && File.separatorChar == '\\' -> normalizePortablePath(value)
                     else -> {
                         val path = Path.of(value)

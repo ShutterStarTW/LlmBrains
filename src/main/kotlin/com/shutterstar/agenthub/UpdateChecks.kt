@@ -1,5 +1,9 @@
 package com.shutterstar.agenthub
 
+import com.shutterstar.agenthub.environment.mcp.discovery.JsonArray
+import com.shutterstar.agenthub.environment.mcp.discovery.JsonObject
+import com.shutterstar.agenthub.environment.mcp.discovery.JsonString
+import com.shutterstar.agenthub.environment.mcp.discovery.SafeJsonParser
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -119,6 +123,9 @@ class HttpLatestVersionFetcher(private val timeout: Duration = Duration.ofSecond
         "\"$key\"\\s*:\\s*\"([^\"]+)\"".toRegex().find(json)?.groupValues?.get(1)
 }
 
+/** Includes the process exit status so query failure cannot masquerade as an empty report. */
+data class CommandOutput(val output: String, val exitCode: Int?)
+
 data class UpdateOutcome(
     /** Installed agents with a newer version available. */
     val outdated: List<String>,
@@ -139,19 +146,22 @@ data class UpdateOutcome(
 class UpdateChecker(
     private val runCommand: (String) -> String,
     private val fetcher: LatestVersionFetcher = HttpLatestVersionFetcher(),
+    private val runCommandResult: ((String) -> CommandOutput)? = null,
 ) {
+    private fun report(command: String): CommandOutput =
+        runCommandResult?.invoke(command) ?: CommandOutput(runCommand(command), null)
     fun check(agents: List<CodingAgent>): UpdateOutcome {
         val sources = agents.associate { it.id to it.resolvedVersionSource }
         val npmAgents = agents.filter { sources[it.id]?.kind == VersionSource.Kind.NPM }
         val pypiAgents = agents.filter { sources[it.id]?.kind == VersionSource.Kind.PYPI }
 
-        val npmInstalled = if (npmAgents.isEmpty()) emptySet() else jsonObjectKeys(runCommand("npm ls -g --depth=0 --json"))
+        val npmInstalled = if (npmAgents.isEmpty()) emptySet() else npmInstalledNames(report("npm ls -g --depth=0 --json"))
         val npmManaged = npmAgents.any { sources[it.id]?.id in npmInstalled }
-        val npmOutdated = if (npmManaged) jsonObjectKeys(runCommand("npm outdated -g --json")) else emptySet()
+        val npmOutdated = if (npmManaged) npmOutdatedNames(report("npm outdated -g --json")) else emptySet()
 
-        val pipInstalled = if (pypiAgents.isEmpty()) emptySet() else pipNames(runCommand("pip list --format=json"))
+        val pipInstalled = if (pypiAgents.isEmpty()) emptySet() else pipNames(report("pip list --format=json")).orEmpty()
         val pipManaged = pypiAgents.any { sources[it.id]?.id in pipInstalled }
-        val pipOutdated = if (pipManaged) pipNames(runCommand("pip list --outdated --format=json")) else emptySet()
+        val pipOutdated = if (pipManaged) pipNames(report("pip list --outdated --format=json")) else emptySet()
 
         val pool = Executors.newFixedThreadPool(minOf(maxOf(agents.size, 1), 8))
         try {
@@ -161,9 +171,9 @@ class UpdateChecker(
                     when {
                         source == null -> UpdateStatus.UNKNOWN
                         source.kind == VersionSource.Kind.NPM && source.id in npmInstalled ->
-                            if (source.id in npmOutdated) UpdateStatus.OUTDATED else UpdateStatus.CURRENT
+                            if (npmOutdated == null) UpdateStatus.UNKNOWN else if (source.id in npmOutdated) UpdateStatus.OUTDATED else UpdateStatus.CURRENT
                         source.kind == VersionSource.Kind.PYPI && source.id in pipInstalled ->
-                            if (source.id in pipOutdated) UpdateStatus.OUTDATED else UpdateStatus.CURRENT
+                            if (pipOutdated == null) UpdateStatus.UNKNOWN else if (source.id in pipOutdated) UpdateStatus.OUTDATED else UpdateStatus.CURRENT
                         else -> classifyVersions(
                             runCommand("${agent.command} ${agent.versionArgs}".trim()),
                             fetcher.latest(source),
@@ -191,11 +201,46 @@ class UpdateChecker(
         }
     }
 
-    // `npm ls`/`npm outdated` JSON: package names are the keys whose value is an object.
-    private fun jsonObjectKeys(json: String): Set<String> =
-        "\"([^\"]+)\"\\s*:\\s*\\{".toRegex().findAll(json).map { it.groupValues[1] }.toSet()
 
-    private fun pipNames(json: String): Set<String> =
-        "\"name\"\\s*:\\s*\"([^\"]+)\"".toRegex().findAll(json)
-            .map { VersionSource.normalizePypiName(it.groupValues[1]) }.toSet()
+    private fun npmObject(result: CommandOutput): JsonObject? {
+        if (result.exitCode != null && result.exitCode !in setOf(0, 1)) return null
+        val text = result.output.trim()
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        val root = SafeJsonParser.parse(text.substring(start))
+            as? JsonObject ?: return null
+        return root.takeUnless { "error" in it.fields || "errors" in it.fields }
+    }
+
+    private fun npmInstalledNames(result: CommandOutput): Set<String> {
+        val root = npmObject(result) ?: return emptySet()
+        val dependencies = root.fields["dependencies"]
+            as? JsonObject ?: return emptySet()
+        return dependencies.fields.filterValues {
+            it is JsonObject
+        }.keys
+    }
+
+    private fun npmOutdatedNames(result: CommandOutput): Set<String>? {
+        val root = npmObject(result) ?: return null
+        if (root.fields.values.any { it !is JsonObject }) return null
+        return root.fields.keys
+    }
+
+    private fun pipNames(result: CommandOutput): Set<String>? {
+        if (result.exitCode != null && result.exitCode != 0) return null
+        val text = result.output.trim()
+        val start = text.indexOf('[')
+        if (start < 0) return null
+        val array = SafeJsonParser.parse(text.substring(start))
+            as? JsonArray ?: return null
+        val names = mutableSetOf<String>()
+        for (entry in array.values) {
+            val name = ((entry as? JsonObject)
+                ?.fields?.get("name") as? JsonString)
+                ?.value?.takeIf(String::isNotBlank) ?: return null
+            names += VersionSource.normalizePypiName(name)
+        }
+        return names
+    }
 }

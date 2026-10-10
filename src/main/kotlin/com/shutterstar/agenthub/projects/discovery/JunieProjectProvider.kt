@@ -67,7 +67,7 @@ class JunieProjectProvider(
         if (!Files.isRegularFile(index, LinkOption.NOFOLLOW_LINKS)) return emptyMap()
         val result = linkedMapOf<String, Summary>()
         runCatching {
-            LocalSessionSupport.scanHeaderLines(index, MAX_INDEX_LINES, MAX_INDEX_LINE_CHARACTERS) { line ->
+            LocalSessionSupport.scanHeaderLines(index, MAX_INDEX_LINES, MAX_INDEX_LINE_CHARACTERS, INDEX_CHARACTER_BUDGET) { line ->
                 parseSummary(line)?.let { result[it.sessionId] = it }
                 false
             }
@@ -107,6 +107,8 @@ class JunieProjectProvider(
         private const val MAX_SUMMARY_CHARACTERS = 64 * 1024
         private const val MAX_INDEX_LINES = 50_000
         private const val MAX_INDEX_LINE_CHARACTERS = 16 * 1024
+        /** Room for [MAX_INDEX_LINES] summaries; the default 512 KB header budget stops after ~1,700 of them. */
+        private const val INDEX_CHARACTER_BUDGET = 32 * 1024 * 1024
         private const val SESSION_ID_FIELD = "sessionId"
         private const val PROJECT_DIR_FIELD = "projectDir"
         private const val CREATED_AT_FIELD = "createdAt"

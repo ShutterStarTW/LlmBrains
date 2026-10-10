@@ -77,4 +77,24 @@ class AtomicPathReplaceTest {
         assertEquals(LinkResult.Success(EffectiveSyncMode.COPY), result)
         assertEquals("fresh", Files.readString(target.resolve("SKILL.md")))
     }
+
+    @Test
+    fun `should restore the original when the staged swap fails`() {
+        val target = writeSkillMd(root.resolve("skill"), "unique-original")
+        val source = writeSkillMd(root.resolve("source"), "replacement")
+        var moves = 0
+        val result = AtomicPathReplace.replace(target, move = { from, to ->
+            moves++
+            if (moves == 2) throw java.io.IOException("Injected swap failure")
+            Files.move(from, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+            Unit
+        }) { staging -> CopyStrategy().createLink(source, staging) }
+
+        assertTrue(result is LinkResult.Failure)
+        assertEquals(3, moves)
+        assertEquals("unique-original", Files.readString(target.resolve("SKILL.md")))
+        assertEquals(setOf("skill", "source"), Files.list(root).use { paths ->
+            paths.map { it.fileName.toString() }.toList().toSet()
+        })
+    }
 }

@@ -3,20 +3,17 @@
 ## Installation
 
 ```shell
-# Install with curl (macOS / Linux)
-curl -fsSL https://forgecode.dev/cli | sh
-
-# Windows (via WSL)
-wsl bash -c "curl -fsSL https://forgecode.dev/cli | sh"
+# Install (macOS / Linux / Windows; Node.js required)
+npm install -g forgecode
 
 # Update to latest version
-forge update
+npm update -g forgecode
 
 # Uninstall
-rm -f $(which forge) && rm -rf ~/.forge
+npm uninstall -g forgecode
 ```
 
-> via [forgecode.dev](https://forgecode.dev)
+> Official npm wrapper: [antinomyhq/npm-forgecode](https://github.com/antinomyhq/npm-forgecode); the postinstall step downloads the native binary for your platform. The former `curl -fsSL https://forgecode.dev/cli | sh` installer returns 404.
 
 
 ## Get Version

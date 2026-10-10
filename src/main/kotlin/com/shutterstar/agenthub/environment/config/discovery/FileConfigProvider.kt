@@ -8,6 +8,7 @@ import com.shutterstar.agenthub.environment.discovery.PROJECT_WALK_EXCLUDED_DIRE
 import com.shutterstar.agenthub.projects.model.DiscoveredProject
 import com.shutterstar.agenthub.projects.model.ProjectPathResolver
 import java.io.IOException
+import java.io.InputStream
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -72,7 +73,7 @@ abstract class FileConfigProvider(
         val highlights = if (attrs.size() <= MAX_CONTENT_BYTES) {
             // Bounded even if the file grows between stat and read. No content or exceptions are logged.
             try {
-                Files.newInputStream(normalized).use { input ->
+                openWithoutFollowingLinks(normalized).use { input ->
                     val bytes = input.readNBytes(MAX_CONTENT_BYTES + 1)
                     if (bytes.size > MAX_CONTENT_BYTES) emptyList()
                     else ConfigHighlightReader.read(
@@ -96,12 +97,31 @@ abstract class FileConfigProvider(
         )
     }
 
-    // An ancestor that cannot be inspected at all (the root of the WSL distro share) is not evidence of a link.
+    /**
+     * Opens without following a link swapped in after the regular-file check. The IDE's WSL file system provider
+     * does not implement `NOFOLLOW_LINKS` for reads (`NotImplementedError`, an `Error`): there the link check is
+     * repeated right before a plain open.
+     */
+    private fun openWithoutFollowingLinks(path: Path): InputStream = try {
+        Files.newInputStream(path, NOFOLLOW_LINKS)
+    } catch (_: NotImplementedError) {
+        if (!Files.isRegularFile(path, NOFOLLOW_LINKS) || !safePath(path)) throw IOException("Not a plain file")
+        Files.newInputStream(path)
+    }
+
+    // Only the WSL provider's missing attribute support (`NotImplementedError`) is no evidence of a link; any other
+    // failure to inspect an ancestor rejects the path.
     private fun safePath(path: Path): Boolean = generateSequence(path.toAbsolutePath().normalize()) { it.parent }
         .none {
-            runCatching {
+            try {
                 Files.isSymbolicLink(it) || Files.readAttributes(it, BasicFileAttributes::class.java, NOFOLLOW_LINKS).isOther
-            }.getOrDefault(false)
+            } catch (_: NotImplementedError) {
+                false
+            } catch (_: IOException) {
+                true
+            } catch (_: SecurityException) {
+                true
+            }
         }
 
     companion object {

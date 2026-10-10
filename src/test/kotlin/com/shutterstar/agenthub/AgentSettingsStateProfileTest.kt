@@ -21,6 +21,60 @@ class AgentSettingsStateProfileTest {
         WslSupport.settings = WslSupport.Settings()
     }
 
+
+    @Test
+    fun `should discard background results after a switch even when the original profile is selected again`() {
+        val settings = AgentSettingsState()
+        val host = settings.executionSnapshot()
+        settings.setWslMode(true, "Ubuntu")
+        val wsl = settings.executionSnapshot()
+        settings.setWslMode(false, "")
+
+        assertFalse(settings.applyIfCurrent(host) { settings.saveDetectionResults(mapOf("claude" to true)) })
+        assertFalse(settings.applyIfCurrent(wsl) { settings.saveOutdatedAgents(listOf("codex")) })
+        assertFalse(settings.isInstallationKnown())
+        assertTrue(settings.getOutdatedAgentIds().isEmpty())
+        assertTrue(settings.applyIfCurrent(settings.executionSnapshot()) {
+            settings.saveDetectionResults(mapOf("codex" to true))
+        })
+        assertEquals(setOf("codex"), settings.visibleAgentIds())
+    }
+
+    @Test
+    fun `should notify listeners only after both the profile and execution runtime have changed`() {
+        val settings = AgentSettingsState()
+        val observed = mutableListOf<Pair<String, WslSupport.Settings>>()
+        settings.addDetectionListener { observed += settings.runtimeKey() to WslSupport.settings }
+
+        settings.setWslMode(true, "Ubuntu")
+        settings.setWslMode(true, "Debian")
+        settings.setWslMode(false, "")
+
+        assertEquals(
+            listOf(
+                "wsl:ubuntu" to WslSupport.Settings(true, "Ubuntu"),
+                "wsl:debian" to WslSupport.Settings(true, "Debian"),
+                "host" to WslSupport.Settings(),
+            ),
+            observed,
+        )
+    }
+
+
+    @Test
+    fun `should build command arguments from the captured runtime rather than the current one`() {
+        WslSupport.settings = WslSupport.Settings(false, "")
+        val captured = WslSupport.Settings(true, "Ubuntu")
+        val arguments = AgentDetector.shellArgv("claude --version", captured).toList()
+        if (OsDetector.isWindows()) {
+            assertEquals("wsl.exe", arguments.first())
+            assertEquals("Ubuntu", arguments[arguments.indexOf("-d") + 1])
+        } else {
+            assertEquals("bash", arguments.first())
+        }
+        assertFalse(WslSupport.settings.useWsl)
+    }
+
     @Test
     fun `the environment is named by mode and distribution`() {
         assertEquals("host", AgentSettingsState.runtimeKey(false, "Ubuntu"))

@@ -28,6 +28,10 @@ internal class CachedEnvironmentIndex(private val store: StateStore<EnvironmentI
 
     fun decoded(): Map<String, ProjectEnvironment> = currentView().decoded
 
+    /** The raw stored state of one project, from the same cached view (no copy of the whole index). */
+    fun project(projectId: String): EnvironmentIndexProjectState? =
+        currentView().state.projects.firstOrNull { it.projectId == projectId }
+
     /** Returns false when the project was already stored with identical content (and a recent timestamp). */
     fun record(updated: EnvironmentIndexProjectState, nowMillis: Long, maxProjects: Int): Boolean {
         val existing = currentView().state.projects.firstOrNull { it.projectId == updated.projectId }

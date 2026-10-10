@@ -438,13 +438,18 @@ class AgentSettingsConfigurable(private val settingsState: AgentSettingsState = 
         executionSettings: WslSupport.Settings,
         onComplete: () -> Unit,
     ) {
+        val snapshot = settingsState.executionSnapshot()
         TerminalCommandRunner.runTracked(project, label, command, background, executionSettings) { exitCode ->
+            if (!settingsState.isExecutionCurrent(snapshot)) {
+                onComplete()
+                return@runTracked
+            }
             if (exitCode != 0 || project.isDisposed) {
                 if (!project.isDisposed) DetectionResultsWatcher.showNotification(project, label, "Operation failed (exit code $exitCode). Run Detect to refresh the agent status.", NotificationType.ERROR)
                 onComplete()
             } else {
                 if (isUpdate) settingsState.removeOutdatedAgent(agent.id)
-                DetectionResultsWatcher.watchCommandAvailability(project, agent, expectInstalled, isUpdate = isUpdate, commandFinished = true, onComplete = onComplete)
+                DetectionResultsWatcher.watchCommandAvailability(project, agent, expectInstalled, isUpdate = isUpdate, commandFinished = true, snapshot = snapshot, onCancelled = onComplete, onComplete = onComplete)
             }
         }
     }

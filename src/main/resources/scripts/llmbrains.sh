@@ -24,6 +24,16 @@ USAGE
 # version-all/update-all/detect-all receive their agent-definitions payload via a temp file
 # (rather than inline on the command line) for parity with the PowerShell script, where the
 # payload's raw `"`, `$`, and `|` characters get mangled when passed as native-exe arguments.
+decode_agent_field() {
+  local value="$1"
+  value="${value//%7C/|}"
+  value="${value//%7E/~}"
+  value="${value//%0D/$'\r'}"
+  value="${value//%0A/$'\n'}"
+  value="${value//%25/%}"
+  printf '%s' "$value"
+}
+
 read_agent_definitions() {
   local path="$1"
   cat "$path"
@@ -52,6 +62,28 @@ windows_only_note() {
     echo " (Windows-only, not in this distro)"
   fi
 }
+
+
+# Update hints come from the built-in registry and may contain fallback chains, pipes and quoted arguments.
+# Execute them as shell text. The payload's id/name/binary fields are never evaluated.
+# WSL-only: mirror WslSupport.withToolchainGuard inside this child shell, which cannot inherit the IDE shell's shims.
+run_update_command() (
+  if [[ $IS_WSL -eq 1 ]]; then
+    if ! has_cmd pip; then
+      if has_cmd pip3; then
+        pip() { command pip3 "$@"; }
+      else
+        pip() { echo '[x] Install pip in this WSL distro first: sudo apt install python3-pip' >&2; return 127; }
+      fi
+      export -f pip
+    fi
+    if ! has_cmd npm; then
+      npm() { echo '[x] Install Node.js in this WSL distro first (Windows interop npm is not used)' >&2; return 127; }
+      export -f npm
+    fi
+  fi
+  bash -o pipefail -c "$1"
+)
 
 if [[ $# -lt 1 ]]; then
   usage
@@ -113,14 +145,13 @@ case "$subcommand" in
 
     if has_cmd "$binary"; then
       printf "  ${COL_BRIGHT_WHITE}↻${COL_RESET}  ${COL_BRIGHT_WHITE}%s${COL_RESET}\n" "$name"
-      read -ra _cmd <<< "$update_command"
-      update_output=$("${_cmd[@]}" 2>&1)
+      update_output=$(run_update_command "$update_command" 2>&1)
       status=$?
       display_output=$(echo "$update_output" | grep -vE "^[[:space:]]*(Collecting|Downloading|Installing collected|Using cached|Building wheels|Obtaining|Attempting|Running command|Getting requirements|Preparing metadata|Requirement already satisfied|Uninstalling|Successfully uninstalled|Found existing installation)" | grep -vE "^(WARNING|NOTE|DEPRECATION|ERROR: pip|\[notice\])" | grep -v "which is incompatible")
       if [[ -n "$display_output" ]]; then
         echo "$display_output" | sed 's/^/     /'
       fi
-      if [[ $status -eq 0 ]] || echo "$update_output" | grep -q "Successfully installed"; then
+      if [[ $status -eq 0 ]]; then
         if echo "$update_output" | grep -qE "up to date|Requirement already satisfied|already up-to-date|already installed"; then
           printf "  ${COL_BRIGHT_GREEN}~${COL_RESET}  %-20s ${COL_DIM}up to date${COL_RESET}\n\n" "$name"
           exit 2
@@ -202,6 +233,12 @@ case "$subcommand" in
     outdated_ids=""
 
     while IFS='|' read -r id name command version_args update_hint install_hint; do
+      id=$(decode_agent_field "$id")
+      name=$(decode_agent_field "$name")
+      command=$(decode_agent_field "$command")
+      version_args=$(decode_agent_field "$version_args")
+      update_hint=$(decode_agent_field "$update_hint")
+      install_hint=$(decode_agent_field "$install_hint")
       if [[ -n "$id" ]]; then
         version_command="$command $version_args"
         binary="${version_command%% *}"
@@ -276,16 +313,31 @@ case "$subcommand" in
     uptodate_count=0
     fail_count=0
     updated_names=""
+    updated_ids=""
+    uptodate_ids=""
+    failed_ids=""
 
     while IFS='|' read -r id name command version_args update_hint install_hint; do
+      id=$(decode_agent_field "$id")
+      name=$(decode_agent_field "$name")
+      command=$(decode_agent_field "$command")
+      version_args=$(decode_agent_field "$version_args")
+      update_hint=$(decode_agent_field "$update_hint")
+      install_hint=$(decode_agent_field "$install_hint")
       if [[ -n "$id" ]] && [[ ",$active_ids," == *",$id,"* ]]; then
         "$0" update "$name" "$command" "$update_hint" "$install_hint"
         rc=$?
         if [[ $rc -eq 0 ]]; then
           ((ok_count++))
           updated_names="${updated_names:+$updated_names~}$name"
-        elif [[ $rc -eq 2 ]]; then ((uptodate_count++))
-        else ((fail_count++)); fi
+          updated_ids="${updated_ids:+$updated_ids,}$id"
+        elif [[ $rc -eq 2 ]]; then
+          ((uptodate_count++))
+          uptodate_ids="${uptodate_ids:+$uptodate_ids,}$id"
+        else
+          ((fail_count++))
+          failed_ids="${failed_ids:+$failed_ids,}$id"
+        fi
       fi
     done < <(echo "$agents_json" | tr '~' '\n')
 
@@ -296,6 +348,9 @@ case "$subcommand" in
       echo "uptodate=$uptodate_count" >> "$output_file"
       echo "failed=$fail_count" >> "$output_file"
       echo "updated_names=$updated_names" >> "$output_file"
+      echo "updated_ids=$updated_ids" >> "$output_file"
+      echo "uptodate_ids=$uptodate_ids" >> "$output_file"
+      echo "failed_ids=$failed_ids" >> "$output_file"
       echo "done=1" >> "$output_file"
     fi
     ;;
@@ -318,6 +373,11 @@ case "$subcommand" in
     missing_count=0
 
     while IFS='|' read -r id name command version_args install_hint; do
+      id=$(decode_agent_field "$id")
+      name=$(decode_agent_field "$name")
+      command=$(decode_agent_field "$command")
+      version_args=$(decode_agent_field "$version_args")
+      install_hint=$(decode_agent_field "$install_hint")
       if [[ -n "$id" ]]; then
         version_command="$command $version_args"
         binary="${version_command%% *}"

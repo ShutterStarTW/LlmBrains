@@ -18,7 +18,11 @@ import java.util.UUID
  * executed as one install+swap so the delete-then-create gap cannot empty the skill directory.
  */
 internal object AtomicPathReplace {
-    fun replace(target: Path, install: (staging: Path) -> LinkResult): LinkResult {
+    fun replace(
+        target: Path,
+        move: (Path, Path) -> Unit = { from, to -> Files.move(from, to, StandardCopyOption.ATOMIC_MOVE); Unit },
+        install: (staging: Path) -> LinkResult,
+    ): LinkResult {
         val parent = target.parent
             ?: return LinkResult.Failure("Cannot replace $target without a parent directory")
 
@@ -39,16 +43,16 @@ internal object AtomicPathReplace {
 
             val hadOriginal = Files.exists(target, LinkOption.NOFOLLOW_LINKS)
             if (hadOriginal) {
-                Files.move(target, displaced, StandardCopyOption.ATOMIC_MOVE)
+                move(target, displaced)
             }
             try {
-                Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE)
+                move(staging, target)
             } catch (error: Throwable) {
                 if (hadOriginal &&
                     !Files.exists(target, LinkOption.NOFOLLOW_LINKS) &&
                     Files.exists(displaced, LinkOption.NOFOLLOW_LINKS)
                 ) {
-                    Files.move(displaced, target, StandardCopyOption.ATOMIC_MOVE)
+                    move(displaced, target)
                 }
                 throw error
             }

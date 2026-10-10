@@ -34,7 +34,7 @@ installed and unticks what it found missing, which is the quickest way to set up
   npm look "installed" from inside WSL too. AgentHub filters out anything that only resolves to
   a `/mnt/c/...` Windows path, so detection reflects what is actually installed *in the distro* —
   not what's reachable through interop.
-- **Linux/WSL-only agents become available.** ForgeCode, LeanCTL, Muse Code and Command
+- **Linux/WSL-only agents become available.** LeanCTL, Muse Code and Command
   Code have no native Windows build and are normally hidden on Windows; in WSL mode they run as
   regular Linux binaries inside the distro and show up like any other agent.
 - **A missing toolchain produces a hint, not a silent failure.** A fresh distro often lacks

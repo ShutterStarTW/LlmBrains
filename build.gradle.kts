@@ -168,7 +168,7 @@ val shrinkPluginJar = tasks.register<ProGuardTask>("shrinkPluginJar") {
     // JDK runtime classes (java.base + the modules our Swing UI / java.util.logging code
     // needs) - required so ProGuard can resolve java.lang/java.util/javax.swing/etc. references.
     val javaHome = System.getProperty("java.home")
-    listOf("java.base", "java.desktop", "java.logging").forEach { module ->
+    listOf("java.base", "java.desktop", "java.logging", "java.net.http", "java.datatransfer").forEach { module ->
         libraryjars(
             mapOf("jarfilter" to "!**.jar", "filter" to "!module-info.class"),
             "$javaHome/jmods/$module.jmod",

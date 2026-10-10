@@ -147,26 +147,38 @@ object WslSupport {
      * (Store WSL >= 0.64) switches it to UTF-8, and the NUL-byte heuristic in [decodeWslOutput]
      * covers older inbox versions that ignore the variable.
      */
-    fun listDistros(): List<String> = try {
-        val process = ProcessBuilder("wsl.exe", "--list", "--quiet")
+    fun listDistros(): List<String> = listDistros {
+        ProcessBuilder("wsl.exe", "--list", "--quiet")
             .redirectErrorStream(true)
             .apply { environment()["WSL_UTF8"] = "1" }
             .start()
-        val bytes = process.inputStream.readBytes()
-        if (!process.waitFor(15, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
+    }
+
+    internal fun listDistros(start: () -> Process): List<String> {
+        var process: Process? = null
+        return try {
+            val running = start().also { process = it }
+            // A short list fits in the pipe. Do not read to EOF before applying the timeout.
+            if (!running.waitFor(15, TimeUnit.SECONDS) || running.exitValue() != 0) {
+                emptyList()
+            } else {
+                val bytes = running.inputStream.use { it.readBytes() }
+                decodeWslOutput(bytes).lineSequence()
+                    .map { line -> line.trim { it.isWhitespace() || it == '\u0000' || it == '\uFEFF' } }
+                    .filter { it.isNotEmpty() }
+                    .toList()
+            }
+        } catch (_: java.io.IOException) {
             emptyList()
-        } else if (process.exitValue() != 0) {
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
             emptyList()
-        } else {
-            decodeWslOutput(bytes).lineSequence()
-                // Strip whitespace plus stray NULs / BOM left over from UTF-16 decoding.
-                .map { line -> line.trim { it.isWhitespace() || it == '\u0000' || it == '\uFEFF' } }
-                .filter { it.isNotEmpty() }
-                .toList()
+        } finally {
+            process?.let { running ->
+                if (running.isAlive) running.destroyForcibly()
+                runCatching { running.inputStream.close() }
+            }
         }
-    } catch (_: Exception) {
-        emptyList()
     }
 
     /** UTF-8, or UTF-16LE from older inbox wsl.exe versions that ignore `WSL_UTF8`. */

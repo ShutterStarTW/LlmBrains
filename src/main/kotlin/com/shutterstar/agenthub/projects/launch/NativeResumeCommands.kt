@@ -65,9 +65,9 @@ object NativeResumeCommands {
     /**
      * Session ids are UUIDs or similar opaque tokens. Anything outside this set is refused rather
      * than quoted: the id is interpolated into a shell line, and a discovered session record is
-     * untrusted input.
+     * untrusted input. It must start with a letter or digit, so it can never be read as a CLI option.
      */
-    private val safeId = Regex("^[A-Za-z0-9._:-]{1,128}$")
+    private val safeId = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
     fun supports(agentId: String): Boolean = agentId in templates
 

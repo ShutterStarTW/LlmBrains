@@ -289,7 +289,9 @@ internal class SkillSyncExecutor(
 
                 is StepOutcome.Failure -> {
                     results += SkillSyncStepResult(step, succeeded = false, error = outcome.message)
-                    val failedStep = coalescedInstall ?: step
+                    // AtomicPathReplace owns recovery of a failed swap. Its original target may still
+                    // be intact; treating the failed install as new content would delete that original.
+                    val failedStep = if (coalescedInstall == null) step else null
                     if (coalescedInstall != null) {
                         results += SkillSyncStepResult(coalescedInstall, succeeded = false, error = outcome.message)
                     }
@@ -316,7 +318,7 @@ internal class SkillSyncExecutor(
 
 
     private fun rollback(
-        failedStep: SkillSyncStep,
+        failedStep: SkillSyncStep?,
         results: List<SkillSyncStepResult>,
         backups: List<SkillBackup>,
     ): List<String> {
@@ -325,7 +327,7 @@ internal class SkillSyncExecutor(
         val successfulMutations = results
             .filter { it.succeeded }
             .mapNotNull { result -> result.step.reversalTarget()?.let { path -> path to result.step.createsContent() } }
-        val failedMutation = failedStep.reversalTarget()?.let { path ->
+        val failedMutation = failedStep?.reversalTarget()?.let { path ->
             if (failedStep.createsContent() || backupsByPath.containsKey(path)) path to failedStep.createsContent() else null
         }
         val targets = (successfulMutations + listOfNotNull(failedMutation))

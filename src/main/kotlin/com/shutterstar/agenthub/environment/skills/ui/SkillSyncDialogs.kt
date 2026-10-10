@@ -423,7 +423,9 @@ internal class SkillBulkMigrationDialog(
         val linked = candidate.requests.filterIsInstance<SkillSyncRequest.ShareSkill>().map { it.targetAgentId }
         val fallback = candidate.skill.sources.mapNotNull { it.agentId }.distinct().sorted()
         val source = promote?.sourceAgentId ?: fallback.firstOrNull()
-        val linkedIds = if (linked.isNotEmpty()) linked else fallback.filter { it != source }
+        // Only agents the plan really links. The agents that merely list the same folder (Cursor, Kilo… read
+        // ~/.claude/skills) are not linked and must not be shown or warned about.
+        val linkedIds = linked
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             alignmentX = JComponent.LEFT_ALIGNMENT

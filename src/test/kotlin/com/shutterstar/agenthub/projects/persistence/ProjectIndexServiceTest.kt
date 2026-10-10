@@ -297,6 +297,48 @@ class ProjectIndexServiceTest {
         assertEquals(Instant.parse("2026-09-01T00:00:00Z"), agents.getValue("codex").lastActivity)
         assertEquals(setOf("claude", "codex"), ProjectIndexStateMapper.decode(service.state).single().agents.mapTo(mutableSetOf()) { it.agentId })
     }
+
+    @Test
+    fun `should start a new runtime refresh while the previous runtime is still in flight`() {
+        var partition = "host"
+        val tasks = java.util.ArrayDeque<Runnable>()
+        val memories = mutableMapOf(
+            "host" to com.shutterstar.agenthub.storage.MemoryStateStore(ProjectIndexState()),
+            "wsl-Ubuntu" to com.shutterstar.agenthub.storage.MemoryStateStore(ProjectIndexState()),
+        )
+        val store = object : com.shutterstar.agenthub.storage.StateStore<ProjectIndexState> {
+            override val persistent = false
+            override fun snapshot() = memories.getValue(partition).snapshot()
+            override fun update(transform: (ProjectIndexState) -> ProjectIndexState) = memories.getValue(partition).update(transform)
+            override fun stamp() = partition + memories.getValue(partition).stamp()
+            override fun externalStamp() = stamp()
+            override fun partition() = partition
+            override fun bound() = memories.getValue(partition)
+        }
+        var calls = 0
+        val service = ProjectIndexService(
+            discover = { calls++; ProjectDiscoveryResult(listOf(project("new-runtime")), emptyList()) },
+            executor = { tasks.add(it) },
+            store = store,
+            isAgentVisible = { true }, detectionGeneration = { 0L }, canDiscover = { true },
+        )
+        val old = service.refreshInBackground()
+        partition = "wsl-Ubuntu"
+        val fresh = service.refreshInBackground()
+        assertNotSame(old, fresh)
+        assertSame(fresh, service.refreshInBackground())
+
+        tasks.removeFirst().run()
+        assertTrue(old.isCompletedExceptionally)
+        tasks.removeFirst().run()
+        fresh.join()
+
+        assertEquals(2, calls)
+        assertTrue(memories.getValue("host").snapshot().projects.isEmpty())
+        assertEquals(listOf("new-runtime"), service.cachedProjects().map { it.identity.id })
+        assertTrue(tasks.isEmpty())
+    }
+
     private fun projectWith(id: String, vararg agents: Pair<String, String>) = project(id).copy(
         agents = agents.map { (agentId, activity) ->
             AgentProject(agentId, id, 1, Instant.parse(activity), emptyList())

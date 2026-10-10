@@ -3,6 +3,7 @@ package com.shutterstar.agenthub.projects.launch
 import com.shutterstar.agenthub.LaunchFlags
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -58,6 +59,14 @@ class NativeResumeCommandsTest {
         assertNull(NativeResumeCommands.command("codex", "id with spaces"))
         assertNull(NativeResumeCommands.command("opencode", "\$(evil)"))
         assertEquals("codex resume ses_01ABC", NativeResumeCommands.command("codex", " ses_01ABC "))
+    }
+
+    @Test
+    fun `refuses a session id that a CLI could read as an option`() {
+        assertNull(NativeResumeCommands.command("claude", "--dangerously-skip-permissions"))
+        assertNull(NativeResumeCommands.command("vibe", "-c"))
+        assertNotNull(NativeResumeCommands.unavailableReason("claude", "--dangerously-skip-permissions"))
+        assertEquals("claude --resume 1-2", NativeResumeCommands.command("claude", "1-2"))
     }
 
     @Test

@@ -213,6 +213,67 @@ class UpdateChecksTest {
         assertEquals(listOf("cursor", "forge", "goose"), outcome.unverified)
     }
 
+
+    @Test
+    fun `should report failed npm outdated queries as unverified`() {
+        val managed = agent("codex", "npm update -g @openai/codex")
+        for (report in listOf(
+            CommandOutput("", null),
+            CommandOutput("network error", 1),
+            CommandOutput("{\"error\":{\"code\":\"EAI_AGAIN\"}}", 1),
+            CommandOutput("{", 0),
+            CommandOutput("{}", 2),
+        )) {
+            val checker = UpdateChecker(
+                runCommand = { "" }, fetcher = FakeFetcher(emptyMap()),
+                runCommandResult = { command ->
+                    if (command.startsWith("npm ls")) {
+                        CommandOutput("{\"dependencies\":{\"@openai/codex\":{\"version\":\"1.0\"}}}", 0)
+                    } else report
+                },
+            )
+            assertEquals(UpdateOutcome(emptyList(), listOf("codex")), checker.check(listOf(managed)))
+        }
+    }
+
+    @Test
+    fun `should accept npm exit one with a valid outdated report and zero with an empty report`() {
+        val managed = agent("codex", "npm update -g @openai/codex")
+        for ((report, expected) in listOf(
+            CommandOutput("{\"@openai/codex\":{\"current\":\"1.0\",\"latest\":\"1.1\"}}", 1) to UpdateOutcome(listOf("codex"), emptyList()),
+            CommandOutput("{}", 0) to UpdateOutcome(emptyList(), emptyList()),
+        )) {
+            val checker = UpdateChecker(
+                runCommand = { "" }, fetcher = FakeFetcher(emptyMap()),
+                runCommandResult = { command ->
+                    if (command.startsWith("npm ls")) CommandOutput("{\"dependencies\":{\"@openai/codex\":{\"version\":\"1.0\"}}}", 0)
+                    else report
+                },
+            )
+            assertEquals(expected, checker.check(listOf(managed)))
+        }
+    }
+
+    @Test
+    fun `should distinguish failed pip queries from an empty successful outdated list`() {
+        val managed = agent("semgrep", "pip install --upgrade semgrep")
+        for ((report, expected) in listOf(
+            CommandOutput("", null) to UpdateOutcome(emptyList(), listOf("semgrep")),
+            CommandOutput("[]", 1) to UpdateOutcome(emptyList(), listOf("semgrep")),
+            CommandOutput("[{\"missing_name\":\"semgrep\"}]", 0) to UpdateOutcome(emptyList(), listOf("semgrep")),
+            CommandOutput("[]", 0) to UpdateOutcome(emptyList(), emptyList()),
+        )) {
+            val checker = UpdateChecker(
+                runCommand = { "" }, fetcher = FakeFetcher(emptyMap()),
+                runCommandResult = { command ->
+                    if (command == "pip list --format=json") CommandOutput("[{\"name\":\"semgrep\",\"version\":\"1.0\"}]", 0)
+                    else report
+                },
+            )
+            assertEquals(expected, checker.check(listOf(managed)))
+        }
+    }
+
     @Test
     fun `empty agent list is a no-op`() {
         val outcome = UpdateChecker(runCommand = { "" }, fetcher = FakeFetcher(emptyMap())).check(emptyList())

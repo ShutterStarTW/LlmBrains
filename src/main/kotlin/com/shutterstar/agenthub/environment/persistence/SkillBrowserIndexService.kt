@@ -30,7 +30,7 @@ class SkillBrowserIndexService(
 
     /** The source paths that were links when [contextKey] was last scanned. */
     fun cachedLinkPaths(contextKey: String): Set<String> =
-        store.snapshot().projects.firstOrNull { it.projectId == contextKey }?.linkPaths.orEmpty().toSet()
+        index.project(contextKey)?.linkPaths.orEmpty().toSet()
 
     @Synchronized
     fun record(contextKey: String, skills: List<AgentSkill>, linkPaths: Set<String> = emptySet()) {

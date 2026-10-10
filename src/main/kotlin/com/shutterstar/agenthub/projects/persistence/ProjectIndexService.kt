@@ -50,6 +50,8 @@ class ProjectIndexService(
 
     @Volatile
     private var activeRefresh: CompletableFuture<ProjectDiscoveryResult>? = null
+    @Volatile private var activeRefreshPartition: String? = null
+    private val refreshGeneration = java.util.concurrent.atomic.AtomicLong()
 
     /**
      * The last discovery result of this IDE session.
@@ -92,14 +94,15 @@ class ProjectIndexService(
 
     @Synchronized
     fun refreshInBackground(): CompletableFuture<ProjectDiscoveryResult> {
-        activeRefresh?.takeUnless { it.isDone }?.let { return it }
+        val refreshPartition = store.partition()
+        activeRefresh?.takeUnless { it.isDone }?.takeIf { activeRefreshPartition == refreshPartition }?.let { return it }
         if (!canDiscover()) return CompletableFuture.completedFuture(ProjectDiscoveryResult(emptyList(), emptyList()))
 
         val refreshStore = store.bound()
-        val refreshPartition = store.partition()
+        val ticket = refreshGeneration.incrementAndGet()
         val refresh = CompletableFuture.supplyAsync(::discoverConsistently, executor)
             .thenApply { result ->
-                if (store.partition() != refreshPartition) {
+                if (store.partition() != refreshPartition || ticket != refreshGeneration.get()) {
                     throw CancellationException("AgentHub runtime changed during discovery")
                 }
                 val merged = result.copy(projects = preserveFailedProviders(result))
@@ -109,6 +112,7 @@ class ProjectIndexService(
                 refreshListeners.forEach { listener -> runCatching { listener(merged) } }
                 merged
             }
+        activeRefreshPartition = refreshPartition
         activeRefresh = refresh
         refresh.whenComplete { _, _ ->
             synchronized(this) {
@@ -153,8 +157,10 @@ class ProjectIndexService(
 
     @Synchronized
     fun cancelActiveRefresh() {
+        refreshGeneration.incrementAndGet()
         activeRefresh?.cancel(true)
         activeRefresh = null
+        activeRefreshPartition = null
     }
 
     fun storageStamp(): String = store.externalStamp()

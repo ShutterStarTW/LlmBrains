@@ -85,6 +85,17 @@ object AgentRuntime {
         if (value.isEmpty()) return null
         if (!isWsl()) return value
         if (DRIVE_PATH.matches(value)) return value
+        // An already-translated UNC path must be recognized before the Linux absolute-path branch.
+        if (value.startsWith("\\\\") || value.startsWith("//")) {
+            val environment = wslEnvironment() ?: return null
+            val portable = value.replace('\\', '/')
+            val roots = (listOf(environment.shareRoot) + shareRoots(environment.distro)).map { it.replace('\\', '/') }
+            val root = roots.firstOrNull {
+                portable.startsWith(it, ignoreCase = true) &&
+                    (portable.length == it.length || portable[it.length] == '/')
+            } ?: return null
+            return environment.shareRoot + portable.substring(root.length).replace('/', separator)
+        }
         MNT_PATH.matchEntire(value)?.let { match ->
             val drive = match.groupValues[1].uppercase(Locale.ROOT)
             val rest = match.groupValues[2].replace('/', separator)
@@ -120,6 +131,9 @@ object AgentRuntime {
         return null
     }
 
+    /** A Linux path or a a UNC (`\\host\share`) path: no usable Windows terminal directory. */
+    fun isDistroPath(path: String): Boolean = path.startsWith("/") || path.startsWith("\\\\")
+
     /**
      * Where to start a terminal that runs an agent in WSL mode: (the directory the IDE terminal starts in, the Linux
      * directory for `wsl.exe --cd`). A project inside the distro - given as a Linux path or as its share path - is no
@@ -128,9 +142,8 @@ object AgentRuntime {
      */
     fun terminalDirectories(workingDirectory: String?, fallbackTerminalDirectory: String?): Pair<String?, String?> {
         if (workingDirectory == null) return fallbackTerminalDirectory to null
-        val inDistro = workingDirectory.startsWith("/") || workingDirectory.startsWith("\\\\")
-        if (!inDistro) return workingDirectory to null
-        val linux = if (workingDirectory.startsWith("/")) workingDirectory else toLinuxPath(workingDirectory)
+        if (!isDistroPath(workingDirectory)) return workingDirectory to null
+        val linux = if (workingDirectory.startsWith("/") && !workingDirectory.startsWith("//")) workingDirectory else toLinuxPath(workingDirectory)
         return fallbackTerminalDirectory to linux
     }
 
@@ -199,7 +212,16 @@ object AgentRuntime {
 
     private fun lookup(settings: WslSupport.Settings, key: String): WslEnvironment? = synchronized(lookupLock) {
         fresh(key)?.let { return it.environment }
-        val found = runCatching { wslLookup(settings) }.getOrNull()
+        val found = try {
+            wslLookup(settings)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            null
+        } catch (_: java.io.IOException) {
+            null
+        } catch (_: RuntimeException) {
+            null
+        }
         synchronized(cache) { cache[key] = Cached(found, nanoTime()) }
         found
     }
@@ -215,21 +237,28 @@ object AgentRuntime {
             .redirectErrorStream(true)
             .apply { environment()["WSL_UTF8"] = "1" }
             .start()
-        val bytes = process.inputStream.readBytes()
-        if (!process.waitFor(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
-            return null
+        try {
+            // Wait first: reading to EOF before the timeout would block for as long as a wedged wsl.exe keeps the pipe open.
+            // The two lines are far below the pipe buffer, so the process never blocks on a full pipe meanwhile.
+            if (!process.waitFor(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                return null
+            }
+            if (process.exitValue() != 0) return null
+            val bytes = process.inputStream.readBytes()
+            val lines = WslSupport.decodeWslOutput(bytes).lineSequence()
+                .map { it.trim { char -> char.isWhitespace() || char == '\u0000' || char == '﻿' } }
+                .filter { it.isNotEmpty() }
+                .toList()
+            val home = lines.getOrNull(0)?.takeIf { it.startsWith("/") } ?: return null
+            val distro = lines.getOrNull(1) ?: settings.distro.trim().takeIf { it.isNotEmpty() } ?: return null
+            // Windows 11 / current Windows 10 publish `\\wsl.localhost`; older builds only `\\wsl$`.
+            val shareRoot = shareRoots(distro).firstOrNull(shareProbe) ?: shareRoots(distro).first()
+            return WslEnvironment(distro, home, shareRoot)
+        } finally {
+            if (process.isAlive) process.destroyForcibly()
+            runCatching { process.inputStream.close() }
         }
-        if (process.exitValue() != 0) return null
-        val lines = WslSupport.decodeWslOutput(bytes).lineSequence()
-            .map { it.trim { char -> char.isWhitespace() || char == '\u0000' || char == '﻿' } }
-            .filter { it.isNotEmpty() }
-            .toList()
-        val home = lines.getOrNull(0)?.takeIf { it.startsWith("/") } ?: return null
-        val distro = lines.getOrNull(1) ?: settings.distro.trim().takeIf { it.isNotEmpty() } ?: return null
-        // Windows 11 / current Windows 10 publish `\\wsl.localhost`; older builds only `\\wsl$`.
-        val shareRoot = shareRoots(distro).firstOrNull(shareProbe) ?: shareRoots(distro).first()
-        return WslEnvironment(distro, home, shareRoot)
     }
 
     private const val UNAVAILABLE_HOME = "\\\\wsl.localhost\\unavailable\\home"

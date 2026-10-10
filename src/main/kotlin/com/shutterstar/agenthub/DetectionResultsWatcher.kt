@@ -45,32 +45,51 @@ object DetectionResultsWatcher {
         taskRef.set(task)
     }
 
-    fun watchCommandAvailability(
+    internal fun watchCommandAvailability(
         project: Project,
         agent: CodingAgent,
         expectInstalled: Boolean,
         isUpdate: Boolean = false,
         commandFinished: Boolean = false,
+        snapshot: AgentSettingsState.ExecutionSnapshot = AgentSettingsState.getInstance().executionSnapshot(),
+        onCancelled: () -> Unit = {},
         onComplete: (() -> Unit)? = null,
     ) {
+        val settings = AgentSettingsState.getInstance()
+        val taskRef = AtomicReference<ScheduledFuture<*>?>()
+        fun cancelTask() {
+            val current = taskRef.getAndSet(null) ?: return
+            availabilityTasks.remove(agent.id, current)
+            current.cancel(false)
+        }
         val startTime = System.currentTimeMillis()
         val initialDelay = if (isUpdate && !commandFinished) UPDATE_INITIAL_DELAY_MS else INSTALL_POLL_INTERVAL_MS
         val task = executor.scheduleAtFixedRate({
             try {
-                val isInstalled = AgentDetector.isCommandAvailable(agent.command)
+                if (!settings.isExecutionCurrent(snapshot)) {
+                    cancelTask()
+                    ApplicationManager.getApplication().invokeLater({ onCancelled() }, ModalityState.any())
+                    return@scheduleAtFixedRate
+                }
+                val isInstalled = AgentDetector.isCommandAvailable(agent.command, snapshot.settings)
                 val elapsed = System.currentTimeMillis() - startTime
                 if (isInstalled == expectInstalled || elapsed > INSTALL_MAX_WAIT_MS) {
-                    availabilityTasks.remove(agent.id)?.cancel(false)
+                    cancelTask()
                     // ModalityState.any() so the notification/refresh fires while the modal Settings dialog is open.
                     ApplicationManager.getApplication().invokeLater({
-                        AgentSettingsState.getInstance().updateDetectionResult(agent.id, isInstalled)
-                        if (!isUpdate) {
-                            // Activate in the matching set: companions are opt-in, agents opt-out.
-                            if (CompanionTools.isCompanion(agent.id)) {
-                                AgentSettingsState.getInstance().setCompanionActive(agent.id, isInstalled)
-                            } else {
-                                AgentSettingsState.getInstance().setAgentActive(agent.id, isInstalled)
+                        if (!settings.applyIfCurrent(snapshot) {
+                            settings.updateDetectionResult(agent.id, isInstalled)
+                            if (!isUpdate) {
+                                // Activate in the matching set: companions are opt-in, agents opt-out.
+                                if (CompanionTools.isCompanion(agent.id)) {
+                                    settings.setCompanionActive(agent.id, isInstalled)
+                                } else {
+                                    settings.setAgentActive(agent.id, isInstalled)
+                                }
                             }
+                        }) {
+                            onCancelled()
+                            return@invokeLater
                         }
                         AgentSettingsConfigurable.scheduleRefresh()
                         val succeeded = isInstalled == expectInstalled
@@ -97,6 +116,7 @@ object DetectionResultsWatcher {
         }, initialDelay, INSTALL_POLL_INTERVAL_MS, TimeUnit.MILLISECONDS)
         // Store-then-cancel keeps the map's "current task for this agent" atomic: a concurrent call
         // (e.g. double-click) can't land its task in between and have it overwritten.
+        taskRef.set(task)
         availabilityTasks.put(agent.id, task)?.cancel(false)
     }
 
@@ -106,25 +126,35 @@ object DetectionResultsWatcher {
     private fun pollFile(
         resultsFilePath: Path,
         taskRef: AtomicReference<ScheduledFuture<*>?>,
+        onTimeout: () -> Unit = {},
         onComplete: (String) -> Unit,
     ) {
-        val startTime = System.currentTimeMillis()
-        taskRef.get()?.cancel(false)
+        val settings = AgentSettingsState.getInstance()
+        val snapshot = settings.executionSnapshot()
+        val polling = ResultFilePolling(resultsFilePath, MAX_WAIT_MS)
+        val ownTask = AtomicReference<ScheduledFuture<*>?>()
+        fun finish(callback: () -> Unit) {
+            val own = ownTask.getAndSet(null) ?: return
+            taskRef.compareAndSet(own, null)
+            own.cancel(false)
+            runCatching { Files.deleteIfExists(resultsFilePath) }
+            ApplicationManager.getApplication().invokeLater({
+                settings.applyIfCurrent(snapshot, callback)
+            }, ModalityState.any())
+        }
         val task = executor.scheduleAtFixedRate({
-            try {
-                if (Files.exists(resultsFilePath) && Files.size(resultsFilePath) > 0) {
-                    val content = Files.readString(resultsFilePath)
-                    if (!content.contains("done=1")) return@scheduleAtFixedRate
-                    taskRef.getAndSet(null)?.cancel(false)
-                    Files.deleteIfExists(resultsFilePath)
-                    ApplicationManager.getApplication().invokeLater({ onComplete(content) }, ModalityState.any())
-                } else if (System.currentTimeMillis() - startTime > MAX_WAIT_MS) {
-                    taskRef.getAndSet(null)?.cancel(false)
-                    Files.deleteIfExists(resultsFilePath)
+            if (!settings.isExecutionCurrent(snapshot)) {
+                finish {}
+            } else {
+                when (val outcome = polling.poll()) {
+                    ResultFilePolling.Outcome.Pending -> Unit
+                    ResultFilePolling.Outcome.TimedOut -> finish(onTimeout)
+                    is ResultFilePolling.Outcome.Complete -> finish { onComplete(outcome.content) }
                 }
-            } catch (_: Exception) {}
+            }
         }, POLL_INTERVAL_MS, POLL_INTERVAL_MS, TimeUnit.MILLISECONDS)
-        taskRef.set(task)
+        ownTask.set(task)
+        taskRef.getAndSet(task)?.cancel(false)
     }
 
     // Persists detection results only; does NOT touch active/inactive checkboxes.
@@ -134,16 +164,13 @@ object DetectionResultsWatcher {
         return Pair(installedCount, results.size)
     }
 
-    fun watchForUpdateResults(
+    internal fun watchForUpdateResults(
         resultsFilePath: Path,
-        onComplete: (ok: Int, uptodate: Int, failed: Int, updatedNames: List<String>) -> Unit,
+        onTimeout: () -> Unit = {},
+        onComplete: (UpdateAllReport) -> Unit,
     ) {
-        pollFile(resultsFilePath, updateWatchTask) { content ->
-            val ok = parseIntValue(content, "ok")
-            val uptodate = parseIntValue(content, "uptodate")
-            val failed = parseIntValue(content, "failed")
-            val updatedNames = findList(content, "updated_names", "~")
-            onComplete(ok, uptodate, failed, updatedNames)
+        pollFile(resultsFilePath, updateWatchTask, onTimeout) { content ->
+            onComplete(UpdateAllReport.parse(content))
         }
     }
 
@@ -152,7 +179,9 @@ object DetectionResultsWatcher {
         project: Project,
         resultsFilePath: Path,
     ) {
-        pollFile(resultsFilePath, detectWatchTask) { content ->
+        pollFile(resultsFilePath, detectWatchTask, onTimeout = {
+            showNotification(project, "Detect", "Agent detection timed out. Run Detect to retry.", NotificationType.WARNING)
+        }) { content ->
             val results = content.lines().mapNotNull { line ->
                 val idx = line.indexOf('=')
                 if (idx <= 0) return@mapNotNull null
@@ -178,26 +207,14 @@ object DetectionResultsWatcher {
     ) {
         // The terminal script only sees npm/pip-managed agents; once it is done, the in-process
         // check (registry lookups for everything else) produces the authoritative outdated set.
-        pollFile(resultsFilePath, versionWatchTask) { _ ->
+        pollFile(resultsFilePath, versionWatchTask, onTimeout = {
+            showNotification(project, "Update", "Update check timed out. Check for updates again to retry.", NotificationType.WARNING)
+        }) { _ ->
             ApplicationManager.getApplication().executeOnPooledThread {
                 AgentDetector.checkForUpdates(project, notifyIfUpToDate = true)
             }
         }
     }
-
-    private fun findValue(content: String, key: String): String? =
-        content.lines()
-            .firstOrNull { it.startsWith("$key=") }
-            ?.substringAfter("=")?.trim()
-
-    private fun findList(content: String, key: String, separator: String): List<String> =
-        findValue(content, key)
-            ?.split(separator)
-            ?.filter { it.isNotBlank() }
-            ?: emptyList()
-
-    private fun parseIntValue(content: String, key: String): Int =
-        findValue(content, key)?.toIntOrNull() ?: 0
 
     fun allUpToDateMsg(count: Int): String =
         "All $count ${if (count == 1) "agent" else "agents"} up to date"

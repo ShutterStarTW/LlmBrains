@@ -133,7 +133,7 @@ object TerminalCommandRunner {
 
     fun runInBackground(project: Project?, title: String, command: String, executionSettings: WslSupport.Settings = WslSupport.settings) {
         try {
-            ProcessBuilder(backgroundArgv(command, executionSettings)).redirectErrorStream(true).start()
+            startDetachedBackgroundProcess(backgroundArgv(command, executionSettings))
         } catch (_: Exception) {
             DetectionResultsWatcher.showNotification(
                 project,
@@ -154,10 +154,12 @@ object TerminalCommandRunner {
      * this is safe to call from the EDT and never passes a flag an older version would reject.
      */
     fun runAgent(project: Project, title: String, agent: CodingAgent, workingDirectory: String? = project.basePath) {
+        val settings = AgentSettingsState.getInstance()
+        val snapshot = settings.executionSnapshot()
         ApplicationManager.getApplication().executeOnPooledThread {
-            val command = LaunchFlags.build(agent.command, agent.launchFlags) { AgentDetector.shellOutput(it) }
+            val command = LaunchFlags.build(agent.command, agent.launchFlags) { AgentDetector.shellOutput(it, executionSettings = snapshot.settings) }
             ApplicationManager.getApplication().invokeLater({
-                if (!project.isDisposed) run(project, title, command, workingDirectory)
+                if (!project.isDisposed && settings.isExecutionCurrent(snapshot)) run(project, title, command, workingDirectory, snapshot.settings)
             }, ModalityState.any())
         }
     }
@@ -178,6 +180,16 @@ object TerminalCommandRunner {
         // path (\wsl.localhost\...): neither is a usable terminal directory, so it goes to `wsl.exe --cd` and the
         // terminal itself starts in the IDE project.
         val (terminalDirectory, linuxDirectory) = AgentRuntime.terminalDirectories(workingDirectory, project.basePath)
+        if (workingDirectory != null && AgentRuntime.isDistroPath(workingDirectory) && linuxDirectory == null) {
+            // Starting the agent in the IDE project instead would resume or launch it against the wrong project.
+            DetectionResultsWatcher.showNotification(
+                project,
+                "Error",
+                "Could not map $workingDirectory to a directory in the WSL distro; the agent was not started.",
+                NotificationType.ERROR,
+            )
+            return
+        }
         runInTerminal(project, title, WslSupport.wrapForTerminal(command, executionSettings, linuxDirectory), terminalDirectory)
     }
 
@@ -258,3 +270,7 @@ internal fun trackedCommandScript(command: String, resultPath: String, powershel
         exit "${'$'}agenthub_exit_code"
         """.trimIndent()
     }
+
+/** Detached toolbar operations discard output so a full pipe cannot stop an installer. */
+internal fun startDetachedBackgroundProcess(argv: List<String>): Process =
+    ProcessBuilder(argv).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()

@@ -295,6 +295,57 @@ class SkillSyncExecutorTest {
         assertEquals("content", Files.readString(targetPath.resolve("SKILL.md")))
     }
 
+
+    @Test
+    fun `should preserve an identical copy when staging fails without a backup`() {
+        assertOriginalSurvivesFailedReplacement("content", createPartialStaging = false)
+    }
+
+    @Test
+    fun `should preserve a different copy when replacement throws after partial staging without a backup`() {
+        assertOriginalSurvivesFailedReplacement("unique original content", createPartialStaging = true)
+    }
+
+    private fun assertOriginalSurvivesFailedReplacement(originalContent: String, createPartialStaging: Boolean) {
+        val canonical = writeSkillMd(root.resolve("canonical"), "content")
+        val targetRoot = root.resolve("claude-root")
+        val targetPath = writeSkillMd(targetRoot.resolve("canonical"), originalContent)
+        val target = CopyOnlyTarget("claude", targetRoot)
+        val fingerprint = fingerprintCalculator.calculate(canonical)!!
+        val observed = observer.observe(target, canonical, fingerprint, SkillScope.GLOBAL, null, SkillSyncMode.COPY)
+        val request = SkillSyncPlanningRequest(
+            "failed-replacement", "skill-1", canonical, fingerprint, listOf(observed),
+            backupBeforeReplacement = false,
+        )
+        // Also covers the explicit KEEP_CANONICAL path, which can replace a different copy.
+        val plan = com.shutterstar.agenthub.environment.skills.sync.model.SkillSyncPlan(
+            request.operationId, request.skillId, canonical,
+            planner.buildSteps(observed, request, backup = false, remove = true), emptyList(),
+        )
+        val failingCopy = object : FileLinkStrategy {
+            override fun canLink(source: Path, target: Path): Boolean = true
+            override fun createLink(source: Path, target: Path): LinkResult {
+                if (createPartialStaging) {
+                    writeSkillMd(target, "partial replacement")
+                    throw java.io.IOException("simulated staging failure")
+                }
+                return LinkResult.Failure("simulated staging failure")
+            }
+        }
+        val localExecutor = SkillSyncExecutor(stepExecutor = SkillSyncStepExecutor(copyStrategy = failingCopy))
+        val result = localExecutor.execute(
+            plan, request, mapOf("claude" to target), SkillScope.GLOBAL, null, root.resolve("backups"),
+        )
+
+        assertEquals(SyncOperationStatus.FAILED, result.status)
+        assertEquals(originalContent, Files.readString(targetPath.resolve("SKILL.md")))
+        assertFalse(result.rollbackAvailable)
+        assertTrue(result.rollbackErrors.isEmpty())
+        Files.list(targetRoot).use { siblings ->
+            assertEquals(listOf(targetPath), siblings.toList(), "only the original directory should remain")
+        }
+    }
+
     private class FakeTarget(
         override val agentId: String,
         private val global: Path,
