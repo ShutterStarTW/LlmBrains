@@ -93,7 +93,7 @@ class JunieProjectProviderTest {
     @Test
     fun `should read an index larger than the default header budget`() {
         val project = home.resolve("work/indexed").toString()
-        val filler = (1..3000).joinToString("\n") { summaryJson("filler-$it", home.resolve("work/other-$it").toString()) }
+        val filler = (1..10_000).joinToString("\n") { summaryJson("filler-$it", home.resolve("work/other-$it").toString()) }
         session("session-7-late", null, events = listOf(prompt("Late in the index")), summary = false)
         Files.writeString(home.resolve("sessions/index.jsonl"), filler + "\n" + summaryJson("session-7-late", project) + "\n")
         assertTrue(Files.size(home.resolve("sessions/index.jsonl")) > LocalSessionSupport.HEADER_CHARACTER_BUDGET)
